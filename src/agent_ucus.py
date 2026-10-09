@@ -1,110 +1,99 @@
+"""İki ajanlı temel şablon. Komut ve ateşleme kararı senaryo kodundan gelir."""
+import copy
 import os
 import sys
 import time
-import copy
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
-workspace = Path(__file__).resolve().parents[1]
-bvrgym = workspace / "BVRGym"
+WORKSPACE = Path(__file__).resolve().parents[1]
+BVRGYM = WORKSPACE / "BVRGym"
+sys.path.insert(0, str(BVRGYM))
 
-sys.path.insert(0, str(bvrgym))
-os.chdir(bvrgym)
-
-from jsb_gym.agents.agents import RLBVRAgent
-from jsb_gym.agents.config import blue_agent, red_agent
+from data_classes.agent_dataclass import Agent_parameters
+from jsb_gym.agents.agents import BaseBVRAgent
+from jsb_gym.simObjects.config import f16_config, AAM_config
 from jsb_gym.utils.loggers import TacviewLogger
 
+SIM_DURATION = 180
+RECORDING_DIR = WORKSPACE / "recordings" / "agent_ucus"
 
-# Her agent için bağımsız konfigürasyon oluştur.
-# Böylece uçuş ayarları ajanlar arasında paylaşılmaz.
-def copy_config(config):
+
+def copy_config(module):
+    """Ajanların fizik ve kontrolcü ayarları birbirinden bağımsız olsun."""
     return SimpleNamespace(**{
-        key: copy.deepcopy(value)
-        for key, value in vars(config).items()
-        if not key.startswith("_")
-        and not isinstance(value, ModuleType)
+        name: copy.deepcopy(value)
+        for name, value in vars(module).items()
+        if not name.startswith("_") and not isinstance(value, ModuleType)
     })
 
 
-def create_agent(template, lat, heading):
-    aircraft_config = copy_config(template.aircraft_simObj_conf)
-    missile_config = copy_config(template.missile_simObj_conf)
-
-    aircraft_config.data_output_xml = None
-    missile_config.data_output_xml = None
-
-    aircraft_config.fg_sleep_time = None
-    missile_config.fg_sleep_time = None
-    aircraft_config.aircraft_simulation.Sim_time_step = 1
-    missile_config.missile_simulation.Sim_time_step = 1
-
-    parameters = copy.deepcopy(template.agent_parameters)
-    parameters.lat = lat
-    parameters.long = 18.0
-    parameters.alt = 7000.0
-    parameters.vel = 300.0
-    parameters.heading = heading
-    parameters.ammo = 2
+def create_agent(name, team, spawn):
+    aircraft, missile = copy_config(f16_config), copy_config(AAM_config)
+    aircraft.aircraft_simulation.Sim_time_step = 1
+    missile.missile_simulation.Sim_time_step = 1
+    for config in (aircraft, missile):
+        config.data_output_xml = None
+        config.fg_sleep_time = None
 
     config = SimpleNamespace(
-        agent_parameters=parameters,
-        aircraft_simObj_conf=aircraft_config,
-        missile_simObj_conf=missile_config,
-        aircraft_name=template.aircraft_name,
-        agent_name=template.agent_name,
-        team=template.team,
+        agent_name=name, team=team, aircraft_name="F-16",
+        agent_parameters=spawn,
+        aircraft_simObj_conf=aircraft,
+        missile_simObj_conf=missile,
     )
+    # BVRGym'in göreli XML/model yolları için; sonra Workspace'e geri dön.
+    previous_cwd = Path.cwd()
+    try:
+        os.chdir(BVRGYM)
+        return BaseBVRAgent(config, None)
+    finally:
+        os.chdir(previous_cwd)
 
-    return RLBVRAgent(config, None)
+
+def main():
+    # 1. Ajanlar: isim, takım, mühimmat ve başlangıç durumu.
+    # lat/long/heading: derece, alt: metre, vel: m/s.
+    blue = create_agent("Kartal-1", "Blue", Agent_parameters(
+        ammo=2, lat=59.0, long=18.0, alt=8000, vel=300, heading=0,
+    ))
+    red = create_agent("Bogey-1", "Red", Agent_parameters(
+        ammo=2, lat=59.25, long=18.0, alt=3000, vel=300, heading=180,
+    ))
+
+    # 2. Kullanıcı komutları: [hedef yön (derece), irtifa (metre), gaz].
+    blue_command = [0, 5000, 0.99]
+    red_command = [180, 7000, 0.99]
+
+    # Atış yalnızca açıkça çağrılır. Bu iki satır örnek olarak kapalıdır:
+    # blue.set_target(red)
+    # blue.launch_missile()
+
+    # 3. BVRGym'in yerleşik Tacview CSV kaydı.
+    logger = TacviewLogger(SimpleNamespace(
+        conf=SimpleNamespace(tacview_output_dir=str(RECORDING_DIR)),
+        all_agents=[blue, red],
+    ))
+    logger.log_flight_data()
+
+    # 4. İki ajanı verilen komutlarla ilerlet ve yaklaşık gerçek zamanda çalıştır.
+    sim_start = blue.simObj.get_sim_time_sec()
+    wall_start = time.monotonic()
+    try:
+        while blue.simObj.get_sim_time_sec() - sim_start < SIM_DURATION:
+            # Dış komut bağlantısı eklendiğinde komutlar burada güncellenecek.
+            blue.apply_action(blue_command)
+            red.apply_action(red_command)
+            logger.log_flight_data()
+
+            elapsed = blue.simObj.get_sim_time_sec() - sim_start
+            time.sleep(max(0, wall_start + elapsed - time.monotonic()))
+    except KeyboardInterrupt:
+        print("Uçuş durduruldu.")
+    finally:
+        logger.save_logs()
+        print("Kayıt:", RECORDING_DIR)
 
 
-# Havada başlangıç: iki uçak birbirine doğru uçuyor.
-blue = create_agent(blue_agent, 59.0, 0)
-red = create_agent(red_agent, 59.25, 180)
-
-blue.set_target(red)
-red.set_target(blue)
-
-# BVRGym'in kendi logger'ı yalnızca all_agents ve çıktı klasörünü ister.
-# Aynı CSV dosyaları hem Tacview'de hem bağımsız görüntüleyicide açılır.
-recording = workspace / "recordings" / "agent_ucus"
-scenario = SimpleNamespace(
-    conf=SimpleNamespace(tacview_output_dir=str(recording)),
-    all_agents=[blue, red],
-)
-logger = TacviewLogger(scenario)
-logger.log_flight_data()
-
-print("İki agent oluşturuldu. Uçuş başladı.")
-print("Tacview CSV kayıt klasörü:", recording)
-
-try:
-    while blue.simObj.get_sim_time_sec() < 180:
-        started = time.perf_counter()
-        previous_time = blue.simObj.get_sim_time_sec()
-
-        # Komutlar: heading, altitude, throttle.
-        # Agent, atış koşulları sağlanınca kendisi füze ateşler.
-        blue.apply_action([0, 7000, 0.49])
-        red.apply_action([180, 7000, 0.49])
-        logger.log_flight_data()
-
-        if blue.healthPoints <= 0 or red.healthPoints <= 0:
-            print(
-                "Angajman sona erdi.",
-                "Blue:", blue.healthPoints,
-                "Red:", red.healthPoints,
-            )
-            break
-
-        # Yaklaşık gerçek zamanlı çalıştır.
-        elapsed_sim = blue.simObj.get_sim_time_sec() - previous_time
-        elapsed_real = time.perf_counter() - started
-        time.sleep(max(0, elapsed_sim - elapsed_real))
-
-except KeyboardInterrupt:
-    print("\nUçuş durduruldu.")
-finally:
-    logger.save_logs()
-    print("Tacview CSV kayıtları kaydedildi:", recording)
+if __name__ == "__main__":
+    main()

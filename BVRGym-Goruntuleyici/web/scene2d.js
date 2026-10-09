@@ -1,7 +1,25 @@
+import {MODEL_LENGTHS,METERS_PER_NM,altitudeLabel,headingOffset,distanceScale,speedLabel,visualScale} from './units.js';
+
+export function updateScaleBar(element,metersPerPixel,width,mode){
+  if(!element)return;
+  const scale=distanceScale(metersPerPixel,Math.min(140,width-112));
+  element.hidden=!scale;
+  if(!scale)return;
+  const label=scale.nauticalMiles.toLocaleString('tr-TR',{maximumSignificantDigits:3})+' NM';
+  element.querySelector('.distance-scale-label').textContent=label;
+  element.querySelector('.distance-scale-bar').style.width=scale.pixels+'px';
+  element.dataset.metersPerPixel=metersPerPixel;
+  element.dataset.nauticalMiles=scale.nauticalMiles;
+  element.setAttribute('aria-label','Mesafe ölçeği: '+label);
+  element.title=mode==='3d'?'Görünüm merkezindeki mesafe ölçeği; perspektifte derinlikle değişir.':'Harita mesafe ölçeği';
+}
+
 export class Scene {
   constructor(canvas,onSelect,onPan){
     this.canvas=canvas;this.ctx=canvas.getContext('2d');this.scale=.045;this.center={east:0,north:0};
-    this.follow=true;this.grid=true;this.trail=true;this.onSelect=onSelect;this.onPan=onPan;this.positions=[];
+    this.distanceScale=canvas.parentElement.querySelector('.distance-scale');
+    this.objectScale=50;this.headingGuides=true;this.follow=true;this.grid=true;this.trail=true;this.onSelect=onSelect;this.onPan=onPan;this.positions=[];
+    this.trailDuration=300;this.labelMode='all';this.labelNames=true;this.labelAltitude=true;this.labelSpeed=true;
     new ResizeObserver(()=>this.resize()).observe(canvas);
     canvas.addEventListener('wheel',event=>{event.preventDefault();this.zoom(event.deltaY<0?1.15:1/1.15);},{passive:false});
     let drag=null;
@@ -13,11 +31,18 @@ export class Scene {
   }
   resize(){this.width=this.canvas.clientWidth;this.height=this.canvas.clientHeight;const ratio=devicePixelRatio||1;this.canvas.width=Math.round(this.width*ratio);this.canvas.height=Math.round(this.height*ratio);this.ctx.setTransform(ratio,0,0,ratio,0,0);}
   zoom(factor){this.scale=Math.min(.8,Math.max(.002,this.scale*factor));}
+  frameAll(entities){
+    if(!entities.length)return;
+    const east=entities.map(e=>e.east_m),north=entities.map(e=>e.north_m);
+    this.center={east:(Math.min(...east)+Math.max(...east))/2,north:(Math.min(...north)+Math.max(...north))/2};
+    this.scale=Math.min(.045,Math.max(.002,Math.min(this.width/Math.max(7000,Math.max(...east)-Math.min(...east)),this.height/Math.max(7000,Math.max(...north)-Math.min(...north)))/1.8));
+  }
+  clear(){this.positions=[];}
   point(entity){return {x:this.width/2+(entity.east_m-this.center.east)*this.scale,y:this.height/2-(entity.north_m-this.center.north)*this.scale};}
   aircraft(x,y,heading,color){
     const ctx=this.ctx;ctx.save();ctx.translate(x,y);ctx.rotate(heading*Math.PI/180);
     // Same fixed 50x visual length as 3D; map zoom changes the screen size.
-    ctx.scale(this.scale*15.06*50/63,this.scale*15.06*50/63);
+    ctx.scale(this.scale*MODEL_LENGTHS.aircraft*this.objectScale/63,this.scale*MODEL_LENGTHS.aircraft*this.objectScale/63);
     // F-16: pointed nose, wing-root extensions, swept wings and rear stabilizers.
     const points=[[0,-32],[2,-25],[3,-17],[3.5,-10],[6,-2],[6,1],[22,10],[22,17],[7,12],[5,19],[13,25],[12,29],[4,25],[3,31],[-3,31],[-4,25],[-12,29],[-13,25],[-5,19],[-7,12],[-22,17],[-22,10],[-6,1],[-6,-2],[-3.5,-10],[-3,-17],[-2,-25]];
     ctx.beginPath();points.forEach(([px,py],i)=>i?ctx.lineTo(px,py):ctx.moveTo(px,py));ctx.closePath();ctx.fillStyle=color;ctx.fill();ctx.strokeStyle=this.colors.map;ctx.lineWidth=1.4;ctx.stroke();
@@ -26,29 +51,66 @@ export class Scene {
   }
   missile(x,y,heading,color){
     const ctx=this.ctx;ctx.save();ctx.translate(x,y);ctx.rotate(heading*Math.PI/180);
-    ctx.scale(this.scale*3.65*100/40,this.scale*3.65*100/40);
+    ctx.scale(this.scale*MODEL_LENGTHS.missile*visualScale('missile',this.objectScale)/41,this.scale*MODEL_LENGTHS.missile*visualScale('missile',this.objectScale)/41);
     ctx.beginPath();const points=[[0,-23],[3,-14],[3,5],[9,15],[9,18],[3,14],[3,17],[-3,17],[-3,14],[-9,18],[-9,15],[-3,5],[-3,-14]];
     points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle=color;ctx.fill();ctx.restore();
   }
   draw(entities,buffer,time,selected){
     const ctx=this.ctx;if(!this.width||!this.height)return;
     const style=getComputedStyle(this.canvas);this.colors={map:style.getPropertyValue('--map').trim(),grid:style.getPropertyValue('--grid').trim(),text:style.getPropertyValue('--text').trim(),muted:style.getPropertyValue('--muted').trim(),blue:style.getPropertyValue('--blue').trim()};
-    const focus=entities.find(e=>e.id===selected);if(this.follow&&focus)this.center={east:focus.east_m,north:focus.north_m};
+    const focus=entities.find(e=>e.id===selected&&e.visible!==false);if(this.follow&&focus)this.center={east:focus.east_m,north:focus.north_m};
     ctx.clearRect(0,0,this.width,this.height);
-    let step=1000;while(step*this.scale<45)step*=2;while(step*this.scale>150)step/=2;
+    let step=METERS_PER_NM;while(step*this.scale<45)step*=2;while(step*this.scale>150)step/=2;
     if(this.grid){const pixels=step*this.scale;const origin=this.point({east_m:0,north_m:0});const x0=((origin.x%pixels)+pixels)%pixels,y0=((origin.y%pixels)+pixels)%pixels;ctx.strokeStyle=this.colors.grid;ctx.lineWidth=1;ctx.beginPath();for(let x=x0;x<this.width;x+=pixels){ctx.moveTo(x,0);ctx.lineTo(x,this.height);}for(let y=y0;y<this.height;y+=pixels){ctx.moveTo(0,y);ctx.lineTo(this.width,y);}ctx.stroke();}
-    if(this.trail){for(const entity of entities){const samples=buffer.tracks.get(entity.id)?.samples||[];const stride=Math.max(1,Math.ceil(samples.length/1500));const trailTime=time;ctx.beginPath();let count=0;for(let i=0;i<samples.length;i+=stride){const s=samples[i];if(s.sim_time_s>trailTime)break;const p=this.point(s);count?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);count++;}const p=this.point(entity);if(count)ctx.lineTo(p.x,p.y);ctx.strokeStyle=entity.team==='red'?'#e88480':entity.kind==='missile'?'#ecc274':this.colors.blue;ctx.globalAlpha=.4;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;}}
-    this.positions=[];
-    for(const entity of entities){const p=this.point(entity);this.positions.push({...p,id:entity.id});if(p.x< -70||p.x>this.width+70||p.y< -70||p.y>this.height+70)continue;
+    if(this.trail){for(const entity of entities){
+      const samples=(buffer.tracks.get(entity.id)?.samples||[]).filter(s=>s.sim_time_s<=time&&(this.trailDuration<0||s.sim_time_s>=time-this.trailDuration));
+      const stride=Math.max(1,Math.ceil(samples.length/1500));ctx.beginPath();let count=0;
+      for(let i=0;i<samples.length;i+=stride){const p=this.point(samples[i]);count?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);count++;}
+      if(count){const p=this.point(entity);ctx.lineTo(p.x,p.y);}
+      ctx.strokeStyle=entity.team==='red'?'#e88480':entity.kind==='missile'?'#ecc274':this.colors.blue;ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;
+    }}
+    this.positions=[];const labelRects=[];
+    for(const entity of entities){if(entity.visible===false)continue;const p=this.point(entity);this.positions.push({...p,id:entity.id});if(p.x< -70||p.x>this.width+70||p.y< -70||p.y>this.height+70)continue;
       const color=entity.kind==='missile'?(entity.team==='red'?'#f18c68':'#ecc274'):(entity.team==='red'?'#e88480':this.colors.blue);
       if(entity.kind==='aircraft')this.aircraft(p.x,p.y,entity.heading_deg,color);
       else if(entity.kind==='missile')this.missile(p.x,p.y,entity.heading_deg,color);
-      const visualLength=entity.kind==='missile'?3.65*100:15.06*50;
-      const labelX=Math.min(this.width-105,Math.max(8,p.x+Math.max(35,this.scale*visualLength/2+12)));
-      ctx.font='14px "Segoe UI",sans-serif';ctx.fillStyle=this.colors.text;ctx.fillText(entity.name,labelX,Math.max(24,p.y-11));ctx.fillStyle=this.colors.muted;ctx.fillText(`${Math.round(entity.altitude_m).toLocaleString('tr-TR')} m`,labelX,Math.max(42,p.y+10));
+      const visualLength=(MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale);
+      if(this.headingGuides){
+        const projection=Math.cos((entity.pitch_deg??0)*Math.PI/180);
+        const start=headingOffset(entity.heading_deg,visualLength*.55*projection);
+        const end=headingOffset(entity.heading_deg,(visualLength*.55+Math.max(250,visualLength*.9))*projection);
+        ctx.save();ctx.strokeStyle=color;ctx.lineWidth=1.4;ctx.setLineDash([5,4]);ctx.beginPath();
+        ctx.moveTo(p.x+start.east*this.scale,p.y-start.north*this.scale);
+        ctx.lineTo(p.x+end.east*this.scale,p.y-end.north*this.scale);ctx.stroke();ctx.restore();
+      }
+      if(this.labelMode!=='none'&&(this.labelMode!=='selected'||entity.id===selected)){
+        const name=this.labelNames?entity.name:'',speed=this.labelSpeed?speedLabel(entity):'',altitude=this.labelAltitude?altitudeLabel(entity.altitude_m):'';
+        if(!name&&!speed&&!altitude)continue;
+        ctx.font='600 12px "Segoe UI",sans-serif';const nameWidth=Math.min(90,ctx.measureText(name).width);
+        ctx.font='12px "Segoe UI",sans-serif';const speedWidth=ctx.measureText(speed).width,altitudeWidth=ctx.measureText(altitude).width;
+        const topHeight=name||speed?17:0,labelHeight=topHeight+(altitude?15:0)+6;
+        const labelWidth=Math.min(this.width-16,Math.max(nameWidth+speedWidth+(name&&speed?10:0),altitudeWidth)+12);
+        const labelX=Math.max(8,Math.min(this.width-labelWidth-8,p.x+Math.max(26,this.scale*visualLength/2+8)));
+        const initialY=Math.max(8,Math.min(this.height-labelHeight-8,p.y-labelHeight/2));let labelY=initialY;
+        for(let i=0;i<labelRects.length+1;i++){
+          const overlap=labelRects.find(r=>labelX<r.right+3&&labelX+labelWidth>r.x-3&&labelY<r.bottom+3&&labelY+labelHeight>r.y-3);
+          if(!overlap)break;
+          labelY=overlap.bottom+3;
+          if(labelY+labelHeight>this.height-8)labelY=Math.max(8,initialY-(i+1)*(labelHeight+3));
+        }
+        labelRects.push({x:labelX,y:labelY,right:labelX+labelWidth,bottom:labelY+labelHeight});
+        ctx.save();ctx.fillStyle=style.getPropertyValue('--panel').trim();ctx.strokeStyle=color;ctx.lineWidth=1;
+        ctx.beginPath();ctx.roundRect(labelX,labelY,labelWidth,labelHeight,3);ctx.fill();ctx.stroke();
+        ctx.fillStyle=this.colors.text;
+        if(name){ctx.font='600 12px "Segoe UI",sans-serif';ctx.fillText(name,labelX+6,labelY+15,Math.max(1,labelWidth-12-speedWidth-(speed?10:0)));}
+        ctx.font='12px "Segoe UI",sans-serif';
+        if(speed){ctx.textAlign=name?'right':'center';ctx.fillText(speed,name?labelX+labelWidth-6:labelX+labelWidth/2,labelY+15);}
+        if(altitude){ctx.textAlign='center';ctx.fillText(altitude,labelX+labelWidth/2,labelY+topHeight+13);}
+        ctx.restore();
+      }
     }
-    ctx.font='14px "Segoe UI",sans-serif';ctx.fillStyle=this.colors.muted;ctx.fillText('K ↑',this.width-40,27);
-    const length=step*this.scale;ctx.strokeStyle=this.colors.muted;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(20,this.height-22);ctx.lineTo(20+length,this.height-22);ctx.moveTo(20,this.height-26);ctx.lineTo(20,this.height-18);ctx.moveTo(20+length,this.height-26);ctx.lineTo(20+length,this.height-18);ctx.stroke();ctx.fillText(`${(step/1000).toLocaleString('tr-TR')} km`,20,this.height-34);
+    updateScaleBar(this.distanceScale,1/this.scale,this.width,'2d');
+    ctx.font='14px "Segoe UI",sans-serif';ctx.fillStyle=this.colors.muted;
     if(!entities.length){ctx.fillStyle=this.colors.muted;ctx.textAlign='center';ctx.fillText('Uçuş verisi bekleniyor',this.width/2,this.height/2);ctx.textAlign='left';}
   }
 }

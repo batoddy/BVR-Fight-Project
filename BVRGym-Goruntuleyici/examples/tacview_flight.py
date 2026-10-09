@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 import sys
 
-workspace = Path(__file__).resolve().parents[2] / 'Workspace'
+parent = Path(__file__).resolve().parents[2]
+workspace = parent if (parent / 'BVRGym').is_dir() else parent / 'Workspace'
 bvrgym = workspace / 'BVRGym'
 sys.path.insert(0, str(bvrgym))
 os.chdir(bvrgym)

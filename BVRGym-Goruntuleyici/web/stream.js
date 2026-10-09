@@ -18,7 +18,7 @@ export function interpolate(a,b,time) {
   if(!b||b.sim_time_s<=a.sim_time_s)return {...a};
   const f=Math.max(0,Math.min(1,(time-a.sim_time_s)/(b.sim_time_s-a.sim_time_s)));
   const result={...a};
-  for(const key of ['east_m','north_m','altitude_m','true_airspeed_mps','mach','pitch_deg','latitude_deg','longitude_deg'])
+  for(const key of ['east_m','north_m','altitude_m','true_airspeed_mps','mach','estimated_tas_mps','estimated_mach','pitch_deg','latitude_deg','longitude_deg'])
     result[key]=Number.isFinite(a[key])&&Number.isFinite(b[key])?a[key]+(b[key]-a[key])*f:null;
   for(const key of ['heading_deg','roll_deg']) {
     const delta=((b[key]-a[key]+540)%360)-180;

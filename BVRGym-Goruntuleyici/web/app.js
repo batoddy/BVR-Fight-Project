@@ -1,163 +1,222 @@
 import {SampleBuffer,ReplayClock} from './stream.js';
 import {Scene} from './scene.js';
 import {Scene as Scene2D} from './scene2d.js';
+import {recentRecordings,rememberRecording} from './history.js';
+import {toFeet,toNauticalMiles,munitionState} from './units.js';
+import {inventoryPanel} from './inventory.js';
+
 const el=id=>document.getElementById(id);
-const themeButton=el('toggle-theme');
-function updateThemeButton(){themeButton.setAttribute('aria-checked',String(document.documentElement.dataset.theme==='dark'));}
-updateThemeButton();
-themeButton.onclick=()=>{
-  const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
-  document.documentElement.dataset.theme=theme;
-  try{localStorage.setItem('bvrgym-viewer-theme',theme);}catch{}
-  updateThemeButton();
+const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
+  altitudeGuides:true,headingGuides:true,objectScale:50,trail:true,trailDuration:300,history:true,grid:true,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true};
+const preferences={...defaults};
+try{
+  const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
+  for(const key of Object.keys(defaults))if(typeof saved[key]===typeof defaults[key])preferences[key]=saved[key];
+}catch{}
+const save=()=>{try{localStorage.setItem('bvrgym-layout-v2',JSON.stringify(preferences));}catch{}};
+const buffer=new SampleBuffer(),replayClock=new ReplayClock();
+const playbackRates=[1,2,3,4,5,10],hiddenObjects=new Set();
+const teamOrder={blue:0,red:1};
+let selected=null,viewTime=null,paused=true,scrubbing=false,lastReceive=0,connectionError=null,
+  lastLabels=0,listSignature='',filter='all',query='',busy=false,scene,webglError=null;
+
+function theme(){el('toggle-theme').setAttribute('aria-checked',String(document.documentElement.dataset.theme==='dark'));}
+theme();el('toggle-theme').onclick=()=>{
+  document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  try{localStorage.setItem('bvrgym-viewer-theme',document.documentElement.dataset.theme);}catch{}theme();
 };
-const buffer=new SampleBuffer();let selected=null,viewTime=null,lastLabels=0,lastReceive=0,connectionError=null;
-const replayClock=new ReplayClock();let playbackSpeed=1,paused=false,scrubbing=false;
-const playbackRates=[1,2,3,4,5,10];
-const dock=el('playback-dock'),dockResizer=el('dock-resizer');
-let dockHeight=134,dockDrag=null,dockNarrow=false;
-try{const saved=Number(localStorage.getItem('bvrgym-dock-height'));if(saved>=94&&saved<=400)dockHeight=saved;}catch{}
-function resizeDock(height,save=false){
-  const minimum=dockNarrow?160:94,maximum=dockNarrow?400:320;
-  dockHeight=Math.round(Math.max(minimum,Math.min(maximum,height)));
-  dock.style.setProperty('--dock-height',dockHeight+'px');
-  dock.classList.toggle('compact',dockHeight<(dockNarrow?220:126));
-  dockResizer.setAttribute('aria-valuemin',minimum);dockResizer.setAttribute('aria-valuemax',maximum);
-  dockResizer.setAttribute('aria-valuenow',dockHeight);dockResizer.setAttribute('aria-valuetext',dockHeight+' piksel');
-  if(save)try{localStorage.setItem('bvrgym-dock-height',String(dockHeight));}catch{}
-}
-resizeDock(dockHeight);
-new ResizeObserver(entries=>{
-  const narrow=entries[0].contentRect.width<=560;
-  if(narrow!==dockNarrow){dockNarrow=narrow;resizeDock(narrow?Math.max(250,dockHeight):Math.min(134,dockHeight));}
-}).observe(dock.parentElement);
-dockResizer.onpointerdown=event=>{
-  if(event.button!==0)return;event.preventDefault();dockDrag={y:event.clientY,height:dockHeight,pointer:event.pointerId};
-  dockResizer.setPointerCapture(event.pointerId);document.body.classList.add('resizing-dock');
-};
-dockResizer.onpointermove=event=>{if(dockDrag)resizeDock(dockDrag.height+dockDrag.y-event.clientY);};
-function finishDockDrag(){if(!dockDrag)return;dockDrag=null;document.body.classList.remove('resizing-dock');resizeDock(dockHeight,true);}
-for(const name of ['pointerup','pointercancel','lostpointercapture'])dockResizer.addEventListener(name,finishDockDrag);
-dockResizer.ondblclick=()=>resizeDock(dock.classList.contains('compact')?(dockNarrow?250:134):(dockNarrow?160:94),true);
-dockResizer.onkeydown=event=>{
-  const values={ArrowUp:dockHeight+16,ArrowDown:dockHeight-16,Home:0,End:400};
-  if(event.key in values){event.preventDefault();resizeDock(values[event.key],true);}
-};
-let scene,webglError=null;
-const selectEntity=id=>{selected=id;renderList();};
-try{scene=new Scene(el('scene'),selectEntity,()=>updateFollow());}
-catch(error){
-  webglError='Bu tarayıcıda 3D görünüm açılamadı; 2D görünüm kullanılıyor.';
-  const oldCanvas=el('scene'),canvas=oldCanvas.cloneNode(true);oldCanvas.replaceWith(canvas);
-  scene=new Scene2D(canvas,selectEntity,()=>updateFollow());
-  el('view-3d').disabled=true;el('view-2d').setAttribute('aria-pressed','true');el('view-3d').setAttribute('aria-pressed','false');
-  for(const id of ['camera-orbit','camera-top','fit-all'])el(id).disabled=true;
-  el('view-title').textContent='Üstten görünüm';
-}
-const availableModes=!webglError;
-function mode(value){
-  if(!availableModes)return;
-  scene.setMode(value);
-  el('view-3d').setAttribute('aria-pressed',String(value==='3d'));el('view-2d').setAttribute('aria-pressed',String(value==='2d'));
-  el('view-title').textContent=value==='3d'?'3D uçuş görünümü':'Üstten görünüm';
-  el('camera-help').textContent=value==='3d'?'Sol tuş: döndür · Sağ tuş: taşı · Tekerlek: yakınlaştır':'Sürükle: taşı · Tekerlek: yakınlaştır';
-}
-el('view-3d').onclick=()=>mode('3d');el('view-2d').onclick=()=>mode('2d');
-el('camera-orbit').onclick=()=>{mode('3d');scene.setView('orbit');};
-el('camera-top').onclick=()=>{mode('3d');scene.setView('top');};
-el('fit-all').onclick=()=>{if(!availableModes)return;scene.follow=false;scene.frameAll(viewTime===null?[]:buffer.entities(viewTime));updateFollow();};
-const number=(value,digits=0)=>Number(value).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
-const roleName=e=>e.kind==='missile'?'Füze':e.team==='red'?'Bogey':e.team==='blue'?'Dost uçak':'Uçak';
-function updateFollow(){el('follow').setAttribute('aria-pressed',String(scene.follow));}
-function panel(name,show){
+
+function panel(name,show,persist=true){
   el(name+'-content').hidden=!show;el(name).classList.toggle('collapsed',!show);
   el('layout').classList.toggle(name==='objects'?'no-list':'no-detail',!show);
   const button=el(name==='objects'?'toggle-list':'toggle-detail');
-  button.setAttribute('aria-expanded',String(show));
-  const label=(name==='objects'?'Nesne panelini':'Uçak bilgi panelini')+(show?' kapat':' aç');
-  button.setAttribute('aria-label',label);button.title=label;
-  button.textContent=name==='objects'?(show?'‹':'›'):(show?'›':'‹');
+  button.setAttribute('aria-expanded',String(show));button.textContent=name==='objects'?(show?'‹':'›'):(show?'›':'‹');
+  button.setAttribute('aria-label',(name==='objects'?'Nesne panelini':'Bilgi panelini')+(show?' kapat':' aç'));
+  if(persist){preferences[name==='objects'?'list':'detail']=show;save();}
 }
+const narrow=matchMedia('(max-width:900px)');
+panel('objects',narrow.matches?false:preferences.list,false);panel('detail',narrow.matches?false:preferences.detail,false);
 el('toggle-list').onclick=()=>panel('objects',el('objects-content').hidden);
 el('toggle-detail').onclick=()=>panel('detail',el('detail-content').hidden);
-const narrowLayout=matchMedia('(max-width:980px)');
-const collapseOnNarrow=()=>{if(narrowLayout.matches){panel('objects',false);panel('detail',false);}};
-collapseOnNarrow();narrowLayout.addEventListener('change',collapseOnNarrow);
-el('follow').onclick=()=>{scene.follow=!scene.follow;updateFollow();};
+narrow.addEventListener('change',event=>{panel('objects',event.matches?false:preferences.list,false);panel('detail',event.matches?false:preferences.detail,false);});
+
+function panelWidth(side,width,persist=false){
+  const minimum=side==='left'?170:240,maximum=side==='left'?350:420;
+  const other=side==='left'?(preferences.detail?preferences.right:32):(preferences.list?preferences.left:32);
+  const available=el('layout').clientWidth-other-350;
+  preferences[side]=Math.round(Math.max(minimum,Math.min(maximum,width,Math.max(minimum,available))));
+  el('layout').style.setProperty(side==='left'?'--left-width':'--right-width',preferences[side]+'px');
+  const grip=el(side==='left'?'objects-resizer':'detail-resizer');
+  grip.setAttribute('aria-valuenow',preferences[side]);grip.setAttribute('aria-valuemin',minimum);grip.setAttribute('aria-valuemax',maximum);
+  if(persist)save();
+}
+for(const side of ['left','right']){
+  panelWidth(side,preferences[side]);const grip=el(side==='left'?'objects-resizer':'detail-resizer');let drag=null;
+  grip.onpointerdown=event=>{if(event.button!==0)return;drag={x:event.clientX,width:preferences[side]};grip.setPointerCapture(event.pointerId);document.body.classList.add('resizing');};
+  grip.onpointermove=event=>{if(drag)panelWidth(side,drag.width+(event.clientX-drag.x)*(side==='left'?1:-1));};
+  const finish=()=>{if(drag){drag=null;document.body.classList.remove('resizing');save();}};
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])grip.addEventListener(name,finish);
+  grip.onkeydown=event=>{if(['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();panelWidth(side,preferences[side]+(event.key==='ArrowRight'?16:-16)*(side==='left'?1:-1),true);}};
+}
+
+let dockNarrow=false,dockDrag=null;
+function dockHeight(value,persist=false){
+  const minimum=dockNarrow?128:68,maximum=dockNarrow?220:170;
+  const height=Math.round(Math.max(minimum,Math.min(maximum,value)));
+  el('playback-dock').style.setProperty('--dock-height',height+'px');
+  const grip=el('dock-resizer');grip.setAttribute('aria-valuenow',height);grip.setAttribute('aria-valuemin',minimum);grip.setAttribute('aria-valuemax',maximum);
+  if(persist){preferences.dock=height;save();}
+}
+dockHeight(preferences.dock);
+new ResizeObserver(entries=>{dockNarrow=entries[0].contentRect.width<=620;dockHeight(preferences.dock);}).observe(el('playback-dock').parentElement);
+el('dock-resizer').onpointerdown=event=>{if(event.button!==0)return;dockDrag={y:event.clientY,height:Number(el('dock-resizer').getAttribute('aria-valuenow'))};el('dock-resizer').setPointerCapture(event.pointerId);document.body.classList.add('resizing');};
+el('dock-resizer').onpointermove=event=>{if(dockDrag)dockHeight(dockDrag.height+dockDrag.y-event.clientY);};
+const finishDock=()=>{if(dockDrag){dockDrag=null;document.body.classList.remove('resizing');dockHeight(Number(el('dock-resizer').getAttribute('aria-valuenow')),true);}};
+for(const name of ['pointerup','pointercancel','lostpointercapture'])el('dock-resizer').addEventListener(name,finishDock);
+el('dock-resizer').ondblclick=()=>dockHeight(Number(el('dock-resizer').getAttribute('aria-valuenow'))>(dockNarrow?128:76)?0:170,true);
+el('dock-resizer').onkeydown=event=>{if(['ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();const current=Number(el('dock-resizer').getAttribute('aria-valuenow'));dockHeight(event.key==='Home'?0:event.key==='End'?220:current+(event.key==='ArrowUp'?12:-12),true);}};
+
+function updateFollow(){
+  el('follow').setAttribute('aria-pressed',String(scene.follow));
+  const name=buffer.tracks.get(selected)?.samples[0].name;
+  el('follow').textContent=scene.follow&&name?'Takip · '+name:'Takip';
+}
+function selectEntity(id){selected=id;listSignature='';renderList();updateFollow();}
+try{scene=new Scene(el('scene'),selectEntity,()=>{preferences.follow=scene.follow;save();updateFollow();});}
+catch{
+  webglError='3D açılamadı; 2D görünüm kullanılıyor.';
+  const canvas=el('scene').cloneNode(true);el('scene').replaceWith(canvas);
+  scene=new Scene2D(canvas,selectEntity,()=>{preferences.follow=scene.follow;save();updateFollow();});
+  el('view-3d').disabled=true;preferences.mode='2d';
+}
+scene.follow=preferences.follow;
+function setMode(value){
+  if(!['2d','3d'].includes(value))value='3d';
+  if(webglError)value='2d';else scene.setMode(value);
+  preferences.mode=value;save();
+  el('view-3d').setAttribute('aria-pressed',String(value==='3d'));el('view-2d').setAttribute('aria-pressed',String(value==='2d'));
+  el('view-title').textContent=value==='3d'?'3D uçuş görünümü':'Üstten görünüm';
+  el('camera-help').textContent=value==='3d'?'Sol tuş: döndür · Sağ tuş: taşı':'Sürükle: taşı · Tekerlek: yakınlaştır';
+}
+setMode(preferences.mode);el('view-3d').onclick=()=>setMode('3d');el('view-2d').onclick=()=>setMode('2d');
+function camera(value){
+  preferences.camera=value;scene.follow=false;preferences.follow=false;
+  if(value==='all'){
+    scene.frameAll(visibleEntities());
+  }else if(!webglError){setMode('3d');scene.setView(value);}
+  updateFollow();save();
+}
+el('camera-mode').value=['orbit','top','all'].includes(preferences.camera)?preferences.camera:'orbit';
+el('camera-mode').onchange=event=>camera(event.target.value);
+if(webglError){el('camera-mode').querySelector('[value=orbit]').disabled=true;el('camera-mode').querySelector('[value=top]').disabled=true;}
+el('follow').onclick=()=>{scene.follow=!scene.follow;preferences.follow=scene.follow;save();updateFollow();};
 el('zoom-in').onclick=()=>scene.zoom(1.25);el('zoom-out').onclick=()=>scene.zoom(.8);
-el('trail').onchange=event=>{scene.trail=event.target.checked;};el('grid').onchange=event=>{scene.grid=event.target.checked;};
-function setPlayback(value){
-  playbackSpeed=Number(value);replayClock.speed=playbackSpeed;
-  replayClock.seek(viewTime,performance.now()/1000);
-  el('playback-speed').value=playbackRates.indexOf(playbackSpeed);
-  el('playback-rate').textContent=playbackSpeed+'×';
-  el('playback-speed').setAttribute('aria-valuetext',playbackSpeed+'×');
-  for(const button of document.querySelectorAll('[data-rate]'))button.setAttribute('aria-pressed',String(Number(button.dataset.rate)===playbackSpeed));
+
+function viewSettings(){
+  scene.altitudeGuides=el('altitude-guides').checked;scene.headingGuides=el('heading-guides').checked;scene.objectScale=Number(el('object-scale').value);scene.trail=el('trail').checked;scene.grid=el('grid').checked;scene.trailDuration=Number(el('trail-duration').value);
+  el('toggle-altitude-guides').setAttribute('aria-pressed',String(scene.altitudeGuides));
+  scene.labelMode=el('label-mode').value;scene.labelNames=el('label-names').checked;scene.labelAltitude=el('label-altitude').checked;scene.labelSpeed=el('label-speed').checked;
+  Object.assign(preferences,{altitudeGuides:scene.altitudeGuides,headingGuides:scene.headingGuides,objectScale:scene.objectScale,trail:scene.trail,grid:scene.grid,trailDuration:scene.trailDuration,history:el('show-history').checked,
+    labelMode:scene.labelMode,labelNames:scene.labelNames,labelAltitude:scene.labelAltitude,labelSpeed:scene.labelSpeed});save();
 }
-el('playback-speed').oninput=event=>setPlayback(playbackRates[Number(event.target.value)]);
-for(const button of document.querySelectorAll('[data-rate]')){
-  button.style.setProperty('--stop',playbackRates.indexOf(Number(button.dataset.rate)));
-  button.onclick=()=>setPlayback(button.dataset.rate);
-}
-el('record-end').onclick=()=>{
-  const bounds=buffer.bounds();if(!bounds)return;
-  paused=true;replayClock.seek(bounds.last,performance.now()/1000);viewTime=bounds.last;
-};
-el('restart-playback').onclick=()=>{
-  const bounds=buffer.bounds();if(!bounds)return;
-  paused=false;replayClock.seek(bounds.first,performance.now()/1000);viewTime=bounds.first;
-};
-el('play-pause').onclick=()=>{
-  const bounds=buffer.bounds();if(!bounds)return;
-  if(paused&&viewTime>=bounds.last){replayClock.seek(bounds.first,performance.now()/1000);viewTime=bounds.first;}
-  paused=!paused;
-};
-el('timeline').onpointerdown=()=>{scrubbing=true;};
-el('timeline').oninput=event=>{
-  paused=true;viewTime=Number(event.target.value);replayClock.seek(viewTime,performance.now()/1000);
-};
-for(const name of ['change','pointerup','pointercancel','blur'])el('timeline').addEventListener(name,()=>{scrubbing=false;});
-function formatTime(value){
-  const m=Math.floor(value/60),s=value%60;
-  return String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0');
-}
+for(const [id,key] of [['altitude-guides','altitudeGuides'],['heading-guides','headingGuides'],['trail','trail'],['grid','grid'],['show-history','history'],['label-names','labelNames'],['label-altitude','labelAltitude'],['label-speed','labelSpeed']])el(id).checked=preferences[key];
+el('object-scale').value=[1,25,50,100].includes(preferences.objectScale)?preferences.objectScale:50;
+el('trail-duration').value=[60,300,-1].includes(preferences.trailDuration)?preferences.trailDuration:300;
+el('label-mode').value=['all','selected','none'].includes(preferences.labelMode)?preferences.labelMode:'all';
+for(const id of ['altitude-guides','heading-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','trail-duration','label-mode'])el(id).onchange=viewSettings;
+viewSettings();updateFollow();
+el('toggle-altitude-guides').onclick=()=>{el('altitude-guides').checked=!el('altitude-guides').checked;viewSettings();};
+document.addEventListener('pointerdown',event=>{if(!el('view-options').contains(event.target))el('view-options').open=false;});
+
+const number=(value,digits=0)=>Number(value).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
+function formatTime(value){const ticks=Math.round(Math.max(0,value)*10),m=Math.floor(ticks/600),s=(ticks%600)/10;return String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0');}
+function seek(time,pausePlayback=true){const bounds=buffer.bounds();if(!bounds||!Number.isFinite(time))return;viewTime=Math.max(bounds.first,Math.min(bounds.last,time));if(pausePlayback)paused=true;replayClock.seek(viewTime,performance.now()/1000);renderList();updateTimeline();}
 function updateTimeline(){
-  const bounds=buffer.complete?buffer.bounds():null,slider=el('timeline');slider.disabled=!bounds;
-  for(const id of ['play-pause','restart-playback','record-end'])el(id).disabled=!bounds;
-  if(bounds){
-    slider.min=Math.floor(bounds.first*100)/100;slider.max=Math.ceil(bounds.last*100)/100;
-    if(!scrubbing)slider.value=viewTime??bounds.last;
-    slider.setAttribute('aria-valuetext',formatTime(viewTime??bounds.first));
-    el('timeline-first').textContent=formatTime(bounds.first);el('timeline-last').textContent=formatTime(bounds.last);
-  }
-  el('play-pause').textContent=paused?'▶':'Ⅱ';
-  el('play-pause').setAttribute('aria-label',paused?'Oynat':'Duraklat');
-  el('play-pause').setAttribute('aria-pressed',String(paused));
+  const bounds=buffer.complete?buffer.bounds():null;
+  for(const id of ['timeline','play-pause','restart-playback','record-end','seek-time'])el(id).disabled=!bounds;
+  if(bounds){el('timeline').min=bounds.first;el('timeline').max=bounds.last;if(!scrubbing)el('timeline').value=viewTime??bounds.first;
+    el('timeline-last').textContent=formatTime(bounds.last);el('timeline').setAttribute('aria-valuetext',formatTime(viewTime??bounds.first));}
+  if(document.activeElement!==el('seek-time'))el('seek-time').value=formatTime(viewTime??0);
+  el('play-pause').textContent=paused?'▶':'Ⅱ';el('play-pause').setAttribute('aria-label',paused?'Oynat':'Duraklat');el('play-pause').setAttribute('aria-pressed',String(paused));
 }
-let listSignature='';
+function playPause(){const bounds=buffer.bounds();if(!bounds)return;if(paused&&viewTime>=bounds.last)seek(bounds.first);paused=!paused;replayClock.seek(viewTime,performance.now()/1000);updateTimeline();}
+el('play-pause').onclick=playPause;
+el('restart-playback').onclick=()=>{seek(buffer.bounds()?.first);paused=false;};el('record-end').onclick=()=>seek(buffer.bounds()?.last);
+el('seek-time').onchange=()=>{const parts=el('seek-time').value.trim().replace(',','.').split(':');const time=parts.length===1?Number(parts[0]):parts.length===2?Number(parts[0])*60+Number(parts[1]):NaN;if(Number.isFinite(time)&&time>=0)seek(time);else{el('seek-time').value=formatTime(viewTime??0);}};
+el('seek-time').onkeydown=event=>{if(event.key==='Enter'){el('seek-time').dispatchEvent(new Event('change'));el('seek-time').blur();}};
+el('timeline').onpointerdown=()=>{scrubbing=true;};el('timeline').oninput=event=>seek(Number(event.target.value));
+for(const name of ['change','pointerup','pointercancel','blur'])el('timeline').addEventListener(name,()=>{scrubbing=false;});
+function setSpeed(rate){replayClock.speed=rate;replayClock.seek(viewTime,performance.now()/1000);el('playback-speed').value=playbackRates.indexOf(rate);el('playback-rate').textContent=rate+'×';el('playback-speed').setAttribute('aria-valuetext',rate+'×');for(const button of document.querySelectorAll('[data-rate]'))button.setAttribute('aria-pressed',String(Number(button.dataset.rate)===rate));}
+el('playback-speed').oninput=event=>setSpeed(playbackRates[Number(event.target.value)]);
+for(const button of document.querySelectorAll('[data-rate]'))button.onclick=()=>setSpeed(Number(button.dataset.rate));
+document.addEventListener('keydown',event=>{
+  const target=event.target instanceof Element?event.target:null;
+  if(document.querySelector('dialog[open]')||event.altKey||event.ctrlKey||event.metaKey)return;
+  if(event.code==='Space'){
+    if(target?.closest('input:not([type="range"]),select,textarea,summary,[contenteditable]:not([contenteditable="false"])'))return;
+    event.preventDefault();
+    if(!event.repeat&&buffer.complete&&!el('play-pause').disabled)playPause();
+    return;
+  }
+  if(target!==el('timeline')&&target?.closest('input,select,textarea,summary,[contenteditable]:not([contenteditable="false"])'))return;
+  if(['ArrowLeft','ArrowRight'].includes(event.key)&&!target?.closest('[role=separator]')){
+    event.preventDefault();seek((viewTime??0)+(event.key==='ArrowRight'?1:-1)*(event.shiftKey?10:1),false);
+  }
+},true);
+
+function allowed(entity){return !hiddenObjects.has(entity.id)&&!hiddenObjects.has(entity.owner_id)&&(filter==='all'||entity.kind===filter||entity.team===filter);}
+function visibleEntities(){return viewTime===null?[]:buffer.entities(viewTime).filter(allowed);}
+function renderEntities(){
+  const entries=visibleEntities();if(!preferences.history||!preferences.trail||viewTime===null)return entries;
+  for(const [id,track] of buffer.tracks){const last=track.samples.at(-1);if(last.kind==='missile'&&viewTime>last.record_end_s&&allowed(last))entries.push({...last,visible:false});}
+  return entries;
+}
 function renderList(){
-  const entries=buffer.complete&&viewTime!==null?buffer.entities(viewTime):[];
-  if(!entries.some(e=>e.id===selected))selected=entries[0]?.id??null;
-  const signature=buffer.session+entries.map(e=>e.id+e.name+(e.id===selected)).join('|');
+  if(!buffer.complete)return;
+  const inventories=buffer.packet.inventory||{};
+  const allAircraft=[...buffer.tracks.values()].map(track=>track.samples[0]).filter(entry=>entry.kind==='aircraft');
+  const matches=entry=>!query||[entry.name,entry.model,entry.team,...(inventories[entry.id]||[]).flatMap(m=>[m.name,m.model])].join(' ').toLocaleLowerCase('tr').includes(query);
+  const entries=allAircraft.filter(entry=>(filter==='all'||entry.team===filter)&&matches(entry))
+    .sort((a,b)=>(teamOrder[a.team]??2)-(teamOrder[b.team]??2));
+  if(selected===null&&entries.length)selected=entries.find(entry=>buffer.at(entry.id,viewTime))?.id??entries[0].id;
+  const state=entry=>viewTime<entry.record_start_s?'Başlamadı':viewTime>=entry.record_end_s?'Son ölçüm':'Kayıtta';
+  const signature=buffer.session+entries.map(entry=>entry.id+(entry.id===selected)+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',');
   if(signature===listSignature)return;listSignature=signature;
-  el('entity-list').replaceChildren();
+  el('entity-list').replaceChildren();el('object-count').textContent=entries.length;
+  el('list-empty').hidden=entries.length>0;el('list-empty').textContent=buffer.bounds()?'Bu filtrede uçak yok.':'Kayıt açarak başla.';
   for(const entry of entries){
-    const button=document.createElement('button');button.className='entity'+(entry.id===selected?' selected':'');
-    button.dataset.kind=entry.kind;button.dataset.team=entry.team;
+    const card=document.createElement('section');card.className='aircraft-card';card.dataset.id=entry.id;
+    const row=document.createElement('div');row.className='entity-row';const button=document.createElement('button');
+    button.className='entity'+(entry.id===selected?' selected':'');button.dataset.kind='aircraft';button.dataset.team=entry.team;
     button.setAttribute('aria-pressed',String(entry.id===selected));button.textContent=entry.name;
-    const model=document.createElement('span');model.textContent=roleName(entry)+' · '+entry.model;
-    button.appendChild(model);button.onclick=()=>{selected=entry.id;renderList();};el('entity-list').appendChild(button);
+    const subtitle=document.createElement('span');subtitle.textContent=entry.model+' · '+state(entry);button.append(subtitle);button.onclick=()=>selectEntity(entry.id);
+    const eye=document.createElement('button');eye.className='entity-visibility';eye.textContent=hiddenObjects.has(entry.id)?'○':'◉';
+    eye.setAttribute('aria-label',entry.name+(hiddenObjects.has(entry.id)?' göster':' gizle'));eye.setAttribute('aria-pressed',String(!hiddenObjects.has(entry.id)));
+    eye.onclick=()=>{if(hiddenObjects.has(entry.id))hiddenObjects.delete(entry.id);else hiddenObjects.add(entry.id);listSignature='';renderList();};
+    row.append(button,eye);card.append(row,inventoryPanel(inventories[entry.id]||[],viewTime,selected,selectEntity));el('entity-list').append(card);
+  }
+  const unassigned=(buffer.packet.unassigned_inventory||[]).filter(entry=>filter==='all'||entry.team===filter);
+  if(unassigned.length){
+    if(selected===null)selected=unassigned.find(entry=>entry.has_track)?.id??null;
+    const section=document.createElement('section');section.className='aircraft-card unassigned';
+    const title=document.createElement('h3');title.textContent='Sahibi eşleşmeyen mühimmat';
+    const note=document.createElement('p');note.className='data-note';note.textContent='Kayıt, taşıyıcı uçağı ayırt etmiyor.';
+    section.append(title,note,inventoryPanel(unassigned,viewTime,selected,selectEntity));el('entity-list').append(section);
   }
 }
+el('object-search').oninput=event=>{query=event.target.value.toLocaleLowerCase('tr');listSignature='';renderList();};
+el('object-filter').onchange=event=>{filter=event.target.value;listSignature='';renderList();};
+
 async function poll(){
   let again=500;
   try{
-    const response=await fetch('/api/state?after='+buffer.cursor+'&session='+encodeURIComponent(buffer.session||''),{cache:'no-store',signal:AbortSignal.timeout(4000)});
-    if(!response.ok)throw new Error('Veri bağlantısı: HTTP '+response.status);
-    const packet=await response.json();if(packet.schema_version!==2||packet.source!=='tacview-csv')throw new Error('Desteklenmeyen kayıt kaynağı');
-    if(buffer.consume(packet)){viewTime=null;selected=null;replayClock.reset();paused=false;}
+    const response=await fetch('/api/state?after='+buffer.cursor+'&session='+encodeURIComponent(buffer.session||''),{cache:'no-store',signal:AbortSignal.timeout(5000)});
+    if(!response.ok)throw new Error('Kayıt bağlantısı açılamadı');
+    const packet=await response.json();if(packet.schema_version!==2||packet.source!=='tacview-csv')throw new Error('Görüntüleyiciyi yeniden başlatıp sayfayı yenile');
+    if(buffer.consume(packet)){viewTime=null;selected=null;paused=true;replayClock.reset();hiddenObjects.clear();listSignature='';scene.clear?.();}
     if(buffer.complete&&viewTime===null&&buffer.bounds()){
-      viewTime=buffer.bounds().first;replayClock.seek(viewTime,performance.now()/1000);
+      viewTime=buffer.bounds().first;replayClock.seek(viewTime,performance.now()/1000);renderList();
+      if(preferences.camera==='all')scene.frameAll(visibleEntities());else if(!webglError&&preferences.camera==='top')scene.setView('top');
     }
     renderList();updateTimeline();lastReceive=performance.now();connectionError=null;
     if(!buffer.complete)again=0;
@@ -165,37 +224,88 @@ async function poll(){
   setTimeout(poll,again);
 }
 function labels(){
-  renderList();updateTimeline();
-  const status=el('status'),message=el('message');
-  let text='Kayıt bekleniyor',note='BVRGym Tacview CSV kaydı bekleniyor. Dosyalar kaydedilince otomatik açılır. '+(buffer.packet.recording||''),error=false;
-  const bounds=buffer.bounds();
-  if(connectionError){text='Bağlantı kesildi';note='Kayıt oynatımı duraklatıldı. '+connectionError;error=true;}
-  else if(buffer.packet.phase==='error'){text='Kayıt okunamadı';note=buffer.packet.error;error=true;}
-  else if(!buffer.complete){text='Kayıt yükleniyor';note='Uçak ve füze kayıtları ortak zaman çizelgesine yükleniyor.';}
-  else if(buffer.packet.phase==='ready'&&bounds){
-    text=paused?(viewTime>=bounds.last?'Kayıt sonu':'Duraklatıldı'):`Kayıt · ${playbackSpeed}×`;
-    note=`Tacview CSV · ${buffer.packet.objects} nesne · ${paused?'Duraklatıldı':'Oynatma '+playbackSpeed+'×'} · ${buffer.packet.recording}`;
-  }
-  if(webglError)note+=' '+webglError;
-  status.textContent=text;status.classList.toggle('error',error);message.textContent=note;message.classList.toggle('error',error);
-  el('clock').textContent=viewTime===null?'—':formatTime(viewTime);
-  const entity=buffer.complete?buffer.at(selected,viewTime):null;
-  if(!entity){
-    el('selected-name').textContent='Uçak bilgisi';el('model').textContent='Bu zamanda seçili nesne yok';
-    for(const id of ['altitude','speed','heading','mach','roll','pitch','east','north'])el(id).textContent='—';
-    return;
-  }
-  el('selected-name').textContent=entity.name;el('model').textContent=roleName(entity)+' · '+entity.model+' · Tacview CSV';
-  for(const [id,key,digits] of [['altitude','altitude_m',0],['speed','true_airspeed_mps',1],['heading','heading_deg',1],['mach','mach',2],['roll','roll_deg',1],['pitch','pitch_deg',1]])el(id).textContent=entity[key]==null?'—':number(entity[key],digits);
-  el('east').textContent=number(entity.east_m/1000,2)+' km';el('north').textContent=number(entity.north_m/1000,2)+' km';
+  updateTimeline();updateFollow();
+  const packet=buffer.packet,bounds=buffer.bounds();let status='Kayıt bekleniyor',notice='',error=false;
+  if(connectionError){status='Bağlantı kesildi';notice=connectionError;error=true;}
+  else if(packet.phase==='error'){status='Kayıt okunamadı';notice=packet.error;error=true;}
+  else if(!buffer.complete){status='Yükleniyor';notice='Kayıt ölçümleri yükleniyor…';}
+  else if(packet.phase==='waiting'&&bounds){status='Yeni kayıt bekleniyor';notice='Önceki kayıt gösteriliyor. Yeni dosyalar tamamlanınca açılacak.';}
+  else if(bounds)status=paused?(viewTime>=bounds.last?'Kayıt sonu':'Duraklatıldı'):replayClock.speed+'×';
+  if(webglError)notice+=(notice?' · ':'')+webglError;
+  el('status').textContent=status;el('status').classList.toggle('error',error);
+  el('scene-message').hidden=!notice;el('scene-message').textContent=notice;el('scene-message').classList.toggle('error',error);
+  el('empty-scene').hidden=Boolean(bounds);el('record-title').textContent=bounds?(packet.recording_name||'Uçuş kaydı'):'Kayıt seç';
+  el('record-duration').textContent=bounds?formatTime(bounds.last-bounds.first)+' · '+packet.objects+' nesne':'Tacview CSV';
+  const track=buffer.tracks.get(selected),first=track?.samples[0],last=track?.samples.at(-1);
+  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=false;el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','east','north','entity-interval'])el(id).textContent='—';el('jump-entity').disabled=true;return;}
+  const current=buffer.at(selected,viewTime),entity=current||(viewTime<first.record_start_s?first:last);
+  el('detail-title').textContent=first.kind==='missile'?'Füze bilgisi':'Uçak bilgisi';el('selected-name').textContent=first.name;
+  el('model').textContent=first.model+' · '+(first.team==='blue'?'Dost takım':first.team==='red'?'Karşı takım':'Takım belirtilmemiş');
+  el('entity-state').textContent=viewTime<first.record_start_s?'Henüz başlamadı · başlangıç ölçümü':!current?'Kayıt sonu · son ölçüm':'Kaydedilmiş uçuş durumu';
+  el('altitude').textContent=number(toFeet(entity.altitude_m),0);
+  for(const [id,key] of [['heading','heading_deg'],['roll','roll_deg'],['pitch','pitch_deg']])el(id).textContent=number(entity[key],1);
+  const speed=entity.true_airspeed_mps??entity.estimated_tas_mps;
+  const mach=entity.mach??entity.estimated_mach;
+  const estimatedSpeed=entity.true_airspeed_mps==null&&speed!=null,estimatedMach=entity.mach==null&&mach!=null;
+  el('speed').textContent=speed==null?'—':number(speed,1);
+  el('mach').textContent=mach==null?'—':number(mach,2);
+  el('speed-measure').hidden=false;el('mach-measure').hidden=false;
+  el('speed-measure').querySelector('dt').textContent=estimatedSpeed?'Hız · tahmini TAS':'Hava hızı · TAS';
+  el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · hesaplanan':'Mach';
+  el('missing-data').hidden=!estimatedSpeed&&!estimatedMach&&speed!=null&&mach!=null;
+  el('missing-data').textContent=[estimatedSpeed?'Hız konumdan hesaplanır.':null,
+    estimatedMach?'Mach standart atmosferden hesaplanır.':null,speed==null?'Hız ölçümü yetersiz.':null,mach==null?'Mach bilgisi yok.':null].filter(Boolean).join(' ');
+  el('missing-data').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
+  el('east').textContent=number(toNauticalMiles(entity.east_m),2)+' NM';el('north').textContent=number(toNauticalMiles(entity.north_m),2)+' NM';
+  const parentId=first.kind==='aircraft'?first.id:entity.owner_id;
+  const owned=buffer.packet.inventory?.[parentId]||[];
+  el('detail-inventory').hidden=first.kind!=='aircraft';
+  el('detail-inventory-list').replaceChildren(inventoryPanel(owned,viewTime,selected,selectEntity));
+  el('entity-interval').textContent=formatTime(first.record_start_s)+' – '+formatTime(first.record_end_s);el('jump-entity').disabled=false;
 }
+el('jump-entity').onclick=()=>seek(buffer.tracks.get(selected)?.samples[0].record_start_s);
+
+async function request(path,payload){const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||'Kayıt açılamadı ('+response.status+')');}
+function importError(message){el('import-error').hidden=!message;el('import-error').textContent=message;}
+function libraryItem(name,subtitle,action){const button=document.createElement('button');button.className='library-item';const content=document.createElement('div');const title=document.createElement('strong');title.textContent=name;const info=document.createElement('span');info.textContent=subtitle;content.append(title,info);button.append(content);button.onclick=async()=>{if(busy)return;busy=true;button.disabled=true;importError('');try{await action();el('record-dialog').close();}catch(error){importError(error.message);}finally{busy=false;button.disabled=false;}};return button;}
+async function libraries(){
+  el('recording-library').replaceChildren();el('recent-recordings').replaceChildren();
+  try{
+    const response=await fetch('/api/recordings');if(!response.ok)throw new Error('Kayıt listesi alınamadı');const entries=await response.json();
+    for(const entry of entries)el('recording-library').append(libraryItem(entry.name,entry.files+' CSV dosyası',async()=>{await request('/api/open',{id:entry.id});try{await rememberRecording({id:entry.id,title:entry.name,catalog:true});}catch{}}));
+    if(!entries.length)el('recording-library').textContent='Henüz kayıt klasörü bulunamadı. CSV dosyalarını seçerek açabilirsin.';
+  }catch(error){el('recording-library').textContent=error.message;}
+  try{
+    const recent=await recentRecordings();for(const entry of recent)el('recent-recordings').append(libraryItem(entry.title,entry.catalog?'Kayıt klasörü':entry.files.length+' CSV dosyası',()=>request(entry.catalog?'/api/open':'/api/import',entry.catalog?{id:entry.id}:{title:entry.title,files:entry.files})));
+    if(!recent.length)el('recent-recordings').textContent='Açtığın kayıtlar burada görünür.';
+  }catch{el('recent-recordings').textContent='Bu tarayıcıda son kayıtlar saklanamıyor.';}
+}
+function openDialog(){importError('');el('record-dialog').showModal();libraries();}
+el('open-recording').onclick=openDialog;el('empty-open').onclick=openDialog;el('close-record-dialog').onclick=()=>el('record-dialog').close();el('refresh-library').onclick=libraries;
+el('choose-files').onclick=()=>el('file-input').click();el('choose-folder').onclick=()=>el('folder-input').click();
+for(const id of ['file-input','folder-input'])el(id).onchange=async event=>{
+  if(busy)return;const chosen=[...event.target.files].filter(file=>file.name.toLowerCase().endsWith('.csv'));event.target.value='';
+  if(!chosen.length){importError('CSV dosyası seçmelisin.');return;}if(chosen.length>1000||chosen.reduce((sum,file)=>sum+file.size,0)>90*1024*1024){importError('En fazla 1000 dosya ve 90 MB seçebilirsin.');return;}
+  const folders=new Set(chosen.filter(file=>file.webkitRelativePath).map(file=>file.webkitRelativePath.split('/').slice(0,-1).join('/')));
+  if(folders.size>1){importError('Tek simülasyonun CSV klasörünü seç; alt klasörlerdeki farklı kayıtları birlikte açma.');return;}
+  busy=true;el('choose-files').disabled=el('choose-folder').disabled=true;importError('');
+  try{const files=await Promise.all(chosen.map(async file=>({name:file.name,text:await file.text()})));const title=chosen[0].webkitRelativePath?.split('/').slice(0,-1).at(-1)||(chosen.length===1?chosen[0].name:'Uçuş kaydı · '+chosen.length+' dosya');
+    await request('/api/import',{title,files});try{await rememberRecording({id:'local-'+crypto.randomUUID(),title,files,catalog:false});}catch{}
+    el('record-dialog').close();
+  }catch(error){importError(error.message);}finally{busy=false;el('choose-files').disabled=el('choose-folder').disabled=false;}
+};
+el('record-info').onclick=()=>{const packet=buffer.packet,bounds=buffer.bounds();if(!bounds){openDialog();return;}el('record-details').replaceChildren();for(const [label,value] of [['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],['Nesne',String(packet.objects)],['Kaynak',packet.recording||'Tarayıcıdan seçilen Tacview CSV dosyaları']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;el('record-details').append(dt,dd);}el('info-dialog').showModal();};
+el('close-info').onclick=()=>el('info-dialog').close();
+
 function render(timestamp){
-  const connected=!connectionError&&timestamp-lastReceive<5000;
-  const canPlay=connected&&buffer.complete&&buffer.packet.phase==='ready'&&!paused&&!scrubbing;
+  const canPlay=!connectionError&&timestamp-lastReceive<6000&&buffer.complete&&buffer.packet.phase==='ready'&&!paused&&!scrubbing;
   if(buffer.complete)viewTime=replayClock.tick(buffer,timestamp/1000,canPlay);
   const bounds=buffer.bounds();if(canPlay&&bounds&&viewTime>=bounds.last)paused=true;
-  const entities=buffer.complete&&viewTime!==null?buffer.entities(viewTime):[];
-  renderList();scene.draw(entities,buffer,viewTime??0,selected);
+  const tracked=buffer.at(selected,viewTime);
+  if(selected&&scene.follow&&(!tracked||!allowed(tracked))){scene.follow=false;preferences.follow=false;save();updateFollow();}
+  renderList();scene.draw(buffer.complete?renderEntities():[],buffer,viewTime??0,selected);
+  if(!webglError&&preferences.mode==='3d'){const north=scene.controls.target.clone().set(0,0,-1).applyQuaternion(scene.camera.quaternion.clone().invert());el('north-arrow').style.transform=`rotate(${Math.atan2(north.x,north.y)*180/Math.PI}deg)`;}
+  else el('north-arrow').style.transform='none';
   if(timestamp-lastLabels>150){labels();lastLabels=timestamp;}
   requestAnimationFrame(render);
 }

@@ -1,6 +1,7 @@
-"""Local read-only HTTP interface. No flight-control endpoints."""
+"""Local recording viewer. Import changes the viewer, never the simulation."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import csv
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
@@ -15,6 +16,9 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/vendor/three.core.js": ("vendor/three.core.js", "text/javascript; charset=utf-8"),
          "/vendor/OrbitControls.js": ("vendor/OrbitControls.js", "text/javascript; charset=utf-8"),
          "/stream.js": ("stream.js", "text/javascript; charset=utf-8")}
+FILES['/history.js'] = ('history.js', 'text/javascript; charset=utf-8')
+FILES['/units.js'] = ('units.js', 'text/javascript; charset=utf-8')
+FILES['/inventory.js'] = ('inventory.js', 'text/javascript; charset=utf-8')
 
 
 def make_server(store, port=8765):
@@ -33,7 +37,9 @@ def make_server(store, port=8765):
 
         def do_GET(self):
             request = urlsplit(self.path)
-            if request.path == "/api/state":
+            if request.path == '/api/recordings':
+                self.send_data(200, json.dumps(store.catalog(), ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+            elif request.path == "/api/state":
                 try:
                     after = int(parse_qs(request.query).get("after", ["0"])[0])
                     if after < 0:
@@ -52,6 +58,32 @@ def make_server(store, port=8765):
                 self.send_error(404)
 
         def do_POST(self):
-            self.send_error(405, "Read-only viewer")
+            request = urlsplit(self.path)
+            if request.path not in ('/api/import', '/api/open'):
+                self.send_error(405, 'No flight-control endpoints')
+                return
+            origin = self.headers.get('Origin')
+            if origin and origin != 'http://' + self.headers.get('Host', ''):
+                self.send_error(403, 'Same-origin requests required')
+                return
+            if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+                self.send_error(415, 'JSON required')
+                return
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 100 * 1024 * 1024:
+                    self.send_data(413, json.dumps({'error': 'Kayıt en fazla 100 MB olabilir'}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+                    return
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+                if not isinstance(payload, dict):
+                    raise ValueError('Geçersiz istek')
+                if request.path == '/api/import':
+                    store.import_files(payload.get('files'), payload.get('title', 'Seçilen CSV dosyaları'))
+                else:
+                    store.open_catalog(payload.get('id'))
+            except (ValueError, OSError, csv.Error) as exc:
+                self.send_data(400, json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+                return
+            self.send_data(200, b'{"ok":true}', 'application/json; charset=utf-8')
 
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)

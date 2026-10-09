@@ -1,4 +1,13 @@
 import * as THREE from 'three';
+import {MODEL_LENGTHS} from './units.js';
+
+function normalizeLength(model,kind,material){
+  const bounds=new THREE.Box3().setFromObject(model);
+  const length=bounds.max.z-bounds.min.z;
+  model.scale.z=MODEL_LENGTHS[kind]/length;
+  const root=new THREE.Group();root.add(model);root.userData.bodyMaterial=material;
+  return root;
+}
 
 function plate(points, thickness, material) {
   const shape=new THREE.Shape();
@@ -59,11 +68,11 @@ export function createF16(color=0x6b9bbc) {
   const exhaust=new THREE.Mesh(new THREE.CylinderGeometry(.38,.41,.65,16,1,true),nozzleMaterial);
   exhaust.rotation.x=Math.PI/2;exhaust.position.set(0,0,6.75);aircraft.add(exhaust);
   aircraft.userData.bodyMaterial=body;
-  return aircraft;
+  return normalizeLength(aircraft,'aircraft',body);
 }
 
 export function createMissile(color=0xecc274) {
-  // Generic AAM visual, 3.65 m long; nose uses the same -Z axis as aircraft.
+  // AIM-120 silhouette, normalized to 3.66 m; nose uses the same -Z axis as aircraft.
   const missile=new THREE.Group();
   const body=new THREE.MeshStandardMaterial({color,metalness:.35,roughness:.5});
   const cylinder=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,2.95,12),body);
@@ -76,7 +85,7 @@ export function createMissile(color=0xecc274) {
   }
   const nozzle=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.12,10),new THREE.MeshStandardMaterial({color:0x3e454a,metalness:.6,roughness:.6}));
   nozzle.rotation.x=Math.PI/2;nozzle.position.z=1.5;missile.add(nozzle);
-  missile.userData.bodyMaterial=body;return missile;
+  return normalizeLength(missile,'missile',body);
 }
 
 export function disposeObject(object) {

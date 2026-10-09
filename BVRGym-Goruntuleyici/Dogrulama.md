@@ -1,14 +1,17 @@
-# Tacview CSV altyapısı doğrulaması
+# Görüntüleyici doğrulaması
 
-8 Ekim 2026 güncellemesi. Görüntüleyicinin tek simülasyon veri kaynağı BVRGym'in yerleşik Tacview CSV kayıtlarıdır.
+9 Ekim 2026. Veri kaynağı BVRGym'in değiştirilmeyen yerleşik Tacview CSV kayıtlarıdır.
 
-- Python tarafında 15 kontrol geçti: yerleşik sütunlar, uçak/füze zamanları, boş mühimmat dosyaları, isteğe bağlı ölçümler, hatalı satırlar, klasörün sonradan oluşması, dosyaların sabitlenmesi, yeni kayıtla değiştirilmesi, hata sonrası toparlanma, uzun kayıtlar ve salt okunur HTTP.
-- JavaScript tarafında 15 kontrol geçti: konum/yön interpolasyonu, füzenin kayıt aralığı, ayrı uçaklar, sayfalı yükleme, yeni kayıt, tüm geçmişin korunması, altı oynatma hızı, duraklatma ve ileri/geri sarma.
-- Gerçek BVRGym `TacviewLogger` ile iki F-16 ve üç aktif AIM-120 kaydedildi. Beş nesne ve 64 ölçüm doğrudan yerleşik CSV'lerden okundu. Dosyalardaki zaman, yön ve irtifa, simülasyon nesnelerinden okunan değerlerle birebir eşleşti.
-- Kayıtlı ve kayıtsız aynı uçuşun nihai fizik sonuçları eşit bulundu. Kontrol edilen BVRGym logger, environment ve agent kaynaklarının içerik özetleri değişmedi.
-- Tarayıcı kontrolünde gerçek CSV'lerle beş 3D model görüntülendi. Füze başlangıç zamanı, geriye sarma, aynı klasöre yeni kaydın yüklenmesi, 2× oynatma, 3D/2D, alt alanın boyutlandırılması ve dar ekran kontrolü geçti. JavaScript çalışma hatası görülmedi.
-- BVRGym'in mevcut `data_output/test_BTvsBT` kaydı da değiştirilmeden açıldı. Mach/TAS sütunları bulunmadığından değerler uydurulmadı.
+- Python: 23 test; CSV doğrulama, tüm geçmişin saklanması, atomik kayıt değiştirme, hatalı dosyada önceki kaydı koruma, dosya seçimi, klasör seçimine geri dönme ve HTTP erişimleri.
+- JavaScript: 18 test; konum ve açı interpolasyonu, kayıt sınırları, sayfalama, altı oynatma hızı, duraklatma ve ileri/geri sarma.
+- Tarayıcı: yerleşik logger ile üretilen iki F-16 ve üç füze, ayrıca değiştirilmeden okunan 10 nesneli test_BTvsBT kaydı. CSV dosyalarını arayüzden açma, hatalı seçimi reddetme, klasör değiştirme, son kayıtları yeniden açma, 2× oynatma, füze izlerini koruma, panel genişliği, daraltılan oynatma alanı, tercihlerin yenilemede korunması ve 430×850 dar ekran yerleşimi kontrol edildi. Çalışma hatası görülmedi.
+- Önceki altyapı kontrolünde gerçek TacviewLogger ölçümleri fizik nesneleriyle karşılaştırıldı; kayıtlı/kayıtsız uçuş sonuçları aynı bulundu. Bu arayüz güncellemesi BVRGym kaynaklarını veya uçuş kodlarını değiştirmez.
 
-Tacview uygulamasında ayrıca açıp karşılaştırma yapılmadı. Uyumluluk, BVRGym'in kendi logger'ının çıktılarının değiştirilmeden kullanılması ve Tacview'in belgelenmiş CSV sözleşmesi üzerinden doğrulandı. İmha/isabet olayları yerleşik CSV'de bulunmaz; füze ölçüm aralığının bitmesi yalnızca kayıt sınırı olarak ele alınır.
+Yerleşik logger CSV dosyalarını save_logs çağrısında üretir: bu altyapı kayıt oynatır, canlı veri sağlamaz. CSV'de TAS/Mach yoksa hız konum değişiminden, Mach standart atmosferden yaklaşık olarak hesaplanır; bilgi panelinde hesaplandığı açıklanır. Kompakt etiketlerde üstte isim ve hız, altta ortalanmış irtifa gösterilir. Hız tam sayıya yuvarlanır, ayrıntı panelinde ondalık değer korunur. İsabet/ölüm olayı üretilmez. Tacview uygulamasında ayrıca görsel karşılaştırma yapılmadı.
 
-UDP alıcısı, özel JSON yayın biçimi, port/nesne profilleri, görüntüleyiciye özel XML'ler, method observer, eski bağlantı testleri, başlatıcı betikler, eski ekran görüntüleri ve önceki arayüz yedekleri proje içinden kaldırılmıştır. BVRGym'in kendi FlightGear desteği ve kaynakları korunur.
+Eski UDP, özel yayın, port profili, XML bağlantısı ve başlatıcı sistemleri yoktur. Kayıt seçimi yalnızca görüntüleyicinin açık kaydını değiştirir; uçuş komutu API'si bulunmaz.
+
+
+Son görsel güncellemede gerçek kayıtlarla envanterin uçak altında gruplanması, boş mühimmat dosyalarının envantere alınması, zamanla Uçakta/Havada/Atıldı durumları, tahmini hızın yaklaşık 300 m/s okunması, ft/NM birimleri, uçak ve füzenin ortak büyütmesi, gerçek model uzunlukları, irtifa çizgisinin doğru uç noktaları, heading çizgisinin ölçülen yönle eşleşmesi ve yer ızgarası kapalıyken irtifa göstergesinin çalışması kontrol edildi.
+
+İrtifa dolgusu güncellemesinde çizgilerin önceki ince opaklığı korundu. Uçuş izinden yere inen mavi perdenin alfa değeri yukarıda 1, yerde 0 olacak şekilde değişir; malzeme opaklığıyla birlikte yumuşak bir dolgu verir. Dolgunun yalnızca uçaklarda oluşturulduğu, yer referansına doğru uzandığı ve İrtifa düğmesiyle kapandığı tarayıcıda doğrulandı. Burun yönü çizgisi için -30°, 0°, +30° pitch ve 0°, 90°, 180°, 270° heading kombinasyonlarında 3D yön ve model burnundaki başlangıç konumu kontrol edildi.

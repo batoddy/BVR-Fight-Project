@@ -159,7 +159,66 @@ class RecordingChecks(unittest.TestCase):
         store.refresh(0)
         self.assertEqual(store.phase, 'waiting')
 
-    def test_http_is_readonly_and_validates_cursor_and_session(self):
+    def test_import_is_atomic_and_preserves_original_files(self):
+        self.write()
+        store = self.ready()
+        original = next(self.directory.glob('*.csv'))
+        contents = original.read_bytes()
+        store.import_files([dict(name=original.name, text=contents.decode())], 'Dosyadan kayıt')
+        session = store.session
+        self.assertEqual(store.packet()['recording_mode'], 'files')
+        self.assertEqual(store.packet()['recording_name'], 'Dosyadan kayıt')
+        store.refresh(100)
+        self.assertEqual(store.session, session)
+        with self.assertRaises(ValueError):
+            store.import_files([dict(name=original.name, text='Time\n0')])
+        self.assertEqual(store.session, session)
+        self.assertEqual(original.read_bytes(), contents)
+        with self.assertRaises(ValueError):
+            store.import_files([dict(name='../bad.csv', text='Time\n0')])
+        with self.assertRaises(ValueError):
+            store.import_files([dict(name=original.name, text=contents.decode())] * 2)
+        store.open_catalog(store.catalog()[0]['id'])
+        self.assertEqual(store.mode, 'folder')
+        self.assertNotEqual(store.session, session)
+        self.write(rows=[[0, 18, 59, 8000, 0, 0, 0]])
+        store.refresh(101)
+        store.refresh(103)
+        self.assertEqual(store.samples[0]['altitude_m'], 8000)
+
+    def test_http_import_and_catalog_never_offer_flight_controls(self):
+        self.write()
+        store = self.ready()
+        server = make_server(store, 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f'http://127.0.0.1:{server.server_port}'
+        try:
+            with urlopen(base + '/api/recordings') as response:
+                entries = json.load(response)
+            self.assertEqual(len(entries), 1)
+            data = json.dumps(dict(id=entries[0]['id'])).encode()
+            request = Request(base + '/api/open', data=data, headers={'Content-Type': 'application/json'})
+            with urlopen(request) as response:
+                self.assertTrue(json.load(response)['ok'])
+            before = store.session
+            request.add_header('Origin', 'http://foreign.example')
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(request)
+            self.assertEqual(caught.exception.code, 403)
+            self.assertEqual(store.session, before)
+            bad = Request(base + '/api/import', data=b'{"files":[]}', headers={'Content-Type': 'application/json'})
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(bad)
+            self.assertEqual(caught.exception.code, 400)
+            self.assertIn('error', json.load(caught.exception))
+            self.assertEqual(store.session, before)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    def test_http_validates_cursor_and_session_and_rejects_flight_controls(self):
         self.write()
         store = self.ready()
         server = make_server(store, 0)

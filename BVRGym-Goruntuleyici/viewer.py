@@ -11,8 +11,10 @@ def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description='BVRGym Tacview CSV görüntüleyici')
+    parent = Path(__file__).resolve().parent.parent
+    workspace = parent if (parent / 'BVRGym').is_dir() else parent / 'Workspace'
     parser.add_argument('--recording', type=Path,
-                        default=Path(__file__).resolve().parent.parent / 'Workspace/BVRGym/data_output/tacview',
+                        default=workspace / 'BVRGym/data_output/tacview',
                         help='TacviewLogger kayıt klasörü; oluşacak kayıtlar da otomatik açılır')
     parser.add_argument('--port', type=int, default=8765, help='Tarayıcı arayüzü portu')
     args = parser.parse_args()
@@ -20,7 +22,7 @@ def main():
         parser.error('Port 1–65535 arasında olmalı')
     if args.recording.exists() and not args.recording.is_dir():
         parser.error('--recording bir klasör olmalı')
-    store = RecordingStore(args.recording)
+    store = RecordingStore(args.recording, catalog_roots=[workspace / 'recordings', workspace / 'BVRGym/data_output'])
     try:
         server = make_server(store, args.port)
     except OSError as exc:
