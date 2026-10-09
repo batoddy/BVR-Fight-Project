@@ -1,0 +1,3 @@
+[submodule "BVRGym"]
+	path = BVRGym
+	url = https://github.com/xcwoid/BVRGym.git

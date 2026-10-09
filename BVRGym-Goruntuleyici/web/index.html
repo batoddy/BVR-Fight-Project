@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BVRGym · Uçuş görünümü</title>
+  <script>let theme;try{theme=localStorage.getItem('bvrgym-viewer-theme');}catch{}document.documentElement.dataset.theme=theme==='light'||theme==='dark'?theme:'dark';</script>
+  <script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">✈</span><div><h1>BVRGym <span>Uçuş görünümü</span></h1><p>Angajman Projesi · uçuş kaydı analizi</p></div></div>
+    <div class="header-actions"><span class="badge" id="status">Veri bekleniyor</span><button id="toggle-theme" class="theme-toggle" role="switch" aria-checked="true"><span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span><span>Koyu mod</span></button></div>
+  </header>
+  <div class="toolbar">
+    <div class="button-group" aria-label="Görünüm"><button id="view-3d" aria-pressed="true">3D</button><button id="view-2d" aria-pressed="false">2D</button></div>
+    <span class="toolbar-divider"></span>
+    <button id="camera-orbit">Serbest kamera</button><button id="camera-top">Üstten</button><button id="fit-all">Tüm uçaklar</button>
+    <button id="follow" aria-pressed="true">Uçağı takip et</button>
+    <div class="view-toggles" aria-label="Harita göstergeleri"><label><input id="trail" type="checkbox" checked>Uçuş izi</label><label><input id="grid" type="checkbox" checked>Yer referansı</label></div>
+    <span class="clock">Gösterim zamanı <output id="clock">—</output></span>
+  </div>
+  <div class="content" id="layout">
+    <aside id="objects" class="objects">
+      <button id="toggle-list" class="panel-arrow" aria-label="Nesne panelini kapat" title="Nesne panelini kapat" aria-expanded="true" aria-controls="objects-content">‹</button>
+      <div id="objects-content" class="panel-body"><h2>NESNELER</h2><div id="entity-list"></div><div class="list-note"><span class="legend-dot"></span> Dost uçak · <span class="legend-dot hostile"></span> Bogey<br><span class="legend-dot missile"></span> Füze<span>Nesneyi seçerek takip et.</span></div></div>
+    </aside>
+    <main>
+      <div class="maphead"><strong id="view-title">3D uçuş görünümü</strong><span id="camera-help">Sol tuş: döndür · Sağ tuş: taşı · Tekerlek: yakınlaştır</span></div>
+      <div class="surface">
+        <canvas id="scene" role="img" aria-label="Uçakların kaydedilmiş üç boyutlu konumu, yönelimi ve uçuş izleri">3D uçuş görünümü</canvas>
+        <div class="scene-note"><span class="legend-dot"></span> Uçuş izi <span>·</span> Yükseklik: MSL</div>
+        <div class="zoom"><button id="zoom-in" aria-label="Yakınlaştır">+</button><button id="zoom-out" aria-label="Uzaklaştır">−</button></div>
+      </div>
+      <section class="timeline-bar" id="playback-dock" aria-label="Uçuş kaydı kontrolleri">
+        <div id="dock-resizer" class="dock-resizer" role="separator" tabindex="0" aria-label="Alt kontrol alanının yüksekliği" aria-orientation="horizontal" aria-valuemin="94" aria-valuemax="320" aria-valuenow="134" title="Yukarı/aşağı sürükleyerek boyutlandır · Çift tıkla: daralt / aç"><span></span></div>
+        <div class="dock-body">
+        <div class="timeline-section">
+        <div class="timeline-position">
+        <button id="play-pause" aria-label="Duraklat" aria-pressed="false" disabled>Ⅱ</button>
+        <span id="timeline-first" class="timeline-time">—</span>
+        <input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıtta seçilen simülasyon zamanı" disabled>
+        <span id="timeline-last" class="timeline-time">—</span>
+        </div>
+        <div class="playback-actions"><button id="restart-playback" disabled>Baştan izle</button><button id="record-end" disabled>Sona git</button></div>
+        </div>
+        <div class="speed-control">
+          <label for="playback-speed">Oynatma hızı <output id="playback-rate">1×</output></label>
+          <input id="playback-speed" type="range" min="0" max="5" step="1" value="0" aria-label="Oynatma hızı" aria-valuetext="1×">
+          <div class="speed-stops" aria-label="Hız durakları"><button data-rate="1" aria-label="1 kat hız" aria-pressed="true">1×</button><button data-rate="2" aria-label="2 kat hız" aria-pressed="false">2×</button><button data-rate="3" aria-label="3 kat hız" aria-pressed="false">3×</button><button data-rate="4" aria-label="4 kat hız" aria-pressed="false">4×</button><button data-rate="5" aria-label="5 kat hız" aria-pressed="false">5×</button><button data-rate="10" aria-label="10 kat hız" aria-pressed="false">10×</button></div>
+        </div>
+        </div>
+      </section>
+    </main>
+    <aside id="detail" class="detail">
+      <button id="toggle-detail" class="panel-arrow" aria-label="Uçak bilgi panelini kapat" title="Uçak bilgi panelini kapat" aria-expanded="true" aria-controls="detail-content">›</button>
+      <div id="detail-content" class="panel-body">
+      <div class="detailhead"><h2 id="selected-name">Uçak bilgisi</h2></div><p id="model">Ölçümler bekleniyor</p>
+      <dl class="measures">
+        <div><dt>İrtifa · MSL</dt><dd><output id="altitude">—</output><small> m</small></dd></div>
+        <div><dt>Hava hızı · TAS</dt><dd><output id="speed">—</output><small> m/s</small></dd></div>
+        <div><dt>Burun yönü</dt><dd><output id="heading">—</output><small> °</small></dd></div>
+        <div><dt>Mach</dt><dd><output id="mach">—</output></dd></div>
+        <div><dt>Yatış</dt><dd><output id="roll">—</output><small> °</small></dd></div>
+        <div><dt>Yunuslama</dt><dd><output id="pitch">—</output><small> °</small></dd></div>
+      </dl>
+      <div class="positions"><div>Yerel doğu<output id="east">—</output></div><div>Yerel kuzey<output id="north">—</output></div></div>
+      <div class="readonly"><strong>Pasif izleme</strong><p>Uçuşu Python kodun yönetir. Arayüz Tacview ile aynı CSV kayıtlarını görüntüler.</p></div>
+      <div class="reference-note">Yer düzlemi 0 m MSL referansıdır; arazi yükseklik verisi kullanılmaz.</div>
+      </div>
+    </aside>
+  </div>
+  <footer id="message" aria-live="polite">BVRGym Tacview CSV kaydı bekleniyor. Kayıt oluşunca otomatik açılır.</footer>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
