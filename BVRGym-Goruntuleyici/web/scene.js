@@ -15,7 +15,7 @@ export class Scene {
     this.follow=true;this.grid=true;this.trail=true;this.mode='3d';
     this.speedUnit='mps';this.altitudeUnit='ft';this.distanceUnit='nm';
     this.trailDuration=300;this.labelMode='all';this.labelNames=true;this.labelAltitude=true;this.labelSpeed=true;
-    this.models=new Map();this.lastTheme=null;
+    this.models=new Map();this.altitudeGuideCache=new WeakMap();this.lastTheme=null;
     this.hasData=false;this.objectScale=50;this.altitudeGuides=true;this.headingGuides=true;this.lastTrailUpdate=-Infinity;
     this.world=new THREE.Scene();
     this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
@@ -38,9 +38,30 @@ export class Scene {
     const sun=new THREE.DirectionalLight(0xffffff,3);sun.position.set(-15000,30000,10000);this.world.add(sun);
     this.ground=new THREE.Mesh(new THREE.PlaneGeometry(400000,400000),new THREE.MeshStandardMaterial({color:0x24352b,roughness:1,metalness:0}));
     this.ground.rotation.x=-Math.PI/2;this.ground.position.y=-1;this.world.add(this.ground);
-    this.groundGrid=new THREE.GridHelper(160000,80,0x5c7765,0x344f43);this.world.add(this.groundGrid);
-    const axisGeometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-80000,2,0),new THREE.Vector3(80000,2,0),new THREE.Vector3(0,2,-80000),new THREE.Vector3(0,2,80000)]);
-    this.axes=new THREE.LineSegments(axisGeometry,new THREE.LineBasicMaterial({color:0x83a395,transparent:true,opacity:.5}));this.world.add(this.axes);
+    // Draw the grid in the ground surface itself: no competing depth layers.
+    this.gridUniforms={gridEnabled:{value:1},gridColor:{value:new THREE.Color(0x50725f)}};
+    this.ground.material.onBeforeCompile=shader=>{
+      Object.assign(shader.uniforms,this.gridUniforms);
+      shader.vertexShader=shader.vertexShader.replace('#include <common>',
+        '#include <common>\nvarying vec2 vGridPosition;').replace('#include <project_vertex>',
+        '#include <project_vertex>\nvGridPosition=(modelMatrix*vec4(transformed,1.0)).xz;');
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
+        '#include <common>\nvarying vec2 vGridPosition;\nuniform float gridEnabled;\nuniform vec3 gridColor;')
+        .replace('#include <opaque_fragment>',`
+          vec2 gridCoordinate=vGridPosition/2000.0;
+          vec2 footprint=max(fwidth(gridCoordinate),vec2(0.000001));
+          vec2 lineDistance=abs(fract(gridCoordinate+0.5)-0.5)/footprint;
+          // Filter subpixel lines and fade cells too small to distinguish.
+          vec2 lineCoverage=1.0-smoothstep(vec2(0.1),vec2(0.9),lineDistance);
+          vec2 cellFade=1.0-smoothstep(vec2(0.12),vec2(0.5),footprint);
+          float gridAlpha=max(lineCoverage.x*cellFade.x,lineCoverage.y*cellFade.y);
+          vec2 axisCoverage=1.0-smoothstep(vec2(0.45),vec2(1.55),abs(gridCoordinate)/footprint);
+          gridAlpha=max(gridAlpha,max(axisCoverage.x,axisCoverage.y)*0.65);
+          outgoingLight=mix(outgoingLight,gridColor,gridAlpha*gridEnabled*0.45);
+          #include <opaque_fragment>
+        `);
+    };
+    this.ground.material.customProgramCacheKey=()=> 'filtered-ground-grid-v1';
     this.labels=document.createElement('div');this.labels.className='scene-labels';canvas.parentElement.append(this.labels);
     this.canvas2d=document.createElement('canvas');this.canvas2d.id='scene2d';this.canvas2d.hidden=true;
     this.canvas2d.setAttribute('aria-label','Uçakların üstten görünümü');canvas.parentElement.insertBefore(this.canvas2d,this.labels);
@@ -159,11 +180,37 @@ export class Scene {
     mesh.geometry.dispose();mesh.geometry=geometry;
   }
 
+  altitudeDrops(track,time){
+    const samples=track?.samples||[];
+    if(!samples.length)return [];
+    let cached=this.altitudeGuideCache.get(samples);
+    if(!cached||cached.length!==samples.length){
+      const guides=[{time:samples[0].sim_time_s,point:point(samples[0])}];
+      const spacing=2*1852;let travelled=0,next=spacing;
+      for(let i=1;i<samples.length;i++){
+        const a=samples[i-1],b=samples[i],start=point(a),end=point(b),length=start.distanceTo(end);
+        if(length>0)while(next<=travelled+length){
+          const fraction=(next-travelled)/length;
+          guides.push({time:a.sim_time_s+(b.sim_time_s-a.sim_time_s)*fraction,point:start.clone().lerp(end,fraction)});
+          next+=spacing;
+        }
+        travelled+=length;
+      }
+      cached={length:samples.length,guides};this.altitudeGuideCache.set(samples,cached);
+    }
+    const drops=[],first=this.trailDuration<0?-Infinity:time-this.trailDuration;
+    for(const guide of cached.guides){
+      if(guide.time>time)break;
+      if(guide.time<first)continue;
+      const top=guide.point;drops.push(top,new THREE.Vector3(top.x,4,top.z));
+    }
+    return drops;
+  }
+
   updateTrail(record,track,entity,time) {
     const samples=track?.samples||[];const visible=samples.filter(s=>s.sim_time_s<=time&&(this.trailDuration<0||s.sim_time_s>=time-this.trailDuration));
     const stride=Math.max(1,Math.ceil(visible.length/1800));
-    const drops=[],dropStride=Math.max(1,Math.ceil(visible.length/12));
-    if(entity.kind==='aircraft')for(let i=0;i<visible.length;i+=dropStride){const top=point(visible[i]);drops.push(top,new THREE.Vector3(top.x,4,top.z));}
+    const drops=entity.kind==='aircraft'?this.altitudeDrops(track,time):[];
     this.replaceLine(record.altitudeTrace,drops);
     const points=[];for(let i=0;i<visible.length;i+=stride)points.push(point(visible[i]));
     points.push(point(entity));this.replaceLine(record.trail,points);
@@ -179,7 +226,7 @@ export class Scene {
     const sky=dark?0x142330:0xb9cdda;
     this.world.background=new THREE.Color(sky);this.world.fog=new THREE.FogExp2(sky,.000002);
     this.ground.material.color.setHex(dark?0x26392f:0xc3d2bc);
-    this.groundGrid.material.color.setHex(dark?0x50725f:0x607c66);
+    this.gridUniforms.gridColor.value.setHex(dark?0x50725f:0x607c66);
   }
 
   clear() {
@@ -214,7 +261,7 @@ export class Scene {
       this.camera.position.add(delta);this.controls.target.copy(focusPosition);
       this.camera.updateMatrixWorld();
     }
-    this.groundGrid.visible=this.grid;this.axes.visible=this.grid;
+    this.gridUniforms.gridEnabled.value=this.grid?1:0;
     const now=performance.now(),updateTrails=now-this.lastTrailUpdate>160||time<this.lastTime;
     const rect=this.canvas.getBoundingClientRect();
     const labelRects=[];
@@ -294,3 +341,6 @@ export class Scene {
     updateScaleBar(this.distanceScale,metersPerPixel,rect.width,'3d',this.distanceUnit);
   }
 }
+
+
+

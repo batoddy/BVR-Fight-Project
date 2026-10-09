@@ -1,2 +1,40 @@
-.venv
-recordings
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node dependencies and build outputs
+node_modules/
+build/
+dist/
+*.egg-info/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Simulation recordings and runtime logs
+recordings/
+logs/
+*.log
+
+# Local backups and generated document history
+*.bak
+*.tmp
+*.swp
+*~
+/docs/mimari/history/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini

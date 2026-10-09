@@ -102,3 +102,9 @@ Görüntüleyici için Python standart kütüphanesi yeterlidir; BVRGym yalnızc
 Görünüm ve birim ayarları üst çubukta açılır panellerden seçilir. Nesne büyütme oranı doğrudan üst çubuktadır. Kayıt aç panelinden klasör/dosya seçebilir, açık dizini görebilir veya son kayıtları arayabilirsin. Paneller dışarı tıklayınca veya Escape ile kapanır.
 
 Sol listedeki uçağa veya sahnedeki etikete çift tıklama, nesneye yaklaşır ve kamera takibini açar. Gündüz görünümü koyu takım renkleri kullanır.
+
+3D yer ızgarası yer yüzeyinde çizilir; ince çizgiler ekran piksel boyutuna göre filtrelenir ve uzakta kademeli olarak azalır.
+
+İrtifa dolgusundaki dikey çizgiler uçuş yolu boyunca sabit 2 NM (3704 m) aralıklarla eklenir; uzun kayıtlarda seyrelmez, iz süresi değiştiğinde eski konumları kaymaz.
+
+

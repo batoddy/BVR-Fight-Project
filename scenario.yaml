@@ -1,0 +1,33 @@
+# Süre: simülasyon saniyesi. Bekleme: her dış döngüde gerçek saniye.
+world:
+  duration_s: 180
+  sleep_s: 0.08  # 0.08 = Yaklaşık gerçek zaman ; 0 = beklemeden çalıştır.
+  wind_mps:  # Dünya eksenleri: kuzey, doğu, aşağı (+).
+    north: 0
+    east: 0
+    down: 0
+
+# blue/red: Python'da ajanlara erişmek için kullanılan benzersiz anahtarlar.
+# name: görünen isim. Uçak modeli şimdilik Python'da F-16 olarak sabit.
+agents:
+  blue:
+    name: KE
+    team: Blue
+    ammo: 2
+    spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
+      lat: 59.0
+      long: 18.0
+      alt: 8000
+      vel: 300
+      heading: 0
+
+  red:
+    name: Bogey
+    team: Red
+    ammo: 2
+    spawn:
+      lat: 59.25
+      long: 18.0
+      alt: 3000
+      vel: 300
+      heading: 180

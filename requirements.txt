@@ -5,3 +5,4 @@ pandas
 py_trees
 stable_baselines3
 tensorboard
+PyYAML

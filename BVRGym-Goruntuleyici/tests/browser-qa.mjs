@@ -19,7 +19,7 @@ try{
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error(stderr||'Startup timeout')),10000);child.on('exit',code=>{clearTimeout(timer);reject(new Error('Exit '+code+stderr));});child.stdout.on('data',chunk=>{if(String(chunk).includes('http://')){clearTimeout(timer);resolve();}});});
   browser=await chromium.launch({headless:true,executablePath:options.browser,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   const page=await browser.newPage({viewport:{width:1500,height:950}}),errors=[];
-  page.on('pageerror',error=>errors.push(error.message));
+  page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error'&&!message.text().startsWith('Failed to load resource:'))errors.push(message.text());});
   await page.goto('http://127.0.0.1:'+port,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelector('#status').textContent==='Kayıt bekleniyor');
   assert.equal(await page.locator('#timeline').isDisabled(),true);
@@ -60,6 +60,30 @@ try{
   await page.locator('#record-info').click();
   assert.equal(await page.locator('#record-info-panel').isVisible(),true);
   await page.locator('#close-info').click();
+  await page.evaluate(async()=>{
+    const {scene}=await import('/app.js');
+    if(scene.world.children.some(child=>child.type==='GridHelper'))throw new Error('Grid still has overlapping geometry');
+    for(const distance of [1500,15000,150000]){
+      scene.camera.position.copy(scene.controls.target).add({x:distance,y:distance*.12,z:distance*.6});scene.controls.update();
+      scene.renderer.render(scene.world,scene.camera);
+      if(scene.renderer.getContext().getError()!==0)throw new Error('Grid rendering error');
+    }
+    scene.camera.position.copy(scene.controls.target).add({x:9000,y:6500,z:11000});scene.controls.update();
+  });
+  await page.evaluate(async()=>{
+    const {scene}=await import('/app.js');const previous=scene.trailDuration;scene.trailDuration=-1;
+    const track={samples:[0,10371.2,34076.8,148160].map(east=>({east_m:east,north_m:0,altitude_m:5000,sim_time_s:east/1481.6}))};
+    const early=scene.altitudeDrops(track,10),late=scene.altitudeDrops(track,100);
+    if(early.length!==10||late.length!==82)throw new Error('Guide density changed with trail length');
+    for(let i=2;i<late.length;i+=2)if(Math.abs(late[i].distanceTo(late[i-2])-3704)>.001)throw new Error('Guide spacing is not fixed');
+    for(let i=0;i<early.length;i+=2)if(early[i].distanceTo(late[i])>.001)throw new Error('Past guides moved');
+    scene.trailDuration=10;const window=scene.altitudeDrops(track,100);
+    if(window.length!==10||Math.abs(window[0].x-133344)>.001)throw new Error('Trail window shifted guide alignment');
+    const rising={samples:[{east_m:0,north_m:0,altitude_m:5000,sim_time_s:0},{east_m:8889.6,north_m:11852.8,altitude_m:16112,sim_time_s:10}]};
+    scene.trailDuration=-1;const climb=scene.altitudeDrops(rising,10);
+    for(let i=2;i<climb.length;i+=2)if(Math.abs(climb[i].distanceTo(climb[i-2])-3704)>.001)throw new Error('Climb spacing mismatch');
+    scene.trailDuration=previous;
+  });
   const times=await page.evaluate(async()=>{
     const {buffer}=await import('/app.js');
     const missiles=[...buffer.tracks.values()].filter(track=>track.samples[0].kind==='missile');
@@ -449,6 +473,10 @@ try{
   if(!resolved.startsWith(prefix)||!path.basename(resolved).startsWith('bvrgym-csv-qa-'))throw new Error('Unsafe cleanup path');
   await fs.rm(resolved,{recursive:true,force:true});
 }
+
+
+
+
 
 
 
