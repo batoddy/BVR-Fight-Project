@@ -1,11 +1,6 @@
-# Süre: simülasyon saniyesi. Bekleme: her dış döngüde gerçek saniye.
+# Süre: simülasyon saniyesi. Bekleme veya özel ortam ayarı uygulanmaz.
 world:
   duration_s: 180
-  sleep_s: 0.08  # 0.08 = Yaklaşık gerçek zaman ; 0 = beklemeden çalıştır.
-  wind_mps:  # Dünya eksenleri: kuzey, doğu, aşağı (+).
-    north: 0
-    east: 0
-    down: 0
 
 # blue/red: Python'da ajanlara erişmek için kullanılan benzersiz anahtarlar.
 # name: görünen isim. Uçak modeli şimdilik Python'da F-16 olarak sabit.
