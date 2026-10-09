@@ -2,6 +2,7 @@
 import copy
 import os
 import sys
+import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -33,8 +34,8 @@ def copy_config(module):
 def create_agent(settings):
     aircraft = copy_config(f16_config)
     missile = copy_config(AAM_config)
-    aircraft.aircraft_simulation.Sim_time_step = 1
-    missile.missile_simulation.Sim_time_step = 1
+    aircraft.aircraft_simulation.Sim_time_step = world["sim_time_step"]
+    missile.missile_simulation.Sim_time_step = world["sim_time_step"]
     return BaseBVRAgent(SimpleNamespace(
         agent_name=settings["name"], team=settings["team"], aircraft_name="F-16",
         agent_parameters=Agent_parameters(ammo=settings["ammo"], **settings["spawn"]),
@@ -51,7 +52,7 @@ blue, red = agents["blue"], agents["red"]
 
 # 2. Komutlar: [hedef yön (derece), hedef irtifa (metre), gaz].
 # Başlangıç yönünü ve irtifasını koru. Kendi uçuş komutlarını burada yazabilirsin.
-commands = {key: [settings["spawn"]["heading"], settings["spawn"]["alt"], 0.49]
+commands = {key: [settings["spawn"]["heading"], settings["spawn"]["alt"], settings["throttle"]]
             for key, settings in scenario["agents"].items()}
 
 # İstersen hedef seçip ateşle; otomatik atış yok.
@@ -70,3 +71,4 @@ with CSVRecorder(WORKSPACE / "recordings") as recorder:
 
         recorder.record(agents)
         # Veri okuma örneği: altitude_m = blue.simObj.get_altitude()
+        time.sleep(world["sleep_s"])

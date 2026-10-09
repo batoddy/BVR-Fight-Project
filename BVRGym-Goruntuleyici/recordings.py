@@ -1,7 +1,6 @@
 """Read BVRGym's native Tacview CSV exports without changing their files."""
 import csv
 import hashlib
-import io
 import math
 from pathlib import Path
 import re
@@ -28,18 +27,32 @@ def metadata(path):
     model, callsign, color = match.groups()
     color = (color or '').strip()
     team = color.lower() if color.lower() in ('blue', 'red') else 'unknown'
-    kind = 'missile' if model.upper().startswith(('AIM', 'AAM', 'AMRAAM')) else 'aircraft'
+    upper = model.upper()
+    missile = re.match(r'^(AIM|AAM|AMRAAM|R[- ]?\d|PL[- ]?\d|SD[- ]?\d|METEOR|MICA|IRIS|PYTHON|DERBY|ASPIDE)', upper)
+    kind = 'missile' if missile else 'aircraft'
+    visual_model = 'f16' if re.match(r'^F[- ]?16(?:\b|[A-Z])', upper) else 'aim120' if upper.startswith(('AIM-120', 'AMRAAM')) else 'generic'
     return dict(id=path.name, name=callsign or model, model=model, color=color,
-                team=team, kind=kind, file=path.name)
+                team=team, kind=kind, visual_model=visual_model, file=path.name)
 
 
-def ecef(lat_deg, lon_deg, height_m):
-    lat, lon = math.radians(lat_deg), math.radians(lon_deg)
-    a, e2 = 6378137.0, 6.69437999014e-3
-    n = a / math.sqrt(1 - e2 * math.sin(lat) ** 2)
-    return ((n + height_m) * math.cos(lat) * math.cos(lon),
-            (n + height_m) * math.cos(lat) * math.sin(lon),
-            (n * (1 - e2) + height_m) * math.sin(lat))
+def ecef(lat_gc_deg, lon_deg, height_m):
+    """BVRGym native geocentric latitude and JSBSim radial ASL -> ECEF."""
+    lat, lon = math.radians(lat_gc_deg), math.radians(lon_deg)
+    a, b = 6378137.0, 6356752.314245
+    sea_radius = 1 / math.sqrt((math.cos(lat) / a) ** 2 + (math.sin(lat) / b) ** 2)
+    radius = sea_radius + height_m
+    return (radius * math.cos(lat) * math.cos(lon),
+            radius * math.cos(lat) * math.sin(lon), radius * math.sin(lat))
+
+
+def geodetic_latitude(lat_gc_deg, height_m):
+    x, _, z = ecef(lat_gc_deg, 0, height_m)
+    e2 = 6.69437999014e-3
+    phi = math.atan2(z, (1 - e2) * x)
+    for _ in range(8):
+        n = 6378137.0 / math.sqrt(1 - e2 * math.sin(phi) ** 2)
+        phi = math.atan2(z + e2 * n * math.sin(phi), x)
+    return math.degrees(phi)
 
 
 def read_csv(path, handle):
@@ -84,7 +97,11 @@ def read_csv(path, handle):
                 raise ValueError('koordinat aralık dışında')
             if values['sim_time_s'] < 0 or rows and values['sim_time_s'] < rows[-1]['sim_time_s']:
                 raise ValueError('zaman negatif veya geriye gidiyor')
+            if any(values.get(key, 0) < 0 for key in ('true_airspeed_mps', 'mach')):
+                raise ValueError('hız veya Mach negatif olamaz')
             previous = dict(values)
+            for key in ('heading_deg', 'pitch_deg', 'roll_deg'):
+                values[key + '_known'] = key in previous
             for key in ('roll_deg', 'pitch_deg', 'heading_deg'):
                 values.setdefault(key, 0.0)
             for key in ('true_airspeed_mps', 'mach'):
@@ -114,26 +131,6 @@ def read_recording(directory):
     return assemble([read_object(path) for path in paths], [metadata(path) for path in paths])
 
 
-def read_exports(files):
-    if not isinstance(files, list) or not 1 <= len(files) <= 1000:
-        raise ValueError('1–1000 CSV dosyası seçmelisin')
-    objects, names, manifest = [], set(), []
-    for entry in files:
-        if not isinstance(entry, dict):
-            raise ValueError('Geçersiz dosya')
-        name, content = entry.get('name'), entry.get('text')
-        if not isinstance(name, str) or not name.lower().endswith('.csv') or any(c in name for c in ('/', '\\', '\x00')):
-            raise ValueError('Geçersiz CSV dosya adı')
-        if name.casefold() in names:
-            raise ValueError(f'Aynı adlı dosyalar farklı kayıtlardan gelmiş olabilir: {name}')
-        if not isinstance(content, str):
-            raise ValueError('CSV metni bulunamadı')
-        names.add(name.casefold())
-        manifest.append(metadata(Path(name)))
-        objects.append(read_csv(Path(name), io.StringIO(content.lstrip('\ufeff'), newline='')))
-    return assemble(objects, manifest)
-
-
 def assemble(objects, manifest=()):
     objects = [rows for rows in objects if rows]
     if not objects:
@@ -142,7 +139,8 @@ def assemble(objects, manifest=()):
         estimate_motion(rows, ecef)
     samples = sorted((row for rows in objects for row in rows), key=lambda row: row['sim_time_s'])
     first = next((row for row in samples if row['kind'] == 'aircraft'), samples[0])
-    lat0, lon0 = math.radians(first['latitude_deg']), math.radians(first['longitude_deg'])
+    lat0 = math.radians(geodetic_latitude(first['latitude_deg'], first['altitude_m']))
+    lon0 = math.radians(first['longitude_deg'])
     origin = ecef(first['latitude_deg'], first['longitude_deg'], first['altitude_m'])
     for index, row in enumerate(samples, 1):
         xyz = ecef(row['latitude_deg'], row['longitude_deg'], row['altitude_m'])
@@ -179,18 +177,31 @@ def assemble(objects, manifest=()):
     return samples, entities
 
 
+def recording_warnings(entities):
+    warnings = []
+    aircraft = [e for e in entities if e['kind'] == 'aircraft']
+    if any(sum(e['team'] == team for e in aircraft) > 1 for team in ('blue', 'red')):
+        warnings.append('Aynı takımda birden fazla uçak var. BVRGym logger’ı aynı numaralı füze dosyalarını ezebilir; mühimmat sahipliği ve toplamı doğrulanamıyor.')
+    if any(e.get('visual_model') == 'generic' for e in entities):
+        warnings.append('Bazı modellerin geometrisi bulunmuyor; sahnede genel nesne simgesiyle gösteriliyor.')
+    if any(e.get('heading_deg_known') is False for e in entities):
+        warnings.append('Yönelim sütunları eksik olan nesnelerin burun yönü bilinmiyor; yön çizgisi gösterilmez.')
+    return warnings
+
+
 class RecordingStore:
     """Publish a complete, stable folder snapshot; keep every recorded sample."""
-    def __init__(self, directory, settle_seconds=1.0, poll_seconds=.25, catalog_roots=()):
+    def __init__(self, directory, settle_seconds=2.0, poll_seconds=.25, catalog_roots=()):
         self.directory = Path(directory).resolve()
         self.settle_seconds = settle_seconds
         self.poll_seconds = poll_seconds
         self.lock = threading.RLock()
         self.update_lock = threading.Lock()
-        self.mode = 'folder'
         self.recording_name = self.directory.name
-        self.catalog_roots = [Path(root).resolve() for root in catalog_roots]
-        self.initial_directory = self.directory
+        self.active_directory = None
+        roots = [Path(root).resolve() for root in catalog_roots]
+        self.catalog_root = next((p for p in roots if p.is_dir()), self.directory)
+        self.warnings = []
         self.samples, self.entities = [], []
         self.session = str(uuid.uuid4())
         self.phase, self.error = 'waiting', None
@@ -203,8 +214,7 @@ class RecordingStore:
 
     def refresh(self, now=None):
         with self.update_lock:
-            if self.mode == 'folder':
-                self._refresh(now)
+            self._refresh(now)
 
     def _refresh(self, now=None):
         now = time.monotonic() if now is None else now
@@ -231,7 +241,10 @@ class RecordingStore:
                 self.samples, self.entities = samples, entities
                 self.session = str(uuid.uuid4())
                 self.loaded_signature = signature
+                self.active_directory = self.directory
+                self.recording_name = self.directory.name
                 self.phase, self.error = 'ready', None
+                self.warnings = recording_warnings(entities)
         except EmptyRecording:
             with self.lock:
                 self.phase, self.error = 'waiting', None
@@ -239,19 +252,47 @@ class RecordingStore:
             with self.lock:
                 self.phase, self.error = 'error', str(exc)
 
-    def catalog(self):
-        directories = {self.initial_directory, self.directory}
-        for root in self.catalog_roots:
+    def browse(self, path=None):
+        directory = Path(path).expanduser().resolve() if path else self.catalog_root
+        if path and not directory.is_dir():
+            raise ValueError('Dizin bulunamadı')
+        while not directory.exists() and directory.parent != directory:
+            directory = directory.parent
+        if not directory.is_dir():
+            raise ValueError('Dizin bulunamadı')
+        children = []
+        for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
             try:
-                if root.is_dir():
-                    directories.add(root)
-                    directories.update(path for path in root.iterdir() if path.is_dir())
+                if child.is_dir():
+                    children.append(dict(name=child.name, path=str(child)))
             except OSError:
                 continue
+        return dict(path=str(directory), parent=str(directory.parent) if directory.parent != directory else None,
+                    folders=children)
+
+    def change_directory(self, path):
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError('Dizin yolu gerekli')
+        directory = Path(path).expanduser().resolve()
+        if not directory.is_dir():
+            raise ValueError('Dizin bulunamadı')
+        # Validate access before replacing the catalog. The open flight stays unchanged.
+        list(directory.iterdir())
+        with self.lock:
+            self.catalog_root = directory
+
+    def catalog(self):
+        with self.lock:
+            root = self.catalog_root
+        directories = [root]
+        try:
+            directories.extend(p for p in root.iterdir() if p.is_dir())
+        except OSError:
+            pass
         entries = []
         for directory in sorted(directories):
             try:
-                count = len(list(directory.glob('*.csv')))
+                count = len([p for p in directory.glob('*.csv') if p.is_file()])
                 if count:
                     key = hashlib.sha256(str(directory).encode()).hexdigest()[:24]
                     entries.append(dict(id=key, name=directory.name, path=str(directory), files=count))
@@ -259,34 +300,17 @@ class RecordingStore:
                 continue
         return entries
 
-    def import_files(self, files, title='Seçilen CSV dosyaları'):
-        if not isinstance(title, str) or not 1 <= len(title.strip()) <= 160:
-            raise ValueError('Geçersiz kayıt adı')
-        samples, entities = read_exports(files)
-        with self.update_lock, self.lock:
-            self.mode = 'files'
-            self.recording_name = title.strip()
-            self.samples, self.entities = samples, entities
-            self.session = str(uuid.uuid4())
-            self.phase, self.error = 'ready', None
-
     def open_catalog(self, identity):
         entry = next((entry for entry in self.catalog() if entry['id'] == identity), None)
         if entry is None:
-            raise ValueError('Kayıt bulunamadı; listeyi yenile')
+            raise ValueError('Kayıt bulunamadı; dizini ve listeyi kontrol et')
         directory = Path(entry['path'])
-        with self.update_lock:
-            signature = fingerprint(directory)
-            samples, entities = read_recording(directory)
-            if signature != fingerprint(directory):
-                raise ValueError('Kayıt dosyaları yazılıyor; biraz sonra yeniden aç')
-            with self.lock:
-                self.directory, self.mode = directory, 'folder'
-                self.recording_name = directory.name
-                self.samples, self.entities = samples, entities
-                self.session = str(uuid.uuid4())
-                self.loaded_signature = self.pending_signature = self.attempted_signature = signature
-                self.phase, self.error = 'ready', None
+        with self.update_lock, self.lock:
+            # Use the same settling path as watched replacements, rather than bypassing it.
+            self.directory = directory
+            self.loaded_signature = self.pending_signature = self.attempted_signature = None
+            self.phase, self.error = 'waiting', None
+            self._refresh()
 
     def start(self):
         def watch():
@@ -307,9 +331,10 @@ class RecordingStore:
                 after = 0
             after = min(after, len(self.samples))
             selected = self.samples[after:after + limit]
-            return dict(schema_version=2, source='tacview-csv', session=self.session,
-                        phase=self.phase, error=self.error, recording=str(self.directory) if self.mode == 'folder' else '',
-                        recording_name=self.recording_name, recording_mode=self.mode,
+            return dict(schema_version=3, source='tacview-csv', session=self.session,
+                        phase=self.phase, error=self.error, recording=str(self.active_directory or self.directory),
+                        recording_name=self.recording_name, recording_mode='folder',
+                        catalog_root=str(self.catalog_root), warnings=self.warnings,
                         sequence=len(self.samples), cursor=after + len(selected), samples=selected,
                         objects=len(self.entities),
                         inventory={entry['id']: entry.get('inventory', []) for entry in self.entities if entry['kind'] == 'aircraft'},

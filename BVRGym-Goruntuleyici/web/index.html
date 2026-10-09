@@ -23,13 +23,18 @@
         <summary id="open-recording" class="primary">Kayıt aç</summary>
         <section id="record-panel" class="popover recording-popover" aria-labelledby="record-panel-title">
           <div class="menu-heading"><h2 id="record-panel-title">Uçuş kaydı</h2><button id="close-record-panel" aria-label="Kayıt menüsünü kapat">×</button></div>
-          <div class="file-actions"><button id="choose-folder" class="primary">Klasör seç</button><button id="choose-files">CSV dosyaları seç</button></div>
-          <div class="record-source"><span>Açık dizin / kaynak</span><strong id="record-source">Kayıt seçilmedi</strong></div>
-          <input id="file-input" type="file" accept=".csv" multiple hidden><input id="folder-input" type="file" webkitdirectory multiple hidden>
-          <p id="import-error" class="error" role="alert" hidden></p>
+          <div class="file-actions"><button id="change-directory" class="primary">Dizin değiştir</button></div>
+          <div id="directory-browser" hidden>
+            <div class="directory-navigation"><button id="directory-up" aria-label="Üst dizine çık">↑</button><input id="directory-path" aria-label="Dizin yolu" placeholder="Dizin yolu"><button id="directory-go">Git</button></div>
+            <div id="directory-folders" class="directory-folders"></div>
+            <div class="directory-actions"><button id="directory-cancel">Vazgeç</button><button id="use-directory" class="primary">Bu dizini kullan</button></div>
+          </div>
+          <div class="record-source"><span>Kayıt dizini</span><strong id="record-source">Dizin yükleniyor</strong></div>
+          <p class="data-note">Alt klasörler ayrı kayıtlar olarak listelenir. Simülasyon kaydı yazmayı bitirdikten sonra listeden aç.</p>
+          <p id="record-error" class="error" role="alert" hidden></p>
           <input id="record-search" type="search" placeholder="Kayıtlarda ara…" aria-label="Kayıtlarda ara">
-          <div class="recording-lists"><h3>Son kayıtlar</h3><div id="recent-recordings"></div>
-            <div class="library-heading"><h3>Kayıt klasörleri</h3><button id="refresh-library">Yenile</button></div><div id="recording-library"></div>
+          <div class="recording-lists">
+            <div class="library-heading"><h3 id="catalog-title">Dizindeki kayıtlar</h3><button id="refresh-library">Yenile</button></div><div id="recording-library"></div>
           </div>
         </section>
       </details>
@@ -109,7 +114,7 @@
       <div id="detail-content" class="panel-body">
         <h2 id="detail-title">Nesne bilgisi</h2><h3 id="selected-name">Nesne seç</h3><p id="model" class="muted">Kayıt ölçümleri</p><span id="entity-state" class="entity-state"></span>
         <dl class="measures"><div><dt>İrtifa · MSL</dt><dd><output id="altitude">—</output><small id="altitude-unit-label"> ft</small></dd></div><div><dt>Burun yönü</dt><dd><output id="heading">—</output><small> °</small></dd></div><div id="speed-measure"><dt>Hava hızı · TAS</dt><dd><output id="speed">—</output><small id="speed-unit-label"> m/s</small></dd></div><div id="mach-measure"><dt>Mach</dt><dd><output id="mach">—</output></dd></div><div><dt>Yatış</dt><dd><output id="roll">—</output><small> °</small></dd></div><div><dt>Yunuslama</dt><dd><output id="pitch">—</output><small> °</small></dd></div></dl>
-        <p id="missing-data" class="data-note" hidden>Bu kayıtta hava hızı ve Mach ölçümü bulunmuyor.</p>
+        <p id="record-warning" class="data-note" hidden></p><p id="missing-data" class="data-note" hidden>Bu kayıtta hava hızı ve Mach ölçümü bulunmuyor.</p>
         <dl class="positions"><div><dt>Yerel doğu</dt><dd id="east">—</dd></div><div><dt>Yerel kuzey</dt><dd id="north">—</dd></div></dl>
         <section id="detail-inventory" class="detail-inventory" hidden><h3>Mühimmat</h3><div id="detail-inventory-list"></div></section><div class="record-interval"><span>Ölçüm aralığı</span><output id="entity-interval">—</output><button id="jump-entity" disabled>İlk ölçüme git</button></div>
       </div>

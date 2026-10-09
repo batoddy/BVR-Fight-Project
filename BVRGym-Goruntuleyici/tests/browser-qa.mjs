@@ -45,12 +45,21 @@ try{
   });assert.equal(stopsAligned,true);
 
   async function files(directory){return (await fs.readdir(directory)).filter(name=>name.endsWith('.csv')).map(name=>path.join(directory,name));}
-  await page.locator('#open-recording').click();await page.locator('#file-input').setInputFiles(await files(options.native));
+  async function chooseDirectory(directory){
+    directory=await fs.realpath(directory);
+    if(!await page.locator('#record-panel').isVisible())await page.locator('#open-recording').click();
+    await page.locator('#change-directory').click();await page.waitForFunction(()=>!document.querySelector('#directory-path').disabled);await page.locator('#directory-path').fill(path.resolve(directory));await page.locator('#directory-go').click();
+    await page.waitForFunction(directory=>document.querySelector('#directory-path').value===directory&&!document.querySelector('#use-directory').disabled,path.resolve(directory));
+    await page.locator('#use-directory').click();
+    await page.waitForFunction(directory=>[...document.querySelectorAll('#recording-library .library-item')].some(item=>item.dataset.path===directory),path.resolve(directory));
+    await page.locator('#recording-library .library-item').filter({hasText:path.basename(directory)}).first().click();
+  }
+  await chooseDirectory(options.native);
   await page.waitForFunction(async()=>{const {buffer}=await import('/app.js');return buffer.complete&&buffer.packet.objects===5;});
   await page.waitForFunction(()=>!document.querySelector('#record-options').open);
   await page.waitForFunction(()=>!document.querySelector('#timeline').disabled);
   await page.locator('#open-recording').click();
-  await page.waitForFunction(()=>document.querySelectorAll('#recent-recordings .library-item').length>0);
+  await page.waitForFunction(()=>document.querySelectorAll('#recording-library .library-item').length>0);
   await page.locator('#record-search').fill('no-such-recording-qa');
   assert.equal(await page.locator('.recording-lists .library-item:visible').count(),0);
   await page.locator('#record-search').fill('');
@@ -120,7 +129,7 @@ try{
     const time=Number(document.querySelector('#timeline').value);
     for(const [id,record] of scene.models){
       const entity=buffer.at(id,time);if(!entity)continue;
-      const value=entity.true_airspeed_mps??entity.estimated_tas_mps;
+      const value=entity.true_airspeed_mps??entity.position_speed_mps;
       const expected=Math.round(value).toLocaleString('tr-TR')+' m/s';
       if(record.labelSpeedValue.textContent!==expected||!record.labelAltitudeValue.textContent.endsWith('ft'))throw new Error('Aircraft/missile label speed mismatch');
       if(record.label.textContent.includes('≈'))throw new Error('Estimate symbol remains');
@@ -145,7 +154,7 @@ try{
     await page.evaluate(async({unit,symbol,factor})=>{
       const {scene,buffer}=await import('/app.js'),time=Number(document.querySelector('#timeline').value);
       const id=document.querySelector('.entity.selected').closest('.aircraft-card').dataset.id,entity=buffer.at(id,time);
-      const expected=unit==='mach'?(entity.mach??entity.estimated_mach):(entity.true_airspeed_mps??entity.estimated_tas_mps)*factor;
+      const expected=unit==='mach'?(entity.mach??entity.estimated_mach):(entity.true_airspeed_mps??entity.position_speed_mps)*factor;
       const actual=Number(document.querySelector('#speed').textContent.replaceAll('.','').replace(',','.'));
       if(Math.abs(actual-expected)>(unit==='kms'?.00051:unit==='mach'?.0051:.051))throw new Error('Panel unit conversion');
       const altitude=Number(document.querySelector('#altitude').textContent.replaceAll('.','').replace(',','.'));
@@ -318,7 +327,7 @@ try{
   await page.locator('#view-3d').click();await page.locator('#entity-list .entity[data-team="blue"]').click();await page.waitForTimeout(200);await checkFollow();
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-native.png'),fullPage:true});
   assert.equal(await page.locator('#record-drop').count(),0);
-  assert.ok((await page.locator('#record-source').textContent()).includes('CSV'));
+  assert.ok((await page.locator('#record-source').textContent()).includes(path.basename(options.native)));
   assert.equal(await page.locator('#object-scale option:checked').textContent(),'Nesne büyütme · 50×');
   assert.equal(await page.locator('#open-settings').evaluate(node=>getComputedStyle(node).userSelect),'none');
   await page.evaluate(async()=>{const {scene}=await import('/app.js');scene.follow=false;scene.zoom(.3);});
@@ -342,12 +351,13 @@ try{
   assert.equal(await page.locator('#speed-measure').isVisible(),true);
   await page.locator('#record-end').click();await page.waitForTimeout(250);
   assert.equal(await page.locator('#entity-list .munition.selected').count(),1);
-  await page.locator('#open-recording').click();
-  await page.locator('#file-input').setInputFiles({name:'F-16 (bad) [Blue].csv',mimeType:'text/csv',buffer:Buffer.from('Time\n0')});
-  await page.waitForFunction(()=>!document.querySelector('#import-error').hidden);
-  assert.ok((await page.locator('#import-error').textContent()).includes('sütunları'));
-  await page.locator('#close-record-panel').click();
-  await page.locator('#open-recording').click();await page.locator('#file-input').setInputFiles(await files(options.recording));
+  const bad=path.join(temporary,'bad');await fs.mkdir(bad);await fs.writeFile(path.join(bad,'F-16 (bad) [Blue].csv'),'Time\n0');
+  await chooseDirectory(bad);
+  await page.waitForFunction(()=>document.querySelector('#status').textContent==='Kayıt okunamadı');
+  assert.ok((await page.locator('#scene-message').textContent()).includes('sütunları'));
+  // The previous valid flight and its name survive a failed replacement.
+  assert.ok(Number(await page.locator('#timeline').getAttribute('max'))<2);
+  await chooseDirectory(options.recording);
   await page.waitForFunction(()=>Number(document.querySelector('#timeline').max)>1199);
   await page.waitForFunction(()=>!document.querySelector('#record-options').open);
   await seek(780);assert.equal(await page.locator('#entity-list .entity').count(),2);
@@ -435,15 +445,14 @@ try{
   assert.equal(await page.locator('#label-mode').inputValue(),'selected');
   assert.equal(await page.locator('#label-altitude').isChecked(),false);
   assert.equal(await page.locator('#label-speed').isChecked(),false);
-  await page.locator('#open-recording').click();
-  await page.waitForFunction(()=>document.querySelectorAll('#recent-recordings .library-item').length===2);
-  await page.locator('#recent-recordings .library-item').last().click();
-  await page.waitForFunction(()=>Number(document.querySelector('#timeline').max)<2);
   for(const file of await files(options.native))await fs.copyFile(file,path.join(recording,path.basename(file)));
-  await page.locator('#open-recording').click();await page.locator('#refresh-library').click();
-  await page.waitForFunction(()=>document.querySelectorAll('#recording-library .library-item').length===1);
-  await page.locator('#recording-library .library-item').click();
-  await page.waitForFunction(async()=>{const {buffer}=await import('/app.js');return buffer.packet.recording_mode==='folder';});
+  await chooseDirectory(recording);
+  await page.waitForFunction(()=>Number(document.querySelector('#timeline').max)<2);
+  await page.locator('#open-recording').click();
+  assert.equal(await page.locator('#directory-path').inputValue(),await fs.realpath(recording));
+  assert.equal(await page.locator('#file-input').count(),0);
+  assert.equal(await page.locator('#recent-recordings').count(),0);
+  await page.locator('#close-record-panel').click();
   await page.locator('#view-2d').click();await page.locator('#camera-mode').selectOption('all');await page.waitForTimeout(200);
   assert.equal(await page.locator('#scene2d').isVisible(),true);
   await page.setViewportSize({width:430,height:850});await page.waitForTimeout(300);
@@ -465,7 +474,7 @@ try{
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-settings-mobile.png'),fullPage:true});
   await page.locator('#close-settings').click();
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,nativeObjects:geometry,inventory:true,estimatedSpeed:true,nauticalMiles:true,sharedScale:true,headingGuides:true,altitudeGuides:true,importValidation:true,folderSelection:true,recentRecordings:true,replay2x:true,retainedMissileTrails:true,preferences:true,panelResize:true,compactDock:true,mobile:true,errors}));
+  console.log(JSON.stringify({passed:true,nativeObjects:geometry,inventory:true,estimatedSpeed:true,nauticalMiles:true,sharedScale:true,headingGuides:true,altitudeGuides:true,importValidation:true,folderSelection:true,directorySelection:true,replay2x:true,retainedMissileTrails:true,preferences:true,panelResize:true,compactDock:true,mobile:true,errors}));
 }finally{
   if(browser)await browser.close();
   if(child.exitCode===null){child.kill();await new Promise(resolve=>child.once('exit',resolve));}

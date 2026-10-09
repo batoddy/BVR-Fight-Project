@@ -1,17 +1,11 @@
 # Görüntüleyici doğrulaması
 
-9 Ekim 2026. Veri kaynağı BVRGym'in değiştirilmeyen yerleşik Tacview CSV kayıtlarıdır.
+9 Ekim 2026. BVRGym kaynakları ve özgün CSV dosyaları değiştirilmedi.
 
-- Python: 23 test; CSV doğrulama, tüm geçmişin saklanması, atomik kayıt değiştirme, hatalı dosyada önceki kaydı koruma, dosya seçimi, klasör seçimine geri dönme ve HTTP erişimleri.
-- JavaScript: 18 test; konum ve açı interpolasyonu, kayıt sınırları, sayfalama, altı oynatma hızı, duraklatma ve ileri/geri sarma.
-- Tarayıcı: yerleşik logger ile üretilen iki F-16 ve üç füze, ayrıca değiştirilmeden okunan 10 nesneli test_BTvsBT kaydı. CSV dosyalarını arayüzden açma, hatalı seçimi reddetme, klasör değiştirme, son kayıtları yeniden açma, 2× oynatma, füze izlerini koruma, panel genişliği, daraltılan oynatma alanı, tercihlerin yenilemede korunması ve 430×850 dar ekran yerleşimi kontrol edildi. Çalışma hatası görülmedi.
-- Önceki altyapı kontrolünde gerçek TacviewLogger ölçümleri fizik nesneleriyle karşılaştırıldı; kayıtlı/kayıtsız uçuş sonuçları aynı bulundu. Bu arayüz güncellemesi BVRGym kaynaklarını veya uçuş kodlarını değiştirmez.
+- **28 Python testi:** CSV doğrulama, sayfalama, koordinat dönüşümü, hız tahmini, envanter, HTTP, dizin seçimi ve hatalı kayıtta eski uçuş/adını koruma.
+- **23 JavaScript testi:** zamanlama, interpolasyon, birimler, mühimmat durumları, iz penceresi ve biten uçak ölçümünün işaretlenmesi.
+- **Ana tarayıcı kontrolü:** gerçek yerleşik logger ile 5 nesneli kayıt ve 1199,5 saniyelik 10 nesneli kayıt. Dizin değiştirme, kayıt seçme, yanlış kayıtta eski ölçümleri koruma, 2D/3D, birim dönüşümleri, kısayollar, takip, izler, tema, ölçek, açılır menüler, panel/dock boyutlandırma ve 430×850 ekran kontrol edildi; hata yok.
+- **Ek tarayıcı kontrolü:** klasörlere tıklayarak gezinme, üst dizine çıkma, MiG/Meteor için genel geometri, nötr takım rengi, eksik heading için —/kapalı çizgi, biten uçak ölçümü için sabit/soluk gösterim ve çok uçaklı logger sınırı uyarısı; hata yok.
+- **Koordinat referansı:** bilgisayardaki JSBSim 1.3.1 ile 59° jeosantrik enlem ve 5000 m radyal MSL irtifada yarıçap ve jeodezik enlem karşılaştırıldı. ECEF yarıçap farkı 0,001 m'den küçüktür. Kutup/ekvator ve radyal tırmanış ayrı test edilir.
 
-Yerleşik logger CSV dosyalarını save_logs çağrısında üretir: bu altyapı kayıt oynatır, canlı veri sağlamaz. CSV'de TAS/Mach yoksa hız konum değişiminden, Mach standart atmosferden yaklaşık olarak hesaplanır; bilgi panelinde hesaplandığı açıklanır. Kompakt etiketlerde üstte isim ve hız, altta ortalanmış irtifa gösterilir. Hız tam sayıya yuvarlanır, ayrıntı panelinde ondalık değer korunur. İsabet/ölüm olayı üretilmez. Tacview uygulamasında ayrıca görsel karşılaştırma yapılmadı.
-
-Eski UDP, özel yayın, port profili, XML bağlantısı ve başlatıcı sistemleri yoktur. Kayıt seçimi yalnızca görüntüleyicinin açık kaydını değiştirir; uçuş komutu API'si bulunmaz.
-
-
-Son görsel güncellemede gerçek kayıtlarla envanterin uçak altında gruplanması, boş mühimmat dosyalarının envantere alınması, zamanla Uçakta/Havada/Atıldı durumları, tahmini hızın yaklaşık 300 m/s okunması, ft/NM birimleri, uçak ve füzenin ortak büyütmesi, gerçek model uzunlukları, irtifa çizgisinin doğru uç noktaları, heading çizgisinin ölçülen yönle eşleşmesi ve yer ızgarası kapalıyken irtifa göstergesinin çalışması kontrol edildi.
-
-İrtifa dolgusu güncellemesinde çizgilerin önceki ince opaklığı korundu. Uçuş izinden yere inen mavi perdenin alfa değeri yukarıda 1, yerde 0 olacak şekilde değişir; malzeme opaklığıyla birlikte yumuşak bir dolgu verir. Dolgunun yalnızca uçaklarda oluşturulduğu, yer referansına doğru uzandığı ve İrtifa düğmesiyle kapandığı tarayıcıda doğrulandı. Burun yönü çizgisi için -30°, 0°, +30° pitch ve 0°, 90°, 180°, 270° heading kombinasyonlarında 3D yön ve model burnundaki başlangıç konumu kontrol edildi.
+Veri akışı VERI_AKISI.md'dedir. CSV'de yazım tamamlanma işareti bulunmadığından iki saniyelik sakinlik kesin tamamlanma garantisi değildir. Logger'ın aynı takım/füze numarası çakışması arayüzde uyarılır; kaybolan veri uydurulmaz. Tacview uygulamasında ayrıca görsel karşılaştırma yapılmadı.

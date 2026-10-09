@@ -24,7 +24,7 @@ def estimate_motion(rows, to_cartesian):
         speed = None
         if end > begin:
             speed = math.dist(position(begin), position(end)) / (end - begin)
-        row['estimated_tas_mps'] = speed if row['true_airspeed_mps'] is None else None
+        row['position_speed_mps'] = speed if row['true_airspeed_mps'] is None else None
         temperature = standard_temperature(row['altitude_m'])
         reference_speed = row['true_airspeed_mps'] if row['true_airspeed_mps'] is not None else speed
         row['estimated_mach'] = (reference_speed / math.sqrt(1.4 * 287.05287 * temperature)

@@ -1,3 +1,4 @@
+import {sampleWindow} from './stream.js';
 import {MODEL_LENGTHS,DISTANCE_UNITS,altitudeLabel,headingOffset,distanceScale,speedLabel,visualScale} from './units.js';
 
 export function updateScaleBar(element,metersPerPixel,width,mode,unit='nm'){
@@ -19,7 +20,7 @@ export class Scene {
     this.canvas=canvas;this.ctx=canvas.getContext('2d');this.scale=.045;this.center={east:0,north:0};
     this.speedUnit='mps';this.altitudeUnit='ft';this.distanceUnit='nm';
     this.distanceScale=canvas.parentElement.querySelector('.distance-scale');
-    this.objectScale=50;this.headingGuides=true;this.follow=true;this.grid=true;this.trail=true;this.onSelect=onSelect;this.onPan=onPan;this.positions=[];
+    this.objectScale=50;this.headingGuides=true;this.follow=true;this.grid=true;this.trail=true;this.onSelect=onSelect;this.onPan=onPan;this.positions=[];this.trailCache=new WeakMap();
     this.trailDuration=300;this.labelMode='all';this.labelNames=true;this.labelAltitude=true;this.labelSpeed=true;
     new ResizeObserver(()=>this.resize()).observe(canvas);
     canvas.addEventListener('wheel',event=>{event.preventDefault();this.zoom(event.deltaY<0?1.15:1/1.15);},{passive:false});
@@ -40,7 +41,7 @@ export class Scene {
     this.scale=Math.min(.045,Math.max(.002,Math.min(this.width/Math.max(7000,Math.max(...east)-Math.min(...east)),this.height/Math.max(7000,Math.max(...north)-Math.min(...north)))/1.8));
   }
   focusEntity(entity){this.follow=true;this.center={east:entity.east_m,north:entity.north_m};this.scale=Math.min(.8,Math.max(.002,70/((MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale))));}
-  clear(){this.positions=[];}
+  clear(){this.positions=[];this.trailCache=new WeakMap();}
   point(entity){return {x:this.width/2+(entity.east_m-this.center.east)*this.scale,y:this.height/2-(entity.north_m-this.center.north)*this.scale};}
   aircraft(x,y,heading,color){
     const ctx=this.ctx;ctx.save();ctx.translate(x,y);ctx.rotate(heading*Math.PI/180);
@@ -66,19 +67,26 @@ export class Scene {
     let step=1/(DISTANCE_UNITS[this.distanceUnit]||DISTANCE_UNITS.nm).factor;while(step*this.scale<45)step*=2;while(step*this.scale>150)step/=2;
     if(this.grid){const pixels=step*this.scale;const origin=this.point({east_m:0,north_m:0});const x0=((origin.x%pixels)+pixels)%pixels,y0=((origin.y%pixels)+pixels)%pixels;ctx.strokeStyle=this.colors.grid;ctx.lineWidth=1;ctx.beginPath();for(let x=x0;x<this.width;x+=pixels){ctx.moveTo(x,0);ctx.lineTo(x,this.height);}for(let y=y0;y<this.height;y+=pixels){ctx.moveTo(0,y);ctx.lineTo(this.width,y);}ctx.stroke();}
     if(this.trail){for(const entity of entities){
-      const samples=(buffer.tracks.get(entity.id)?.samples||[]).filter(s=>s.sim_time_s<=time&&(this.trailDuration<0||s.sim_time_s>=time-this.trailDuration));
+      const track=buffer.tracks.get(entity.id);if(!track)continue;
+      const now=performance.now();let cached=this.trailCache.get(track);
+      if(!cached||now-cached.wall>160||time<cached.time||cached.duration!==this.trailDuration){
+        cached={wall:now,time,duration:this.trailDuration,samples:sampleWindow(track.samples,time,this.trailDuration,1500)};this.trailCache.set(track,cached);
+      }
+      const samples=cached.samples;
       const stride=Math.max(1,Math.ceil(samples.length/1500));ctx.beginPath();let count=0;
       for(let i=0;i<samples.length;i+=stride){const p=this.point(samples[i]);count?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);count++;}
       if(count){const p=this.point(entity);ctx.lineTo(p.x,p.y);}
-      ctx.strokeStyle=entity.team==='red'?this.colors.red:entity.kind==='missile'?this.colors.missile:this.colors.blue;ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;
+      ctx.strokeStyle=entity.team==='unknown'?this.colors.muted:entity.team==='red'?this.colors.red:entity.kind==='missile'?this.colors.missile:this.colors.blue;ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;
     }}
     this.positions=[];const labelRects=[];
     for(const entity of entities){if(entity.visible===false)continue;const p=this.point(entity);this.positions.push({...p,id:entity.id});if(p.x< -70||p.x>this.width+70||p.y< -70||p.y>this.height+70)continue;
-      const color=entity.kind==='missile'?(entity.team==='red'?this.colors.red:this.colors.missile):(entity.team==='red'?this.colors.red:this.colors.blue);
-      if(entity.kind==='aircraft')this.aircraft(p.x,p.y,entity.heading_deg,color);
+      const color=entity.team==='unknown'?(document.documentElement.dataset.theme==='dark'?'#aeb6bf':'#46515c'):entity.kind==='missile'?(entity.team==='red'?this.colors.red:this.colors.missile):(entity.team==='red'?this.colors.red:this.colors.blue);
+      ctx.globalAlpha=entity.measurement_ended?.6:1;
+      if(entity.visual_model==='generic'){ctx.fillStyle=color;ctx.beginPath();ctx.arc(p.x,p.y,Math.max(3,Math.min(25,this.scale*MODEL_LENGTHS[entity.kind]*visualScale(entity.kind,this.objectScale)/2)),0,Math.PI*2);ctx.fill();}
+      else if(entity.kind==='aircraft')this.aircraft(p.x,p.y,entity.heading_deg,color);
       else if(entity.kind==='missile')this.missile(p.x,p.y,entity.heading_deg,color);
       const visualLength=(MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale);
-      if(this.headingGuides){
+      if(this.headingGuides&&entity.heading_deg_known!==false){
         const projection=Math.cos((entity.pitch_deg??0)*Math.PI/180);
         const start=headingOffset(entity.heading_deg,visualLength*.55*projection);
         const end=headingOffset(entity.heading_deg,(visualLength*.55+Math.max(250,visualLength*.9))*projection);
@@ -112,6 +120,7 @@ export class Scene {
         ctx.restore();
       }
     }
+    ctx.globalAlpha=1;
     updateScaleBar(this.distanceScale,1/this.scale,this.width,'2d',this.distanceUnit);
     ctx.font='14px "Segoe UI",sans-serif';ctx.fillStyle=this.colors.muted;
     if(!entities.length){ctx.fillStyle=this.colors.muted;ctx.textAlign='center';ctx.fillText('Uçuş verisi bekleniyor',this.width/2,this.height/2);ctx.textAlign='left';}

@@ -159,34 +159,29 @@ class RecordingChecks(unittest.TestCase):
         store.refresh(0)
         self.assertEqual(store.phase, 'waiting')
 
-    def test_import_is_atomic_and_preserves_original_files(self):
-        self.write()
+    def test_directory_switch_changes_library_but_preserves_open_flight(self):
+        original = self.write()
         store = self.ready()
-        original = next(self.directory.glob('*.csv'))
-        contents = original.read_bytes()
-        store.import_files([dict(name=original.name, text=contents.decode())], 'Dosyadan kayıt')
         session = store.session
-        self.assertEqual(store.packet()['recording_mode'], 'files')
-        self.assertEqual(store.packet()['recording_name'], 'Dosyadan kayıt')
-        store.refresh(100)
+        library = self.directory / 'recordings'
+        flight = library / 'flight1'
+        flight.mkdir(parents=True)
+        (flight / original.name).write_bytes(original.read_bytes())
+        store.change_directory(str(library))
         self.assertEqual(store.session, session)
+        self.assertEqual(len(store.catalog()), 1)
+        self.assertEqual(store.browse(str(library))['folders'][0]['name'], 'flight1')
         with self.assertRaises(ValueError):
-            store.import_files([dict(name=original.name, text='Time\n0')])
-        self.assertEqual(store.session, session)
-        self.assertEqual(original.read_bytes(), contents)
-        with self.assertRaises(ValueError):
-            store.import_files([dict(name='../bad.csv', text='Time\n0')])
-        with self.assertRaises(ValueError):
-            store.import_files([dict(name=original.name, text=contents.decode())] * 2)
+            store.change_directory(str(library / 'missing'))
         store.open_catalog(store.catalog()[0]['id'])
-        self.assertEqual(store.mode, 'folder')
+        self.assertEqual(store.session, session)
+        self.assertEqual(store.phase, 'waiting')
+        store.refresh(store.pending_since + 1.1)
         self.assertNotEqual(store.session, session)
-        self.write(rows=[[0, 18, 59, 8000, 0, 0, 0]])
-        store.refresh(101)
-        store.refresh(103)
-        self.assertEqual(store.samples[0]['altitude_m'], 8000)
+        self.assertEqual(store.active_directory, flight.resolve())
+        self.assertEqual(original.read_bytes(), (flight / original.name).read_bytes())
 
-    def test_http_import_and_catalog_never_offer_flight_controls(self):
+    def test_http_directory_and_catalog_never_offer_flight_controls(self):
         self.write()
         store = self.ready()
         server = make_server(store, 0)
@@ -207,7 +202,7 @@ class RecordingChecks(unittest.TestCase):
                 urlopen(request)
             self.assertEqual(caught.exception.code, 403)
             self.assertEqual(store.session, before)
-            bad = Request(base + '/api/import', data=b'{"files":[]}', headers={'Content-Type': 'application/json'})
+            bad = Request(base + '/api/directory', data=b'{"path":""}', headers={'Content-Type': 'application/json'})
             with self.assertRaises(HTTPError) as caught:
                 urlopen(bad)
             self.assertEqual(caught.exception.code, 400)

@@ -1,47 +1,47 @@
-# Görüntüleyici veri akışı — ajanlar için kısa not
+# Görüntüleyici veri akışı — ajanlar için
 
-Mevcut kaynak **BVRGym'in yerleşik `TacviewLogger` sınıfının ürettiği CSV dosyalarıdır**. Aynı dosyalar Tacview'de de açılır. UDP, WebSocket veya ACMI kullanılmaz. Uçuş kodu arayüzü import etmez; görüntüleyici simülasyona komut göndermez ve CSV'leri değiştirmez.
-
-## Akış
+Kaynak **BVRGym'in değiştirilmeyen yerleşik TacviewLogger CSV dosyalarıdır**. Aynı dosyalar Tacview'de açılır. UDP, WebSocket, ACMI ve özel uçuş yayıncısı yoktur. Uçuş kodu görüntüleyiciyi import etmez; görüntüleyici simülasyona komut veya CSV'ye yazı göndermez.
 
 ```text
 BVRGym / JSBSim → TacviewLogger → nesne başına CSV
-→ Python görüntüleyici → yerel HTTP üzerinden JSON
-→ tarayıcıdaki örnek tamponu → 2D / 3D sahne
+→ recordings.py → server.py / yerel HTTP JSON
+→ SampleBuffer / ReplayClock → 2D veya 3D sahne
 ```
 
-BVRGym tarafında `jsb_gym/utils/loggers.py` kayıt sınıfını, `jsb_gym/envs/BaseEnv.py` ise `env.log_tacview()` bağlantısını içerir. Ölçümler uçuş sırasında **bellekte toplanır**; `save_logs()` çağrıldığında CSV'ler diske yazılır. Bu nedenle mevcut sistem **tamamlanan kayıtların oynatımıdır, canlı tick aktarımı değildir**. Uçuş erken kesiliyorsa oluşturulmuş logger'ın kaydı ayrıca kaydedilmelidir. Yerleşik `save_logs()` çıktı klasörünü yeniden oluşturur; farklı simülasyonlar için ayrı klasör kullan.
+## Kayıt ve dizin akışı
+
+`BVRGym/jsb_gym/utils/loggers.py` ölçümleri uçuşta bellekte toplar; `save_logs()` çıktı dizinini yeniden oluşturup CSV'leri yazar. `jsb_gym/envs/BaseEnv.py` içindeki `env.log_tacview()` bunu kullanır. Bu sistem tamamlanan kayıtları oynatır, canlı tick aktarmaz. Her simülasyon için ayrı alt klasör kullan.
+
+Arayüzde **Kayıt aç → Dizin değiştir → Bu dizini kullan** ile bir ana dizin seçilir. Bu dizin ve doğrudan alt klasörlerindeki CSV kayıtları listelenir; uçuş listeden açılır. Dizin değişmesi açık uçuşu değiştirmez. Tarayıcı sadece dizin yolunu localStorage'da hatırlar; CSV yükleme ve IndexedDB son-kayıt deposu kaldırıldı. Açık uçuş klasörü sunucuda izlenir.
 
 ## CSV sözleşmesi
 
-Her uçak veya füze ayrı dosyadır. Örnek adlar:
-
-```text
-F-16 (Blue) [Blue].csv
-AIM-120 AMRAAM (AIM0) [Red].csv
-```
-
-Model, çağrı adı ve takım dosya adından okunur. Parser, modeli `AIM`, `AAM` veya `AMRAAM` ile başlayan nesneleri füze olarak tanır.
+Dosya adı: `F-16 (Blue) [Blue].csv` veya `AIM-120 AMRAAM (AIM0) [Red].csv`. Model, çağrı adı ve takım buradan okunur. Füze sınıflaması bilinen model ön eklerine dayanır; yalnız F-16/AIM-120 geometrileri vardır, diğer modeller genel simgeyle gösterilir. Bilinmeyen takım nötrdür.
 
 | Sütun | Anlam / birim |
-| --- | --- |
-| `Time` | Simülasyon zamanı, saniye |
-| `Longitude`, `Latitude` | Boylam, enlem; derece |
-| `Altitude` | Deniz seviyesine göre irtifa, metre |
-| `Roll (deg)`, `Pitch (deg)`, `Yaw (deg)` | Yatış, yunuslama, heading; derece |
-| `TAS`, `Mach` | İsteğe bağlı hız (m/s) ve Mach |
+|---|---|
+| Time | Ortak simülasyon saati, saniye |
+| Longitude | Boylam, derece |
+| Latitude | Yerleşik BVRGym için **jeosantrik** enlem, derece |
+| Altitude | JSBSim radyal MSL irtifa, metre |
+| Roll (deg), Pitch (deg), Yaw (deg) | Ölçülen yönelim, derece |
+| TAS, Mach | İsteğe bağlı; TAS m/s |
 
-Zaman ve konum sütunları zorunludur; sütun sırası önemli değildir. Yerleşik logger TAS/Mach yazmadığında arayüz konum/zamandan yaklaşık hız, standart atmosferden yaklaşık Mach hesaplar. Boş mühimmat CSV'leri envanterde tutulur, sahnede uçan füze oluşturmaz. Füze kaydının bitmesi isabet/imha anlamına gelmez. Aynı takımda birden fazla uçak varsa kayıtta bulunmayan füze sahipliği tahmin edilmez.
+Zaman ve başlangıç konumu zorunludur; sütun sırası bağımsızdır. Seyrek boş konumlar son değeri kullanır. Eksik yönelim ölçüm gibi sunulmaz. Sayı/koordinat/zaman/negatif hız doğrulanır; aynı zamandaki son satır tutulur.
 
-## Görüntüleyici tarafı
+ECEF, jeosantrik enlem ve JSBSim radyal irtifasından hesaplanır; yerel düzlem için ayrıca jeodezik enlem bulunur. Ham CSV değerleri değişmez. TAS yoksa son bir saniyedeki ECEF konum değişiminden `position_speed_mps` hesaplanır; bu TAS değildir. `estimated_mach` ISA tahminidir. Ölçülen TAS/Mach önceliklidir. Gösterim birimleri yalnız tarayıcıda değişir (varsayılan m/s, ft, NM).
 
-- `viewer.py`: yerel sunucuyu başlatır; varsayılan adres `http://127.0.0.1:8765`.
-- `recordings.py`: CSV okuma/doğrulama, dosya adından nesne bilgisi ve koordinat dönüşümü. Klasör modunda dosya değişimlerinin durulmasını bekleyip kaydı yeniden yükler.
-- `telemetry.py`: eksik hız/Mach tahminleri.
-- `server.py`: `GET /api/state?after=…&session=…` ile ölçümleri JSON parçaları halinde sunar. Paket sözleşmesi `schema_version=2`, `source=tacview-csv`; `cursor` ve `session` aktarım konumunu/kayıt değişimini belirler. `GET /api/recordings` klasörleri listeler; `POST /api/open` klasör seçer, `POST /api/import` tarayıcıdan seçilen CSV metinlerini alır.
-- `web/app.js`, `web/stream.js`: paketleri alır, kaydı bellekte tutar; seçilen oynatma zamanında örnekler arasında interpolasyon yapar. Oynatma hızı simülasyonu hızlandırmaz, yalnızca gösterim saatini değiştirir.
-- `web/scene.js`, `web/scene2d.js`: yerel doğu/kuzey ve metre cinsindeki irtifayla çizer. 3D eksenler `x=doğu`, `y=irtifa`, `z=-kuzey`. Kullanıcının birim seçimi yalnızca gösterimi değiştirir.
+Boş mühimmat CSV'si envantere alınır ama sahnede nesne oluşturmaz. CSV taşıyıcı kimliği içermez: aynı takımda tek uçak varsa eşleştirilir, birden fazlaysa sahiplik belirsizdir. Logger aynı takımda aynı füze numarasını aynı dosyaya yazıp önceki veriyi ezebilir; arayüz uyarır ama kaybolan ölçümleri üretemez. İsabet/imha olayı kaydedilmediği için uydurulmaz.
 
-Arayüzden bilgisayardaki dosya/klasör seçimi **o anki içeriği içe aktarır**; sonraki değişiklikler için yeniden seçmek gerekir. Sunucunun katalog listesinden açılan veya `--recording` ile verilen klasör ise izlenir. Bu izleme, logger'ın bellekte tuttuğu henüz kaydedilmemiş ölçümleri okuyamaz. Son kayıtlar tarayıcıdaki IndexedDB'de hatırlanır.
+## Kod ve API
 
-**Mimari kural:** Yeni görseller ve hesaplamalar görüntüleyicide geliştirilmelidir. Uçuş koduna arayüz bağımlılığı veya BVRGym içine özel veri yayımlayıcı eklemeyin. Daha fazla kullanım bilgisi: [README.md](README.md).
+- `viewer.py`: yerel sunucu, başlangıç klasörü ve port.
+- `recordings.py`: CSV okuma, doğrulama, dizin kütüphanesi, bekleme ve atomik değişim.
+- `telemetry.py`: konum hızı ve ISA Mach tahmini.
+- `server.py`: `GET /api/directories?path=…` dizin gezintisi; `POST /api/directory {path}` liste dizinini değiştirir; `GET /api/recordings` kayıtları listeler; `POST /api/open {id}` kayıt seçer. `/api/import` yoktur.
+- `GET /api/state?after=…&session=…`: **schema_version=3**, source=tacview-csv. Ölçümler 2000 örneklik JSON parçalarıyla gelir; session değişimi eski tamponu sıfırlar, cursor tekrarları önler. catalog_root, recording, warnings ve inventory ayrı metadata'dır.
+- `web/recording-menu.js`: arayüz dizin akışı. `web/stream.js`: tam örnek tamponu, interpolasyon, saat ve iz penceresi. `scene.js`/`scene2d.js`: çizim; 3D eksenleri x=doğu, y=MSL irtifa, z=eksi kuzey.
+
+Klasör iki saniye değişmeyince okunur, işlem sonunda dosya imzası tekrar kontrol edilir. Hata halinde eski geçerli kayıt/adı korunur. CSV'de kesin tamamlanma işareti bulunmadığından çok uzun yazım duraklaması kesin ayırt edilemez; save_logs tamamlandıktan sonra açmak en güvenilir akıştır. Uçak ölçümü bitince son konum soluk/kesikli gösterilir; füzeler sadece kayıt aralıklarında görünür, isteğe bağlı eski izleri korunur.
+
+Mimariyi değiştirirken uçuş kodundan arayüz bağımlılığı isteme, BVRGym kaynaklarına özel yayın ekleme ve CSV'leri yeniden yazma. Kullanım ve test komutları README.md'dedir.

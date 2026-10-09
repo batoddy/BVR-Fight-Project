@@ -1,4 +1,4 @@
-"""Local recording viewer. Import changes the viewer, never the simulation."""
+"""Local recording viewer. Directory selection changes the viewer, never the simulation."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import csv
@@ -16,7 +16,7 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/vendor/three.core.js": ("vendor/three.core.js", "text/javascript; charset=utf-8"),
          "/vendor/OrbitControls.js": ("vendor/OrbitControls.js", "text/javascript; charset=utf-8"),
          "/stream.js": ("stream.js", "text/javascript; charset=utf-8")}
-FILES['/history.js'] = ('history.js', 'text/javascript; charset=utf-8')
+FILES['/recording-menu.js'] = ('recording-menu.js', 'text/javascript; charset=utf-8')
 FILES['/units.js'] = ('units.js', 'text/javascript; charset=utf-8')
 FILES['/inventory.js'] = ('inventory.js', 'text/javascript; charset=utf-8')
 
@@ -39,6 +39,13 @@ def make_server(store, port=8765):
             request = urlsplit(self.path)
             if request.path == '/api/recordings':
                 self.send_data(200, json.dumps(store.catalog(), ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+            elif request.path == '/api/directories':
+                try:
+                    path = parse_qs(request.query).get('path', [None])[0]
+                    result = store.browse(path)
+                    self.send_data(200, json.dumps(result, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+                except (OSError, ValueError) as exc:
+                    self.send_data(400, json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
             elif request.path == "/api/state":
                 try:
                     after = int(parse_qs(request.query).get("after", ["0"])[0])
@@ -59,7 +66,7 @@ def make_server(store, port=8765):
 
         def do_POST(self):
             request = urlsplit(self.path)
-            if request.path not in ('/api/import', '/api/open'):
+            if request.path not in ('/api/directory', '/api/open'):
                 self.send_error(405, 'No flight-control endpoints')
                 return
             origin = self.headers.get('Origin')
@@ -71,14 +78,14 @@ def make_server(store, port=8765):
                 return
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 100 * 1024 * 1024:
-                    self.send_data(413, json.dumps({'error': 'Kayıt en fazla 100 MB olabilir'}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+                if not 0 < length <= 64 * 1024:
+                    self.send_data(413, json.dumps({'error': 'İstek çok büyük'}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
                     return
                 payload = json.loads(self.rfile.read(length).decode('utf-8'))
                 if not isinstance(payload, dict):
                     raise ValueError('Geçersiz istek')
-                if request.path == '/api/import':
-                    store.import_files(payload.get('files'), payload.get('title', 'Seçilen CSV dosyaları'))
+                if request.path == '/api/directory':
+                    store.change_directory(payload.get('path'))
                 else:
                     store.open_catalog(payload.get('id'))
             except (ValueError, OSError, csv.Error) as exc:

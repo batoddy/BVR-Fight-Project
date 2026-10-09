@@ -1,7 +1,7 @@
 import {SampleBuffer,ReplayClock} from './stream.js';
 import {Scene} from './scene.js';
 import {Scene as Scene2D} from './scene2d.js';
-import {recentRecordings,rememberRecording} from './history.js';
+import {setupRecordingMenu} from './recording-menu.js';
 import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,altitudeValue,speedValue,distanceLabel,munitionState} from './units.js';
 import {inventoryPanel} from './inventory.js';
 
@@ -18,7 +18,7 @@ const buffer=new SampleBuffer(),replayClock=new ReplayClock();
 const playbackRates=[.25,.5,1,2,3,4,5,10],hiddenObjects=new Set();
 const teamOrder={blue:0,red:1};
 let selected=null,viewTime=null,paused=true,scrubbing=false,lastReceive=0,connectionError=null,
-  lastLabels=0,listSignature='',filter='all',query='',busy=false,scene,webglError=null;
+  lastLabels=0,listSignature='',filter='all',query='',scene,webglError=null;
 
 function theme(){el('toggle-theme').setAttribute('aria-checked',String(document.documentElement.dataset.theme==='dark'));}
 theme();el('toggle-theme').onclick=()=>{
@@ -147,7 +147,7 @@ function positionMenu(menu){
 for(const menu of toolbarMenus){
   menu.addEventListener('toggle',()=>{
     menu.querySelector('summary').setAttribute('aria-expanded',String(menu.open));
-    if(menu.open){closeMenus(menu);positionMenu(menu);if(menu.id==='record-options'){importError('');libraries();}}
+    if(menu.open){closeMenus(menu);positionMenu(menu);if(menu.id==='record-options'){recordingError('');libraries();}}
   });
 }
 document.addEventListener('pointerdown',event=>{if(!toolbarMenus.some(menu=>menu.contains(event.target)))closeMenus();});
@@ -264,7 +264,7 @@ async function poll(){
   try{
     const response=await fetch('/api/state?after='+buffer.cursor+'&session='+encodeURIComponent(buffer.session||''),{cache:'no-store',signal:AbortSignal.timeout(5000)});
     if(!response.ok)throw new Error('Kayıt bağlantısı açılamadı');
-    const packet=await response.json();if(packet.schema_version!==2||packet.source!=='tacview-csv')throw new Error('Görüntüleyiciyi yeniden başlatıp sayfayı yenile');
+    const packet=await response.json();if(packet.schema_version!==3||packet.source!=='tacview-csv')throw new Error('Görüntüleyiciyi yeniden başlatıp sayfayı yenile');
     if(buffer.consume(packet)){viewTime=null;selected=null;paused=true;replayClock.reset();hiddenObjects.clear();listSignature='';scene.clear?.();}
     if(buffer.complete&&viewTime===null&&buffer.bounds()){
       viewTime=buffer.bounds().first;replayClock.seek(viewTime,performance.now()/1000);renderList();
@@ -277,7 +277,9 @@ async function poll(){
 }
 function labels(){
   updateTimeline();updateFollow();
-  const packet=buffer.packet,bounds=buffer.bounds();let status='Kayıt bekleniyor',notice='',error=false;
+  const packet=buffer.packet,bounds=buffer.bounds();
+  el('record-warning').textContent=(packet.warnings||[]).join(' ');el('record-warning').hidden=!packet.warnings?.length;
+  let status='Kayıt bekleniyor',notice='',error=false;
   if(connectionError){status='Bağlantı kesildi';notice=connectionError;error=true;}
   else if(packet.phase==='error'){status='Kayıt okunamadı';notice=packet.error;error=true;}
   else if(!buffer.complete){status='Yükleniyor';notice='Kayıt ölçümleri yükleniyor…';}
@@ -287,72 +289,47 @@ function labels(){
   el('status').textContent=status;el('status').classList.toggle('error',error);
   el('scene-message').hidden=!notice;el('scene-message').textContent=notice;el('scene-message').classList.toggle('error',error);
   el('empty-scene').hidden=Boolean(bounds);el('record-title').textContent=bounds?(packet.recording_name||'Uçuş kaydı'):'Kayıt seç';
-  el('record-source').textContent=packet.recording||(bounds?'Tarayıcıdan seçilen CSV · '+(packet.recording_name||'Uçuş kaydı'):'Kayıt seçilmedi');el('record-source').title=el('record-source').textContent;
+  el('record-source').textContent=packet.catalog_root||'Dizin seçilmedi';el('record-source').title=el('record-source').textContent;
   el('record-duration').textContent=bounds?formatTime(bounds.last-bounds.first)+' · '+packet.objects+' nesne':'Tacview CSV';
   const track=buffer.tracks.get(selected),first=track?.samples[0],last=track?.samples.at(-1);
   if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','east','north','entity-interval'])el(id).textContent='—';el('jump-entity').disabled=true;return;}
   const current=buffer.at(selected,viewTime),entity=current||(viewTime<first.record_start_s?first:last);
   el('detail-title').textContent=first.kind==='missile'?'Füze bilgisi':'Uçak bilgisi';el('selected-name').textContent=first.name;
   el('model').textContent=first.model+' · '+(first.team==='blue'?'Dost takım':first.team==='red'?'Karşı takım':'Takım belirtilmemiş');
-  el('entity-state').textContent=viewTime<first.record_start_s?'Henüz başlamadı · başlangıç ölçümü':!current?'Kayıt sonu · son ölçüm':'Kaydedilmiş uçuş durumu';
+  el('entity-state').textContent=viewTime<first.record_start_s?'Henüz başlamadı · başlangıç ölçümü':viewTime>first.record_end_s?'Ölçüm bitti · son konum sabit':'Kaydedilmiş uçuş durumu';
   el('altitude').textContent=number(altitudeValue(entity.altitude_m,preferences.altitudeUnit),0);
-  for(const [id,key] of [['heading','heading_deg'],['roll','roll_deg'],['pitch','pitch_deg']])el(id).textContent=number(entity[key],1);
-  const speed=entity.true_airspeed_mps??entity.estimated_tas_mps;
+  for(const [id,key] of [['heading','heading_deg'],['roll','roll_deg'],['pitch','pitch_deg']])el(id).textContent=entity[key+'_known']===false?'—':number(entity[key],1);
+  const speed=entity.true_airspeed_mps??entity.position_speed_mps;
   const mach=entity.mach??entity.estimated_mach;
   const estimatedSpeed=entity.true_airspeed_mps==null&&speed!=null,estimatedMach=entity.mach==null&&mach!=null;
   const displayedSpeed=speedValue(entity,preferences.speedUnit);
   el('speed').textContent=displayedSpeed==null?'—':number(displayedSpeed,SPEED_UNITS[preferences.speedUnit].digits);
   el('mach').textContent=mach==null?'—':number(mach,2);
   el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';
-  el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · tahmini TAS':'Hava hızı · TAS';
-  el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · hesaplanan':'Mach';
+  el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · konumdan hesaplanan':'Hava hızı · TAS';
+  el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · tahmini':'Mach';
   el('missing-data').hidden=!estimatedSpeed&&!estimatedMach&&speed!=null&&mach!=null;
-  el('missing-data').textContent=[estimatedSpeed?'Hız konumdan hesaplanır.':null,
-    estimatedMach?'Mach standart atmosferden hesaplanır.':null,speed==null?'Hız ölçümü yetersiz.':null,mach==null?'Mach bilgisi yok.':null].filter(Boolean).join(' ');
+  el('missing-data').textContent=[estimatedSpeed?'Hız konum değişiminden hesaplanır; hava hızı değildir.':null,
+    estimatedMach?'Mach standart atmosferden tahmin edilir.':null,speed==null?'Hız ölçümü yetersiz.':null,mach==null?'Mach bilgisi yok.':null].filter(Boolean).join(' ');
   el('missing-data').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
   el('east').textContent=distanceLabel(entity.east_m,preferences.distanceUnit);el('north').textContent=distanceLabel(entity.north_m,preferences.distanceUnit);
   const parentId=first.kind==='aircraft'?first.id:entity.owner_id;
   const owned=buffer.packet.inventory?.[parentId]||[];
   el('detail-inventory').hidden=first.kind!=='aircraft';
-  el('detail-inventory-list').replaceChildren(inventoryPanel(owned,viewTime,selected,selectEntity));
+  // The aircraft list already contains the interactive inventory; avoid rebuilding it here.
+  const summary=owned.reduce((counts,m)=>{counts[munitionState(m,viewTime)]++;return counts;},{carried:0,flying:0,spent:0});
+  el('detail-inventory-list').textContent=owned.length?`${summary.carried} uçakta · ${summary.flying} havada · ${summary.spent} atıldı`:'Mühimmat bilgisi yok.';
   el('entity-interval').textContent=formatTime(first.record_start_s)+' – '+formatTime(first.record_end_s);el('jump-entity').disabled=false;
 }
 el('jump-entity').onclick=()=>seek(buffer.tracks.get(selected)?.samples[0].record_start_s);
 
-async function request(path,payload){const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||'Kayıt açılamadı ('+response.status+')');}
-function importError(message){el('import-error').hidden=!message;el('import-error').textContent=message;}
-function libraryItem(name,subtitle,action){const button=document.createElement('button');button.className='library-item';const content=document.createElement('div');const title=document.createElement('strong');title.textContent=name;const info=document.createElement('span');info.textContent=subtitle;content.append(title,info);button.append(content);button.onclick=async()=>{if(busy)return;busy=true;button.disabled=true;importError('');try{await action();el('record-options').open=false;}catch(error){importError(error.message);}finally{busy=false;button.disabled=false;}};return button;}
-async function libraries(){
-  el('recording-library').replaceChildren();el('recent-recordings').replaceChildren();
-  try{
-    const response=await fetch('/api/recordings');if(!response.ok)throw new Error('Kayıt listesi alınamadı');const entries=await response.json();
-    for(const entry of entries)el('recording-library').append(libraryItem(entry.name,entry.files+' CSV dosyası',async()=>{await request('/api/open',{id:entry.id});try{await rememberRecording({id:entry.id,title:entry.name,catalog:true});}catch{}}));
-    if(!entries.length)el('recording-library').textContent='Henüz kayıt klasörü bulunamadı. CSV dosyalarını seçerek açabilirsin.';
-  }catch(error){el('recording-library').textContent=error.message;}
-  try{
-    const recent=await recentRecordings();for(const entry of recent)el('recent-recordings').append(libraryItem(entry.title,entry.catalog?'Kayıt klasörü':entry.files.length+' CSV dosyası',()=>request(entry.catalog?'/api/open':'/api/import',entry.catalog?{id:entry.id}:{title:entry.title,files:entry.files})));
-    if(!recent.length)el('recent-recordings').textContent='Açtığın kayıtlar burada görünür.';
-  }catch{el('recent-recordings').textContent='Bu tarayıcıda son kayıtlar saklanamıyor.';}
-  filterRecordings();
-}
-function openRecording(){closeMenus(el('record-options'));el('record-options').open=true;positionMenu(el('record-options'));}
-el('empty-open').onclick=openRecording;el('close-record-panel').onclick=()=>el('record-options').open=false;el('refresh-library').onclick=libraries;
-el('choose-files').onclick=()=>el('file-input').click();el('choose-folder').onclick=()=>el('folder-input').click();
-async function importFiles(source){
-  if(busy)return;const chosen=[...source].filter(file=>file.name.toLowerCase().endsWith('.csv'));
-  if(!chosen.length){importError('CSV dosyası seçmelisin.');return;}if(chosen.length>1000||chosen.reduce((sum,file)=>sum+file.size,0)>90*1024*1024){importError('En fazla 1000 dosya ve 90 MB seçebilirsin.');return;}
-  const folders=new Set(chosen.filter(file=>file.webkitRelativePath).map(file=>file.webkitRelativePath.split('/').slice(0,-1).join('/')));
-  if(folders.size>1){importError('Tek simülasyonun CSV klasörünü seç; alt klasörlerdeki farklı kayıtları birlikte açma.');return;}
-  busy=true;el('choose-files').disabled=el('choose-folder').disabled=true;importError('');
-  try{const files=await Promise.all(chosen.map(async file=>({name:file.name,text:await file.text()})));const title=chosen[0].webkitRelativePath?.split('/').slice(0,-1).at(-1)||(chosen.length===1?chosen[0].name:'Uçuş kaydı · '+chosen.length+' dosya');
-    await request('/api/import',{title,files});try{await rememberRecording({id:'local-'+crypto.randomUUID(),title,files,catalog:false});}catch{}
-    el('record-options').open=false;
-  }catch(error){importError(error.message);}finally{busy=false;el('choose-files').disabled=el('choose-folder').disabled=false;}
-}
-for(const id of ['file-input','folder-input'])el(id).onchange=event=>{const files=[...event.target.files];event.target.value='';importFiles(files);};
-function filterRecordings(){const query=el('record-search').value.toLocaleLowerCase('tr').trim();for(const item of document.querySelectorAll('.recording-lists .library-item'))item.hidden=Boolean(query&&!item.textContent.toLocaleLowerCase('tr').includes(query));}
-el('record-search').oninput=filterRecordings;
-el('record-info').onclick=event=>{const packet=buffer.packet,bounds=buffer.bounds();if(!bounds){event.preventDefault();openRecording();return;}el('record-details').replaceChildren();for(const [label,value] of [['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],['Nesne',String(packet.objects)],['Kaynak',packet.recording||'Tarayıcıdan seçilen Tacview CSV dosyaları']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;el('record-details').append(dt,dd);}};
+const recordingMenu=setupRecordingMenu({
+  open:()=>{closeMenus(el('record-options'));el('record-options').open=true;positionMenu(el('record-options'));}
+});
+const libraries=()=>recordingMenu.refresh();
+const recordingError=message=>recordingMenu.error(message);
+el('empty-open').onclick=()=>recordingMenu.open();
+el('record-info').onclick=event=>{const packet=buffer.packet,bounds=buffer.bounds();if(!bounds){event.preventDefault();recordingMenu.open();return;}el('record-details').replaceChildren();for(const [label,value] of [['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],['Nesne',String(packet.objects)],['Kaynak',packet.recording||'Kayıt dizini']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;el('record-details').append(dt,dd);}};
 el('close-info').onclick=()=>el('record-info-options').open=false;
 
 function render(timestamp){

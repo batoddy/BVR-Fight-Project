@@ -27,10 +27,10 @@ test('Distance ruler remains physically correct for NM and km across zoom levels
 });
 
 test('Compact speed labels prefer measured TAS, round estimates and preserve zero',()=>{
-  assert.equal(speedLabel({true_airspeed_mps:250,estimated_tas_mps:300}),'250 m/s');
-  assert.equal(speedLabel({true_airspeed_mps:0,estimated_tas_mps:300}),'0 m/s');
-  assert.equal(speedLabel({true_airspeed_mps:null,estimated_tas_mps:300.15}),'300 m/s');
-  assert.equal(speedLabel({true_airspeed_mps:NaN,estimated_tas_mps:200}),'200 m/s');
+  assert.equal(speedLabel({true_airspeed_mps:250,position_speed_mps:300}),'250 m/s');
+  assert.equal(speedLabel({true_airspeed_mps:0,position_speed_mps:300}),'0 m/s');
+  assert.equal(speedLabel({true_airspeed_mps:null,position_speed_mps:300.15}),'300 m/s');
+  assert.equal(speedLabel({true_airspeed_mps:NaN,position_speed_mps:200}),'200 m/s');
   assert.equal(speedLabel({}),'— m/s');
 });
 test('NM and feet convert display values without changing the physical data',()=>{

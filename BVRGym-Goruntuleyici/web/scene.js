@@ -1,12 +1,13 @@
+import {sampleWindow} from './stream.js';
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/OrbitControls.js';
-import {createF16,createMissile,disposeObject} from './aircraft3d.js';
+import {createF16,createMissile,createGeneric,disposeObject} from './aircraft3d.js';
 import {Scene as Scene2D,updateScaleBar} from './scene2d.js';
 import {MODEL_LENGTHS,altitudeLabel,speedLabel,visualScale} from './units.js';
 
 const point=e=>new THREE.Vector3(e.east_m,e.altitude_m,-e.north_m);
 const degrees=Math.PI/180;
-const colorFor=e=>document.documentElement.dataset.theme==='dark'?(e.kind==='missile'?(e.team==='red'?0xf18c68:0xecc274):(e.team==='red'?0xe88480:0x83b9d2)):(e.kind==='missile'?(e.team==='red'?0xa83215:0x8a5700):(e.team==='red'?0xae2432:0x0756a5));
+const colorFor=e=>e.team==='unknown'?(document.documentElement.dataset.theme==='dark'?0xaeb6bf:0x46515c):document.documentElement.dataset.theme==='dark'?(e.kind==='missile'?(e.team==='red'?0xf18c68:0xecc274):(e.team==='red'?0xe88480:0x83b9d2)):(e.kind==='missile'?(e.team==='red'?0xa83215:0x8a5700):(e.team==='red'?0xae2432:0x0756a5));
 
 export class Scene {
   constructor(canvas,onSelect,onPan) {
@@ -133,7 +134,7 @@ export class Scene {
   }
 
   addEntity(entity) {
-    const model=entity.kind==='missile'?createMissile(colorFor(entity)):createF16(colorFor(entity));model.userData.entityId=entity.id;this.world.add(model);
+    const model=entity.visual_model==='generic'?createGeneric(entity.kind,colorFor(entity)):entity.kind==='missile'?createMissile(colorFor(entity)):createF16(colorFor(entity));model.userData.entityId=entity.id;this.world.add(model);
     const noseOffset=-new THREE.Box3().setFromObject(model).min.z;
     const trail=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:colorFor(entity),transparent:true,opacity:.9,fog:false}));
     const shadowTrail=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6b8c7b,transparent:true,opacity:.4}));
@@ -208,7 +209,7 @@ export class Scene {
   }
 
   updateTrail(record,track,entity,time) {
-    const samples=track?.samples||[];const visible=samples.filter(s=>s.sim_time_s<=time&&(this.trailDuration<0||s.sim_time_s>=time-this.trailDuration));
+    const samples=track?.samples||[];const visible=sampleWindow(samples,time,this.trailDuration,1800);
     const stride=Math.max(1,Math.ceil(visible.length/1800));
     const drops=entity.kind==='aircraft'?this.altitudeDrops(track,time):[];
     this.replaceLine(record.altitudeTrace,drops);
@@ -288,10 +289,10 @@ export class Scene {
       record.altitudeTrace.visible=showAltitude&&this.trail;
       if(record.altitudeCurtain){
         record.altitudeCurtain.visible=showAltitude&&this.trail;
-        record.altitudeCurtain.material.color.setHex(dark?(entity.team==='red'?0xe88480:0x65afe8):color);
+        record.altitudeCurtain.material.color.setHex(entity.team==='unknown'?color:dark?(entity.team==='red'?0xe88480:0x65afe8):color);
         record.altitudeCurtain.material.opacity=dark?(isSelected?.32:.22):(isSelected?.42:.32);
       }
-      record.heading.visible=this.headingGuides&&entity.visible!==false;
+      record.heading.visible=this.headingGuides&&entity.heading_deg_known!==false&&entity.visible!==false;
       if(record.heading.visible){
         const length=MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft;
         const guideLength=Math.max(250,length*scale*.9);
@@ -311,11 +312,11 @@ export class Scene {
       record.ring.position.set(position.x,4,position.z);record.ring.scale.setScalar(scale*2.8);
       const projected=position.clone().project(this.camera);
       const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed)&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
-      record.label.hidden=!visible;record.label.classList.toggle('selected',isSelected);
+      record.label.hidden=!visible;record.label.classList.toggle('selected',isSelected);record.label.classList.toggle('stale',Boolean(entity.measurement_ended));
       record.labelName.textContent=this.labelNames?entity.name:'';record.labelName.hidden=!this.labelNames;
       record.labelSpeedValue.textContent=this.labelSpeed?speedLabel(entity,this.speedUnit):'';record.labelSpeedValue.hidden=!this.labelSpeed;
       record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
-      record.label.title=[record.labelName.textContent,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent].filter(Boolean).join(' · ');
+      record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,record.labelName.textContent,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent].filter(Boolean).join(' · ');
       record.label.style.borderColor='#'+colorFor(entity).toString(16);
       const length=MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft;
       const labelOffset=Math.max(26,length*scale*rect.height/(4*distance*Math.tan(this.camera.fov*Math.PI/360))+8);

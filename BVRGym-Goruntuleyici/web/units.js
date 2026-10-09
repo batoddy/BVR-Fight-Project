@@ -16,7 +16,7 @@ export const distanceLabel=(meters,unit='nm',digits=2)=>{
 
 export function speedValue(entity,unit='mps'){
   if(unit==='mach')return Number.isFinite(entity.mach)?entity.mach:Number.isFinite(entity.estimated_mach)?entity.estimated_mach:null;
-  const speed=Number.isFinite(entity.true_airspeed_mps)?entity.true_airspeed_mps:entity.estimated_tas_mps;
+  const speed=Number.isFinite(entity.true_airspeed_mps)?entity.true_airspeed_mps:entity.position_speed_mps;
   return Number.isFinite(speed)?speed*(SPEED_UNITS[unit]||SPEED_UNITS.mps).factor:null;
 }
 

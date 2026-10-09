@@ -88,6 +88,14 @@ export function createMissile(color=0xecc274) {
   return normalizeLength(missile,'missile',body);
 }
 
+export function createGeneric(kind,color){
+  const group=new THREE.Group();
+  const body=new THREE.MeshStandardMaterial({color,roughness:.7});
+  const symbol=new THREE.Mesh(new THREE.OctahedronGeometry(1,0),body);
+  symbol.scale.set(.45,.35,1);group.add(symbol);
+  return normalizeLength(group,kind,body);
+}
+
 export function disposeObject(object) {
   const geometries=new Set(),materials=new Set();
   object.traverse(node=>{if(node.geometry)geometries.add(node.geometry);if(node.material)for(const material of [].concat(node.material))materials.add(material);});
