@@ -6,13 +6,14 @@ import {MODEL_LENGTHS,altitudeLabel,speedLabel,visualScale} from './units.js';
 
 const point=e=>new THREE.Vector3(e.east_m,e.altitude_m,-e.north_m);
 const degrees=Math.PI/180;
-const colorFor=e=>e.kind==='missile'?(e.team==='red'?0xf18c68:0xecc274):(e.team==='red'?0xe88480:0x83b9d2);
+const colorFor=e=>document.documentElement.dataset.theme==='dark'?(e.kind==='missile'?(e.team==='red'?0xf18c68:0xecc274):(e.team==='red'?0xe88480:0x83b9d2)):(e.kind==='missile'?(e.team==='red'?0xa83215:0x8a5700):(e.team==='red'?0xae2432:0x0756a5));
 
 export class Scene {
   constructor(canvas,onSelect,onPan) {
     this.canvas=canvas;this.onSelect=onSelect;this.onPan=onPan;
     this.distanceScale=canvas.parentElement.querySelector('.distance-scale');
     this.follow=true;this.grid=true;this.trail=true;this.mode='3d';
+    this.speedUnit='mps';this.altitudeUnit='ft';this.distanceUnit='nm';
     this.trailDuration=300;this.labelMode='all';this.labelNames=true;this.labelAltitude=true;this.labelSpeed=true;
     this.models=new Map();this.lastTheme=null;
     this.hasData=false;this.objectScale=50;this.altitudeGuides=true;this.headingGuides=true;this.lastTrailUpdate=-Infinity;
@@ -75,6 +76,15 @@ export class Scene {
     offset.setLength(length);this.camera.position.copy(this.controls.target).add(offset);this.controls.update();
   }
 
+  focusEntity(entity){
+    this.follow=true;this.flat.objectScale=this.objectScale;
+    if(this.mode==='2d'){this.flat.focusEntity(entity);return;}
+    const target=point(entity),offset=this.camera.position.clone().sub(this.controls.target);
+    const length=(MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale);
+    offset.setLength(Math.max(3500,length*5));
+    this.controls.target.copy(target);this.camera.position.copy(target).add(offset);this.controls.update();this.hasData=true;
+  }
+
   setMode(mode) {
     this.mode=mode;this.canvas.hidden=mode==='2d';this.canvas2d.hidden=mode!=='2d';this.labels.hidden=mode==='2d';
     this.controls.enabled=mode!=='2d';this.resize();
@@ -119,7 +129,7 @@ export class Scene {
     ring.rotation.x=-Math.PI/2;ring.position.y=3;
     this.world.add(trail,shadowTrail,stem,ring,heading,altitudeTrace);
     if(altitudeCurtain)this.world.add(altitudeCurtain);
-    const label=document.createElement('button');label.className='flight-label';label.onclick=()=>this.onSelect(entity.id);this.labels.append(label);
+    const label=document.createElement('button');label.className='flight-label';label.onclick=()=>this.onSelect(entity.id);label.ondblclick=event=>{event.preventDefault();this.onFocus?.(entity.id);};this.labels.append(label);
     const labelName=document.createElement('span'),labelSpeedValue=document.createElement('span'),labelAltitudeValue=document.createElement('span');
     labelName.className='flight-label-name';labelSpeedValue.className='flight-label-speed';labelAltitudeValue.className='flight-label-altitude';label.append(labelName,labelSpeedValue,labelAltitudeValue);
     const record={model,trail,shadowTrail,stem,ring,heading,altitudeTrace,altitudeCurtain,noseOffset,label,labelName,labelSpeedValue,labelAltitudeValue};this.models.set(entity.id,record);
@@ -168,8 +178,8 @@ export class Scene {
     const dark=theme==='dark';
     const sky=dark?0x142330:0xb9cdda;
     this.world.background=new THREE.Color(sky);this.world.fog=new THREE.FogExp2(sky,.000002);
-    this.ground.material.color.setHex(dark?0x26392f:0x879d82);
-    this.groundGrid.material.color.setHex(dark?0x50725f:0x597c68);
+    this.ground.material.color.setHex(dark?0x26392f:0xc3d2bc);
+    this.groundGrid.material.color.setHex(dark?0x50725f:0x607c66);
   }
 
   clear() {
@@ -181,6 +191,7 @@ export class Scene {
   }
 
   draw(entities,buffer,time,selected) {
+    this.flat.speedUnit=this.speedUnit;this.flat.altitudeUnit=this.altitudeUnit;this.flat.distanceUnit=this.distanceUnit;
     this.flat.follow=this.follow;this.flat.grid=this.grid;this.flat.trail=this.trail;
     this.flat.objectScale=this.objectScale;this.flat.headingGuides=this.headingGuides;this.flat.trailDuration=this.trailDuration;this.flat.labelMode=this.labelMode;this.flat.labelNames=this.labelNames;this.flat.labelAltitude=this.labelAltitude;this.flat.labelSpeed=this.labelSpeed;
     if(this.mode==='2d'){this.flat.draw(entities,buffer,time,selected);return;}
@@ -217,8 +228,11 @@ export class Scene {
       // Fixed world-space visual scale: zoom changes the apparent size naturally.
       const scale=visualScale(entity.kind,this.objectScale);record.model.scale.setScalar(scale);
       const isSelected=entity.id===selected;
-      record.model.userData.bodyMaterial.color.setHex(colorFor(entity));
-      record.model.userData.bodyMaterial.emissive.setHex(colorFor(entity));record.model.userData.bodyMaterial.emissiveIntensity=.15;
+      const dark=document.documentElement.dataset.theme==='dark',color=colorFor(entity);
+      for(const line of [record.trail,record.stem,record.heading,record.altitudeTrace])line.material.color.setHex(color);
+      record.shadowTrail.material.color.setHex(dark?0x6b8c7b:0x344b3c);
+      record.model.userData.bodyMaterial.color.setHex(color);
+      record.model.userData.bodyMaterial.emissive.setHex(colorFor(entity));record.model.userData.bodyMaterial.emissiveIntensity=dark?.15:0;
       record.trail.visible=this.trail;record.shadowTrail.visible=this.trail&&this.grid;
       const showAltitude=this.altitudeGuides&&entity.kind==='aircraft';
       record.stem.visible=showAltitude&&entity.visible!==false;
@@ -227,8 +241,8 @@ export class Scene {
       record.altitudeTrace.visible=showAltitude&&this.trail;
       if(record.altitudeCurtain){
         record.altitudeCurtain.visible=showAltitude&&this.trail;
-        record.altitudeCurtain.material.color.setHex(entity.team==='red'?0xe88480:0x65afe8);
-        record.altitudeCurtain.material.opacity=isSelected?.32:.22;
+        record.altitudeCurtain.material.color.setHex(dark?(entity.team==='red'?0xe88480:0x65afe8):color);
+        record.altitudeCurtain.material.opacity=dark?(isSelected?.32:.22):(isSelected?.42:.32);
       }
       record.heading.visible=this.headingGuides&&entity.visible!==false;
       if(record.heading.visible){
@@ -252,8 +266,8 @@ export class Scene {
       const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed)&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
       record.label.hidden=!visible;record.label.classList.toggle('selected',isSelected);
       record.labelName.textContent=this.labelNames?entity.name:'';record.labelName.hidden=!this.labelNames;
-      record.labelSpeedValue.textContent=this.labelSpeed?speedLabel(entity):'';record.labelSpeedValue.hidden=!this.labelSpeed;
-      record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
+      record.labelSpeedValue.textContent=this.labelSpeed?speedLabel(entity,this.speedUnit):'';record.labelSpeedValue.hidden=!this.labelSpeed;
+      record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
       record.label.title=[record.labelName.textContent,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent].filter(Boolean).join(' · ');
       record.label.style.borderColor='#'+colorFor(entity).toString(16);
       const length=MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft;
@@ -277,6 +291,6 @@ export class Scene {
     this.lastTime=time;this.renderer.render(this.world,this.camera);
     // Perspective scale at the orbit target's depth, in CSS pixels.
     const metersPerPixel=2*this.camera.position.distanceTo(this.controls.target)*Math.tan(this.camera.fov*degrees/2)/(rect.height*this.camera.zoom);
-    updateScaleBar(this.distanceScale,metersPerPixel,rect.width,'3d');
+    updateScaleBar(this.distanceScale,metersPerPixel,rect.width,'3d',this.distanceUnit);
   }
 }

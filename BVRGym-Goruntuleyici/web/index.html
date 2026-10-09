@@ -11,28 +11,57 @@
 <div class="app">
   <header class="topbar">
     <h1><span aria-hidden="true">✈</span> BVRGym</h1>
-    <button id="open-recording" class="primary">Kayıt aç</button>
-    <button id="record-info" class="record-summary" title="Kayıt ayrıntıları"><strong id="record-title">Kayıt seç</strong><span id="record-duration">Tacview CSV</span></button>
-    <div class="button-group" aria-label="Görünüm"><button id="view-3d" aria-pressed="true">3D</button><button id="view-2d" aria-pressed="false">2D</button></div>
-    <label class="sr-only" for="camera-mode">Kamera</label><select id="camera-mode"><option value="orbit">Serbest kamera</option><option value="top">Üstten</option><option value="all">Tüm nesneler</option></select>
-    <button id="follow" aria-pressed="true">Takip</button>
-    <button id="toggle-altitude-guides" aria-pressed="true" title="Uçakların irtifa dolgusu ve çizgilerini göster/gizle">İrtifa</button>
-    <details id="view-options"><summary>Görünüm</summary><div class="popover">
+    <div class="toolbar-record">
+      <details id="record-info-options" class="toolbar-menu">
+        <summary id="record-info" class="record-summary" title="Kayıt ayrıntıları"><strong id="record-title">Kayıt seç</strong><span id="record-duration">Tacview CSV</span></summary>
+        <section id="record-info-panel" class="popover info-popover" aria-labelledby="info-title"><div class="menu-heading"><h2 id="info-title">Kayıt bilgisi</h2><button id="close-info" aria-label="Kayıt bilgisini kapat">×</button></div><dl id="record-details"></dl><p>İrtifa deniz seviyesine göredir; yer düzlemi 0 m referansıdır.</p></section>
+      </details>
+      <span id="status" class="badge" role="status">Kayıt bekleniyor</span>
+    </div>
+    <div class="toolbar-actions">
+      <details id="record-options" class="toolbar-menu">
+        <summary id="open-recording" class="primary">Kayıt aç</summary>
+        <section id="record-panel" class="popover recording-popover" aria-labelledby="record-panel-title">
+          <div class="menu-heading"><h2 id="record-panel-title">Uçuş kaydı</h2><button id="close-record-panel" aria-label="Kayıt menüsünü kapat">×</button></div>
+          <div class="file-actions"><button id="choose-folder" class="primary">Klasör seç</button><button id="choose-files">CSV dosyaları seç</button></div>
+          <div class="record-source"><span>Açık dizin / kaynak</span><strong id="record-source">Kayıt seçilmedi</strong></div>
+          <input id="file-input" type="file" accept=".csv" multiple hidden><input id="folder-input" type="file" webkitdirectory multiple hidden>
+          <p id="import-error" class="error" role="alert" hidden></p>
+          <input id="record-search" type="search" placeholder="Kayıtlarda ara…" aria-label="Kayıtlarda ara">
+          <div class="recording-lists"><h3>Son kayıtlar</h3><div id="recent-recordings"></div>
+            <div class="library-heading"><h3>Kayıt klasörleri</h3><button id="refresh-library">Yenile</button></div><div id="recording-library"></div>
+          </div>
+        </section>
+      </details>
+      <div class="button-group" aria-label="Görünüm"><button id="view-3d" aria-pressed="true">3D</button><button id="view-2d" aria-pressed="false">2D</button></div>
+      <label class="sr-only" for="camera-mode">Kamera</label><select id="camera-mode"><option value="orbit">Serbest kamera</option><option value="top">Üstten</option><option value="all">Tüm nesneler</option></select>
+      <button id="follow" aria-pressed="true">Takip</button>
+      <button id="toggle-altitude-guides" aria-pressed="true" title="Uçakların irtifa dolgusu ve çizgilerini göster/gizle">İrtifa</button>
+      <select id="object-scale" aria-label="Nesne büyütme oranı" title="Nesne büyütme oranı; füzeler görünürlük için ayrıca %25 büyütülür"><option value="1">Nesne büyütme · 1×</option><option value="25">Nesne büyütme · 25×</option><option value="50" selected>Nesne büyütme · 50×</option><option value="100">Nesne büyütme · 100×</option></select>
+      <details id="view-options" class="toolbar-menu"><summary>Görünüm</summary><div class="popover">
       <label><input id="trail" type="checkbox" checked>Uçuş izi</label>
       <label for="trail-duration">İz süresi<select id="trail-duration"><option value="60">1 dakika</option><option value="300">5 dakika</option><option value="-1">Tüm kayıt</option></select></label>
       <label><input id="show-history" type="checkbox" checked>Kaydı biten füzelerin izini koru</label>
       <label><input id="grid" type="checkbox" checked>Yer referansı</label>
       <label><input id="altitude-guides" type="checkbox" checked>İrtifa dolgusu ve çizgiler</label>
       <label><input id="heading-guides" type="checkbox" checked>Burun yönü · kesikli 3D çizgi</label>
-      <label for="object-scale">Nesne büyütme<select id="object-scale"><option value="1">Gerçek ölçek · 1×</option><option value="25">25×</option><option value="50" selected>50×</option><option value="100">100×</option></select></label>
       <label for="label-mode">Etiketler<select id="label-mode"><option value="all">Tüm nesneler</option><option value="selected">Yalnızca seçili</option><option value="none">Kapalı</option></select></label>
       <label><input id="label-names" type="checkbox" checked>Nesne adı</label>
       <label><input id="label-altitude" type="checkbox" checked>İrtifa</label>
-      <label><input id="label-speed" type="checkbox" checked>Hız · m/s</label>
+      <label><input id="label-speed" type="checkbox" checked><span id="label-speed-caption">Hız · m/s</span></label>
       <p>Sol tuş: döndür · Sağ tuş: taşı<br>Tekerlek: yakınlaştır · Boşluk: oynat/duraklat</p>
     </div></details>
-    <span id="status" class="badge" role="status">Kayıt bekleniyor</span>
-    <button id="toggle-theme" class="theme-toggle" role="switch" aria-label="Koyu mod" aria-checked="true" title="Koyu mod"><span class="switch-track"><span class="switch-thumb"></span></span></button>
+      <details id="settings-options" class="toolbar-menu">
+        <summary id="open-settings">Ayarlar</summary>
+        <section id="settings-panel" class="popover settings-popover" aria-labelledby="settings-title"><div class="menu-heading"><h2 id="settings-title">Birimler</h2><button id="close-settings" aria-label="Ayarları kapat">×</button></div><div class="unit-settings">
+    <label for="speed-unit">Hız<select id="speed-unit"><option value="mps">Metre/saniye · m/s</option><option value="kms">Kilometre/saniye · km/s</option><option value="kmh">Kilometre/saat · km/sa</option><option value="kts">Knot · kt</option><option value="mach">Mach</option></select></label>
+    <label for="altitude-unit">İrtifa<select id="altitude-unit"><option value="ft">Feet · ft</option><option value="m">Metre · m</option></select></label>
+    <label for="distance-unit">Mesafe<select id="distance-unit"><option value="nm">Deniz mili · NM</option><option value="km">Kilometre · km</option></select></label>
+  </div>
+  <div class="settings-actions"><button id="reset-units">Varsayılanlara dön</button></div></section>
+      </details>
+      <button id="toggle-theme" class="theme-toggle" role="switch" aria-label="Koyu mod" aria-checked="true" title="Koyu mod"><span class="switch-track"><span class="switch-thumb"></span></span></button>
+    </div>
   </header>
   <div id="layout" class="content">
     <aside id="objects" class="objects">
@@ -56,7 +85,7 @@
           <div id="distance-scale" class="distance-scale" role="img" aria-label="Mesafe ölçeği" hidden>
             <span class="distance-scale-label"></span><span class="distance-scale-bar" aria-hidden="true"></span>
           </div>
-          <span class="reference-units">İrtifa ft · Hız m/s</span>
+          <span id="reference-units" class="reference-units">İrtifa ft · Hız m/s</span>
         </div>
         <div class="zoom"><button id="zoom-in" aria-label="Yakınlaştır">+</button><button id="zoom-out" aria-label="Uzaklaştır">−</button></div>
       </div>
@@ -71,7 +100,7 @@
             <input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıt zamanı" disabled>
             <output id="timeline-last">—</output>
           </div>
-          <div class="speed-control"><label for="playback-speed">Hız <output id="playback-rate">1×</output></label><input id="playback-speed" type="range" min="0" max="5" step="1" value="0" aria-label="Oynatma hızı" aria-valuetext="1×"><div class="speed-stops"><button data-rate="1" aria-pressed="true">1×</button><button data-rate="2">2×</button><button data-rate="3">3×</button><button data-rate="4">4×</button><button data-rate="5">5×</button><button data-rate="10">10×</button></div></div>
+          <div class="speed-control"><label for="playback-speed">Hız <output id="playback-rate">1×</output></label><input id="playback-speed" type="range" min="0" max="7" step="1" value="2" aria-label="Oynatma hızı" aria-valuetext="1×" title="↑ Hızlandır · ↓ Yavaşlat"><div class="speed-stops"><button data-rate="0.25" aria-pressed="false">0,25×</button><button data-rate="0.5" aria-pressed="false">0,5×</button><button data-rate="1" aria-pressed="true">1×</button><button data-rate="2">2×</button><button data-rate="3">3×</button><button data-rate="4">4×</button><button data-rate="5">5×</button><button data-rate="10">10×</button></div></div>
         </div>
       </section>
     </main>
@@ -79,7 +108,7 @@
       <button id="toggle-detail" class="panel-arrow" aria-label="Bilgi panelini kapat" aria-expanded="true" aria-controls="detail-content">›</button>
       <div id="detail-content" class="panel-body">
         <h2 id="detail-title">Nesne bilgisi</h2><h3 id="selected-name">Nesne seç</h3><p id="model" class="muted">Kayıt ölçümleri</p><span id="entity-state" class="entity-state"></span>
-        <dl class="measures"><div><dt>İrtifa · MSL</dt><dd><output id="altitude">—</output><small> ft</small></dd></div><div><dt>Burun yönü</dt><dd><output id="heading">—</output><small> °</small></dd></div><div id="speed-measure"><dt>Hava hızı · TAS</dt><dd><output id="speed">—</output><small> m/s</small></dd></div><div id="mach-measure"><dt>Mach</dt><dd><output id="mach">—</output></dd></div><div><dt>Yatış</dt><dd><output id="roll">—</output><small> °</small></dd></div><div><dt>Yunuslama</dt><dd><output id="pitch">—</output><small> °</small></dd></div></dl>
+        <dl class="measures"><div><dt>İrtifa · MSL</dt><dd><output id="altitude">—</output><small id="altitude-unit-label"> ft</small></dd></div><div><dt>Burun yönü</dt><dd><output id="heading">—</output><small> °</small></dd></div><div id="speed-measure"><dt>Hava hızı · TAS</dt><dd><output id="speed">—</output><small id="speed-unit-label"> m/s</small></dd></div><div id="mach-measure"><dt>Mach</dt><dd><output id="mach">—</output></dd></div><div><dt>Yatış</dt><dd><output id="roll">—</output><small> °</small></dd></div><div><dt>Yunuslama</dt><dd><output id="pitch">—</output><small> °</small></dd></div></dl>
         <p id="missing-data" class="data-note" hidden>Bu kayıtta hava hızı ve Mach ölçümü bulunmuyor.</p>
         <dl class="positions"><div><dt>Yerel doğu</dt><dd id="east">—</dd></div><div><dt>Yerel kuzey</dt><dd id="north">—</dd></div></dl>
         <section id="detail-inventory" class="detail-inventory" hidden><h3>Mühimmat</h3><div id="detail-inventory-list"></div></section><div class="record-interval"><span>Ölçüm aralığı</span><output id="entity-interval">—</output><button id="jump-entity" disabled>İlk ölçüme git</button></div>
@@ -88,7 +117,5 @@
     </aside>
   </div>
 </div>
-<dialog id="record-dialog" aria-labelledby="record-dialog-title"><div class="dialog-head"><h2 id="record-dialog-title">Uçuş kaydı aç</h2><button id="close-record-dialog" aria-label="Kapat">×</button></div><p>Aynı simülasyona ait uçak ve füze dosyalarını birlikte aç.</p><div class="file-actions"><button id="choose-files" class="primary">CSV dosyaları seç</button><button id="choose-folder">Klasör seç</button></div><input id="file-input" type="file" accept=".csv" multiple hidden><input id="folder-input" type="file" webkitdirectory multiple hidden><p id="import-error" class="error" role="alert" hidden></p><div class="library-heading"><h3>Mevcut kayıtlar</h3><button id="refresh-library">Yenile</button></div><div id="recording-library"></div><h3>Son açılanlar</h3><div id="recent-recordings"></div><p class="dialog-note">Dosyalar değiştirilmez. BVRGym kayıtları tamamlandıktan sonra açılır; arayüz uçuşa komut göndermez.</p></dialog>
-<dialog id="info-dialog" aria-labelledby="info-title"><div class="dialog-head"><h2 id="info-title">Kayıt bilgisi</h2><button id="close-info" aria-label="Kapat">×</button></div><dl id="record-details"></dl><p>İrtifa deniz seviyesine göredir. Yer düzlemi 0 m referansıdır; gerçek arazi kullanılmaz. Füze ölçümlerinin sona ermesi isabet veya imha anlamına gelmez.</p></dialog>
 <script type="module" src="/app.js"></script>
 </body></html>

@@ -2,12 +2,12 @@ import {SampleBuffer,ReplayClock} from './stream.js';
 import {Scene} from './scene.js';
 import {Scene as Scene2D} from './scene2d.js';
 import {recentRecordings,rememberRecording} from './history.js';
-import {toFeet,toNauticalMiles,munitionState} from './units.js';
+import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,altitudeValue,speedValue,distanceLabel,munitionState} from './units.js';
 import {inventoryPanel} from './inventory.js';
 
 const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
-  altitudeGuides:true,headingGuides:true,objectScale:50,trail:true,trailDuration:300,history:true,grid:true,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true};
+  altitudeGuides:true,headingGuides:true,objectScale:50,trail:true,trailDuration:300,history:true,grid:true,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm'};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
@@ -15,7 +15,7 @@ try{
 }catch{}
 const save=()=>{try{localStorage.setItem('bvrgym-layout-v2',JSON.stringify(preferences));}catch{}};
 const buffer=new SampleBuffer(),replayClock=new ReplayClock();
-const playbackRates=[1,2,3,4,5,10],hiddenObjects=new Set();
+const playbackRates=[.25,.5,1,2,3,4,5,10],hiddenObjects=new Set();
 const teamOrder={blue:0,red:1};
 let selected=null,viewTime=null,paused=true,scrubbing=false,lastReceive=0,connectionError=null,
   lastLabels=0,listSignature='',filter='all',query='',busy=false,scene,webglError=null;
@@ -81,7 +81,16 @@ function updateFollow(){
   const name=buffer.tracks.get(selected)?.samples[0].name;
   el('follow').textContent=scene.follow&&name?'Takip · '+name:'Takip';
 }
-function selectEntity(id){selected=id;listSignature='';renderList();updateFollow();}
+function selectEntity(id){selected=id;renderList();updateFollow();}
+function focusEntity(id){
+  const track=buffer.tracks.get(id);if(!track)return;
+  let entity=buffer.at(id,viewTime);
+  if(!entity){seek(track.samples[0].record_start_s);entity=buffer.at(id,viewTime);}
+  if(!entity)return;
+  hiddenObjects.delete(id);selectEntity(id);scene.focusEntity(entity);scene.follow=true;
+  preferences.follow=true;save();updateFollow();
+}
+el('entity-list').ondblclick=event=>{const button=event.target.closest('.entity');if(button)focusEntity(button.closest('.aircraft-card').dataset.id);};
 try{scene=new Scene(el('scene'),selectEntity,()=>{preferences.follow=scene.follow;save();updateFollow();});}
 catch{
   webglError='3D açılamadı; 2D görünüm kullanılıyor.';
@@ -89,7 +98,7 @@ catch{
   scene=new Scene2D(canvas,selectEntity,()=>{preferences.follow=scene.follow;save();updateFollow();});
   el('view-3d').disabled=true;preferences.mode='2d';
 }
-scene.follow=preferences.follow;
+scene.onFocus=focusEntity;if(scene.flat)scene.flat.onFocus=focusEntity;scene.follow=preferences.follow;
 function setMode(value){
   if(!['2d','3d'].includes(value))value='3d';
   if(webglError)value='2d';else scene.setMode(value);
@@ -126,7 +135,42 @@ el('label-mode').value=['all','selected','none'].includes(preferences.labelMode)
 for(const id of ['altitude-guides','heading-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','trail-duration','label-mode'])el(id).onchange=viewSettings;
 viewSettings();updateFollow();
 el('toggle-altitude-guides').onclick=()=>{el('altitude-guides').checked=!el('altitude-guides').checked;viewSettings();};
-document.addEventListener('pointerdown',event=>{if(!el('view-options').contains(event.target))el('view-options').open=false;});
+const toolbarMenus=[...document.querySelectorAll('.toolbar-menu')];
+function closeMenus(except=null){for(const menu of toolbarMenus)if(menu!==except)menu.open=false;}
+function positionMenu(menu){
+  const panel=menu.querySelector('.popover'),anchor=menu.querySelector('summary').getBoundingClientRect();
+  if(!panel||!menu.open)return;
+  const width=panel.offsetWidth,top=anchor.bottom+6;
+  panel.style.left=Math.max(10,Math.min(innerWidth-width-10,anchor.right-width))+'px';
+  panel.style.top=top+'px';panel.style.maxHeight=Math.max(100,innerHeight-top-12)+'px';
+}
+for(const menu of toolbarMenus){
+  menu.addEventListener('toggle',()=>{
+    menu.querySelector('summary').setAttribute('aria-expanded',String(menu.open));
+    if(menu.open){closeMenus(menu);positionMenu(menu);if(menu.id==='record-options'){importError('');libraries();}}
+  });
+}
+document.addEventListener('pointerdown',event=>{if(!toolbarMenus.some(menu=>menu.contains(event.target)))closeMenus();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&toolbarMenus.some(menu=>menu.open)){const summary=toolbarMenus.find(menu=>menu.open).querySelector('summary');closeMenus();summary.focus();event.preventDefault();event.stopImmediatePropagation();}},true);
+addEventListener('resize',()=>toolbarMenus.filter(menu=>menu.open).forEach(positionMenu));
+new ResizeObserver(()=>toolbarMenus.filter(menu=>menu.open).forEach(positionMenu)).observe(document.querySelector('.topbar'));
+
+function unitSettings(refresh=true){
+  for(const [id,key,definitions] of [['speed-unit','speedUnit',SPEED_UNITS],['altitude-unit','altitudeUnit',ALTITUDE_UNITS],['distance-unit','distanceUnit',DISTANCE_UNITS]]){
+    const value=el(id).value;preferences[key]=Object.hasOwn(definitions,value)?value:defaults[key];scene[key]=preferences[key];
+  }
+  el('altitude-unit-label').textContent=' '+ALTITUDE_UNITS[preferences.altitudeUnit].symbol;
+  el('speed-unit-label').textContent=' '+SPEED_UNITS[preferences.speedUnit].symbol;
+  el('label-speed-caption').textContent='Hız · '+SPEED_UNITS[preferences.speedUnit].symbol;
+  el('reference-units').textContent='İrtifa '+ALTITUDE_UNITS[preferences.altitudeUnit].symbol+' · Hız '+SPEED_UNITS[preferences.speedUnit].symbol;
+  save();if(refresh)labels();
+}
+for(const [id,key,definitions] of [['speed-unit','speedUnit',SPEED_UNITS],['altitude-unit','altitudeUnit',ALTITUDE_UNITS],['distance-unit','distanceUnit',DISTANCE_UNITS]]){
+  el(id).value=Object.hasOwn(definitions,preferences[key])?preferences[key]:defaults[key];el(id).onchange=()=>unitSettings();
+}
+unitSettings(false);
+el('close-settings').onclick=()=>el('settings-options').open=false;
+el('reset-units').onclick=()=>{el('speed-unit').value=defaults.speedUnit;el('altitude-unit').value=defaults.altitudeUnit;el('distance-unit').value=defaults.distanceUnit;unitSettings();};
 
 const number=(value,digits=0)=>Number(value).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
 function formatTime(value){const ticks=Math.round(Math.max(0,value)*10),m=Math.floor(ticks/600),s=(ticks%600)/10;return String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0');}
@@ -146,19 +190,26 @@ el('seek-time').onchange=()=>{const parts=el('seek-time').value.trim().replace('
 el('seek-time').onkeydown=event=>{if(event.key==='Enter'){el('seek-time').dispatchEvent(new Event('change'));el('seek-time').blur();}};
 el('timeline').onpointerdown=()=>{scrubbing=true;};el('timeline').oninput=event=>seek(Number(event.target.value));
 for(const name of ['change','pointerup','pointercancel','blur'])el('timeline').addEventListener(name,()=>{scrubbing=false;});
-function setSpeed(rate){replayClock.speed=rate;replayClock.seek(viewTime,performance.now()/1000);el('playback-speed').value=playbackRates.indexOf(rate);el('playback-rate').textContent=rate+'×';el('playback-speed').setAttribute('aria-valuetext',rate+'×');for(const button of document.querySelectorAll('[data-rate]'))button.setAttribute('aria-pressed',String(Number(button.dataset.rate)===rate));}
+function setSpeed(rate){if(!playbackRates.includes(rate))return;replayClock.speed=rate;replayClock.seek(viewTime,performance.now()/1000);el('playback-speed').value=playbackRates.indexOf(rate);const label=rate.toLocaleString('tr-TR')+'×';el('playback-rate').textContent=label;el('playback-speed').setAttribute('aria-valuetext',label);for(const button of document.querySelectorAll('[data-rate]'))button.setAttribute('aria-pressed',String(Number(button.dataset.rate)===rate));}
 el('playback-speed').oninput=event=>setSpeed(playbackRates[Number(event.target.value)]);
-for(const button of document.querySelectorAll('[data-rate]'))button.onclick=()=>setSpeed(Number(button.dataset.rate));
+for(const [index,button] of [...document.querySelectorAll('[data-rate]')].entries()){button.style.left=(100*index/(playbackRates.length-1))+'%';button.onclick=()=>setSpeed(Number(button.dataset.rate));}
 document.addEventListener('keydown',event=>{
   const target=event.target instanceof Element?event.target:null;
-  if(document.querySelector('dialog[open]')||event.altKey||event.ctrlKey||event.metaKey)return;
+  if(toolbarMenus.some(menu=>menu.open)||event.altKey||event.ctrlKey||event.metaKey)return;
   if(event.code==='Space'){
     if(target?.closest('input:not([type="range"]),select,textarea,summary,[contenteditable]:not([contenteditable="false"])'))return;
     event.preventDefault();
     if(!event.repeat&&buffer.complete&&!el('play-pause').disabled)playPause();
     return;
   }
-  if(target!==el('timeline')&&target?.closest('input,select,textarea,summary,[contenteditable]:not([contenteditable="false"])'))return;
+  const speedArrow=['ArrowUp','ArrowDown'].includes(event.key);
+  if(target!==el('timeline')&&!(speedArrow&&target===el('playback-speed'))&&target?.closest('input,select,textarea,summary,[contenteditable]:not([contenteditable="false"])'))return;
+  if(speedArrow&&!target?.closest('[role=separator]')){
+    event.preventDefault();
+    const index=playbackRates.indexOf(replayClock.speed),next=Math.max(0,Math.min(playbackRates.length-1,index+(event.key==='ArrowUp'?1:-1)));
+    if(next!==index)setSpeed(playbackRates[next]);
+    return;
+  }
   if(['ArrowLeft','ArrowRight'].includes(event.key)&&!target?.closest('[role=separator]')){
     event.preventDefault();seek((viewTime??0)+(event.key==='ArrowRight'?1:-1)*(event.shiftKey?10:1),false);
   }
@@ -173,6 +224,7 @@ function renderEntities(){
 }
 function renderList(){
   if(!buffer.complete)return;
+  for(const button of el('entity-list').querySelectorAll('.entity')){const active=button.closest('.aircraft-card').dataset.id===selected;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));}
   const inventories=buffer.packet.inventory||{};
   const allAircraft=[...buffer.tracks.values()].map(track=>track.samples[0]).filter(entry=>entry.kind==='aircraft');
   const matches=entry=>!query||[entry.name,entry.model,entry.team,...(inventories[entry.id]||[]).flatMap(m=>[m.name,m.model])].join(' ').toLocaleLowerCase('tr').includes(query);
@@ -180,7 +232,7 @@ function renderList(){
     .sort((a,b)=>(teamOrder[a.team]??2)-(teamOrder[b.team]??2));
   if(selected===null&&entries.length)selected=entries.find(entry=>buffer.at(entry.id,viewTime))?.id??entries[0].id;
   const state=entry=>viewTime<entry.record_start_s?'Başlamadı':viewTime>=entry.record_end_s?'Son ölçüm':'Kayıtta';
-  const signature=buffer.session+entries.map(entry=>entry.id+(entry.id===selected)+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',');
+  const signature=buffer.session+entries.map(entry=>entry.id+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',');
   if(signature===listSignature)return;listSignature=signature;
   el('entity-list').replaceChildren();el('object-count').textContent=entries.length;
   el('list-empty').hidden=entries.length>0;el('list-empty').textContent=buffer.bounds()?'Bu filtrede uçak yok.':'Kayıt açarak başla.';
@@ -230,33 +282,35 @@ function labels(){
   else if(packet.phase==='error'){status='Kayıt okunamadı';notice=packet.error;error=true;}
   else if(!buffer.complete){status='Yükleniyor';notice='Kayıt ölçümleri yükleniyor…';}
   else if(packet.phase==='waiting'&&bounds){status='Yeni kayıt bekleniyor';notice='Önceki kayıt gösteriliyor. Yeni dosyalar tamamlanınca açılacak.';}
-  else if(bounds)status=paused?(viewTime>=bounds.last?'Kayıt sonu':'Duraklatıldı'):replayClock.speed+'×';
+  else if(bounds)status=paused?(viewTime>=bounds.last?'Kayıt sonu':'Duraklatıldı'):replayClock.speed.toLocaleString('tr-TR')+'×';
   if(webglError)notice+=(notice?' · ':'')+webglError;
   el('status').textContent=status;el('status').classList.toggle('error',error);
   el('scene-message').hidden=!notice;el('scene-message').textContent=notice;el('scene-message').classList.toggle('error',error);
   el('empty-scene').hidden=Boolean(bounds);el('record-title').textContent=bounds?(packet.recording_name||'Uçuş kaydı'):'Kayıt seç';
+  el('record-source').textContent=packet.recording||(bounds?'Tarayıcıdan seçilen CSV · '+(packet.recording_name||'Uçuş kaydı'):'Kayıt seçilmedi');el('record-source').title=el('record-source').textContent;
   el('record-duration').textContent=bounds?formatTime(bounds.last-bounds.first)+' · '+packet.objects+' nesne':'Tacview CSV';
   const track=buffer.tracks.get(selected),first=track?.samples[0],last=track?.samples.at(-1);
-  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=false;el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','east','north','entity-interval'])el(id).textContent='—';el('jump-entity').disabled=true;return;}
+  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','east','north','entity-interval'])el(id).textContent='—';el('jump-entity').disabled=true;return;}
   const current=buffer.at(selected,viewTime),entity=current||(viewTime<first.record_start_s?first:last);
   el('detail-title').textContent=first.kind==='missile'?'Füze bilgisi':'Uçak bilgisi';el('selected-name').textContent=first.name;
   el('model').textContent=first.model+' · '+(first.team==='blue'?'Dost takım':first.team==='red'?'Karşı takım':'Takım belirtilmemiş');
   el('entity-state').textContent=viewTime<first.record_start_s?'Henüz başlamadı · başlangıç ölçümü':!current?'Kayıt sonu · son ölçüm':'Kaydedilmiş uçuş durumu';
-  el('altitude').textContent=number(toFeet(entity.altitude_m),0);
+  el('altitude').textContent=number(altitudeValue(entity.altitude_m,preferences.altitudeUnit),0);
   for(const [id,key] of [['heading','heading_deg'],['roll','roll_deg'],['pitch','pitch_deg']])el(id).textContent=number(entity[key],1);
   const speed=entity.true_airspeed_mps??entity.estimated_tas_mps;
   const mach=entity.mach??entity.estimated_mach;
   const estimatedSpeed=entity.true_airspeed_mps==null&&speed!=null,estimatedMach=entity.mach==null&&mach!=null;
-  el('speed').textContent=speed==null?'—':number(speed,1);
+  const displayedSpeed=speedValue(entity,preferences.speedUnit);
+  el('speed').textContent=displayedSpeed==null?'—':number(displayedSpeed,SPEED_UNITS[preferences.speedUnit].digits);
   el('mach').textContent=mach==null?'—':number(mach,2);
-  el('speed-measure').hidden=false;el('mach-measure').hidden=false;
-  el('speed-measure').querySelector('dt').textContent=estimatedSpeed?'Hız · tahmini TAS':'Hava hızı · TAS';
+  el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';
+  el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · tahmini TAS':'Hava hızı · TAS';
   el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · hesaplanan':'Mach';
   el('missing-data').hidden=!estimatedSpeed&&!estimatedMach&&speed!=null&&mach!=null;
   el('missing-data').textContent=[estimatedSpeed?'Hız konumdan hesaplanır.':null,
     estimatedMach?'Mach standart atmosferden hesaplanır.':null,speed==null?'Hız ölçümü yetersiz.':null,mach==null?'Mach bilgisi yok.':null].filter(Boolean).join(' ');
   el('missing-data').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
-  el('east').textContent=number(toNauticalMiles(entity.east_m),2)+' NM';el('north').textContent=number(toNauticalMiles(entity.north_m),2)+' NM';
+  el('east').textContent=distanceLabel(entity.east_m,preferences.distanceUnit);el('north').textContent=distanceLabel(entity.north_m,preferences.distanceUnit);
   const parentId=first.kind==='aircraft'?first.id:entity.owner_id;
   const owned=buffer.packet.inventory?.[parentId]||[];
   el('detail-inventory').hidden=first.kind!=='aircraft';
@@ -267,7 +321,7 @@ el('jump-entity').onclick=()=>seek(buffer.tracks.get(selected)?.samples[0].recor
 
 async function request(path,payload){const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||'Kayıt açılamadı ('+response.status+')');}
 function importError(message){el('import-error').hidden=!message;el('import-error').textContent=message;}
-function libraryItem(name,subtitle,action){const button=document.createElement('button');button.className='library-item';const content=document.createElement('div');const title=document.createElement('strong');title.textContent=name;const info=document.createElement('span');info.textContent=subtitle;content.append(title,info);button.append(content);button.onclick=async()=>{if(busy)return;busy=true;button.disabled=true;importError('');try{await action();el('record-dialog').close();}catch(error){importError(error.message);}finally{busy=false;button.disabled=false;}};return button;}
+function libraryItem(name,subtitle,action){const button=document.createElement('button');button.className='library-item';const content=document.createElement('div');const title=document.createElement('strong');title.textContent=name;const info=document.createElement('span');info.textContent=subtitle;content.append(title,info);button.append(content);button.onclick=async()=>{if(busy)return;busy=true;button.disabled=true;importError('');try{await action();el('record-options').open=false;}catch(error){importError(error.message);}finally{busy=false;button.disabled=false;}};return button;}
 async function libraries(){
   el('recording-library').replaceChildren();el('recent-recordings').replaceChildren();
   try{
@@ -279,23 +333,27 @@ async function libraries(){
     const recent=await recentRecordings();for(const entry of recent)el('recent-recordings').append(libraryItem(entry.title,entry.catalog?'Kayıt klasörü':entry.files.length+' CSV dosyası',()=>request(entry.catalog?'/api/open':'/api/import',entry.catalog?{id:entry.id}:{title:entry.title,files:entry.files})));
     if(!recent.length)el('recent-recordings').textContent='Açtığın kayıtlar burada görünür.';
   }catch{el('recent-recordings').textContent='Bu tarayıcıda son kayıtlar saklanamıyor.';}
+  filterRecordings();
 }
-function openDialog(){importError('');el('record-dialog').showModal();libraries();}
-el('open-recording').onclick=openDialog;el('empty-open').onclick=openDialog;el('close-record-dialog').onclick=()=>el('record-dialog').close();el('refresh-library').onclick=libraries;
+function openRecording(){closeMenus(el('record-options'));el('record-options').open=true;positionMenu(el('record-options'));}
+el('empty-open').onclick=openRecording;el('close-record-panel').onclick=()=>el('record-options').open=false;el('refresh-library').onclick=libraries;
 el('choose-files').onclick=()=>el('file-input').click();el('choose-folder').onclick=()=>el('folder-input').click();
-for(const id of ['file-input','folder-input'])el(id).onchange=async event=>{
-  if(busy)return;const chosen=[...event.target.files].filter(file=>file.name.toLowerCase().endsWith('.csv'));event.target.value='';
+async function importFiles(source){
+  if(busy)return;const chosen=[...source].filter(file=>file.name.toLowerCase().endsWith('.csv'));
   if(!chosen.length){importError('CSV dosyası seçmelisin.');return;}if(chosen.length>1000||chosen.reduce((sum,file)=>sum+file.size,0)>90*1024*1024){importError('En fazla 1000 dosya ve 90 MB seçebilirsin.');return;}
   const folders=new Set(chosen.filter(file=>file.webkitRelativePath).map(file=>file.webkitRelativePath.split('/').slice(0,-1).join('/')));
   if(folders.size>1){importError('Tek simülasyonun CSV klasörünü seç; alt klasörlerdeki farklı kayıtları birlikte açma.');return;}
   busy=true;el('choose-files').disabled=el('choose-folder').disabled=true;importError('');
   try{const files=await Promise.all(chosen.map(async file=>({name:file.name,text:await file.text()})));const title=chosen[0].webkitRelativePath?.split('/').slice(0,-1).at(-1)||(chosen.length===1?chosen[0].name:'Uçuş kaydı · '+chosen.length+' dosya');
     await request('/api/import',{title,files});try{await rememberRecording({id:'local-'+crypto.randomUUID(),title,files,catalog:false});}catch{}
-    el('record-dialog').close();
+    el('record-options').open=false;
   }catch(error){importError(error.message);}finally{busy=false;el('choose-files').disabled=el('choose-folder').disabled=false;}
-};
-el('record-info').onclick=()=>{const packet=buffer.packet,bounds=buffer.bounds();if(!bounds){openDialog();return;}el('record-details').replaceChildren();for(const [label,value] of [['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],['Nesne',String(packet.objects)],['Kaynak',packet.recording||'Tarayıcıdan seçilen Tacview CSV dosyaları']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;el('record-details').append(dt,dd);}el('info-dialog').showModal();};
-el('close-info').onclick=()=>el('info-dialog').close();
+}
+for(const id of ['file-input','folder-input'])el(id).onchange=event=>{const files=[...event.target.files];event.target.value='';importFiles(files);};
+function filterRecordings(){const query=el('record-search').value.toLocaleLowerCase('tr').trim();for(const item of document.querySelectorAll('.recording-lists .library-item'))item.hidden=Boolean(query&&!item.textContent.toLocaleLowerCase('tr').includes(query));}
+el('record-search').oninput=filterRecordings;
+el('record-info').onclick=event=>{const packet=buffer.packet,bounds=buffer.bounds();if(!bounds){event.preventDefault();openRecording();return;}el('record-details').replaceChildren();for(const [label,value] of [['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],['Nesne',String(packet.objects)],['Kaynak',packet.recording||'Tarayıcıdan seçilen Tacview CSV dosyaları']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;el('record-details').append(dt,dd);}};
+el('close-info').onclick=()=>el('record-info-options').open=false;
 
 function render(timestamp){
   const canPlay=!connectionError&&timestamp-lastReceive<6000&&buffer.complete&&buffer.packet.phase==='ready'&&!paused&&!scrubbing;

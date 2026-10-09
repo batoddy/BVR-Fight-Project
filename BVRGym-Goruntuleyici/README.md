@@ -28,7 +28,7 @@ Varsayılan klasör Workspace/BVRGym/data_output/tacview'dir. BVRGym'in kendi kl
 
 - Başlık, kayıt ve kamera kontrolleri tek üst çubuktadır. Kayıt adına basarak süre ve tam kaynak yolunu görebilirsin.
 - Yan paneller iç kenardaki oklarla kapanır; kenarları sürüklenerek genişlikleri ayarlanır.
-- Oynatma alanının üst kenarını sürükleyerek yüksekliğini değiştir. Temel kontroller daraltıldığında görünür kalır. Hızlar 1×, 2×, 3×, 4×, 5×, 10×; hız değişikliği duraklatmayı bozmaz.
+- Oynatma alanının üst kenarını sürükleyerek yüksekliğini değiştir. Temel kontroller daraltıldığında görünür kalır. Hızlar 0,25×, 0,5×, 1×, 2×, 3×, 4×, 5×, 10×; ↑ / ↓ hızı bir kademe artırır/azaltır; hız değişikliği duraklatmayı bozmaz.
 - Zaman alanına saniye veya dakika:saniye yazarak git. Boşluk oynatır/duraklatır, sağ/sol ok 1 saniye, Shift ile 10 saniye sarar.
 - Kamera menüsünde Serbest kamera, Üstten ve Tüm nesneler bulunur. Serbest kamera takibi bırakır; Takip düğmesi seçili nesneyi izler.
 - Nesne listesinden arama/filtre yap, göz düğmesiyle nesneyi gizle. Füze kaydı bittiğinde seçim korunur; son ölçüm olduğu açıkça belirtilir.
@@ -37,7 +37,7 @@ Varsayılan klasör Workspace/BVRGym/data_output/tacview'dir. BVRGym'in kendi kl
 
 ## Ölçek, birimler ve mühimmat
 
-Hesaplama ve CSV verisi metre cinsinde kalır. Görüntüleme mesafeleri NM (1 NM = 1852 m), irtifa ft (1 ft = 0,3048 m), hız m/s, açılar derece kullanır.
+Hesaplama ve CSV verisi metre cinsinde kalır. Varsayılan gösterim: mesafe NM (1 NM = 1852 m), irtifa ft (1 ft = 0,3048 m), hız m/s, açılar derece. Ayarlar düğmesinde hız için m/s, km/s, km/sa, kt veya Mach; irtifa için ft/metre; mesafe için NM/km seçilir. Etiketler, sağ bilgi paneli, mesafe cetveli ve 2D ızgara birlikte güncellenir. Tercihler tarayıcıda saklanır; Varsayılanlara dön eski birimleri geri getirir. Birim seçimi kayıtları ve dünya koordinatlarını değiştirmez.
 
 F-16 görseli 15,06 m, AIM-120 görseli 3,66 m uzunluğa normalize edilir. Gerçek ölçek 1× seçildiğinde uzunluk oranı yaklaşık 4,1:1'dir. Diğer görünüm ölçeklerinde füzeler görünürlük için ayrıca %25 büyütülür; bu yalnızca görsel modeli etkiler. Varsayılan 50× okunabilirlik içindir: modelin boyu büyür, gerçek konumu/irtifası/mesafesi değişmez. Görünüm menüsünde 1× gerçek ölçek, 25×, 50× veya 100× seçebilirsin. Uzaklaştıkça model ekranda küçülür.
 
@@ -75,7 +75,7 @@ Yerleşik kayıt çağrısı tamamlanan environment'ın verilerini diske yazar. 
 - Dosya adı: `MODEL (ÇAĞRI_ADI) [RENK].csv`. Uçak/füze modeli ve takım bu yerleşik Tacview adlandırmasından okunur; port tabanlı nesne ayarı yoktur.
 - `Time`: simülasyon başlangıcından itibaren saniye. Füzelerin kaydında BVRGym taşıyıcı uçağın saatini kullanır.
 - `Longitude`, `Latitude`: derece; `Altitude`: metre, deniz seviyesine göre.
-- `Roll (deg)`, `Pitch (deg)`, `Yaw (deg)`: derece. Sütun sırası önemli değildir. Konum ve zaman zorunludur; yönelim yoksa sıfır kullanılır. İsteğe bağlı `TAS` (m/s) ve `Mach` sütunları varsa okunur. Yerleşik BVRGym logger'ı bunları yazmadığında konum ve zamandan yaklaşık hız, standart atmosferden yaklaşık Mach hesaplanır. Ölçülen ve hesaplanan değerler ayrı tutulur; hesaplanan değerler bilgi panelindeki başlık ve açıklamada belirtilir. Kompakt etiketlerin üst satırında solda ad, sağda tam sayıya yuvarlanmış hız; alt satırın ortasında irtifa bulunur; bilgi paneli ondalık hassasiyetini korur.
+- `Roll (deg)`, `Pitch (deg)`, `Yaw (deg)`: derece. Sütun sırası önemli değildir. Konum ve zaman zorunludur; yönelim yoksa sıfır kullanılır. İsteğe bağlı `TAS` (m/s) ve `Mach` sütunları varsa okunur. Yerleşik BVRGym logger'ı bunları yazmadığında konum ve zamandan yaklaşık hız, standart atmosferden yaklaşık Mach hesaplanır. Ölçülen ve hesaplanan değerler ayrı tutulur; hesaplanan değerler bilgi panelindeki başlık ve açıklamada belirtilir. Kompakt etiketlerin üst satırında solda ad, sağda seçilen birimde hız; alt satırın ortasında irtifa bulunur; bilgi paneli birime uygun ondalık hassasiyetini korur.
 - Kullanılmayan mühimmatın boş CSV dosyalarından envanter bilgisi okunur; uçuş izi veya sahnede füze oluşturulmaz. Hatalı ölçüm veya geriye giden zaman, dosya ve satır bilgisiyle bildirilir; önceki geçerli kayıt korunur.
 - Ham kayıt dosyaları değiştirilmez veya başka bir formata çevrilmez. HTTP'deki JSON yalnızca tarayıcıya sunulan iç gösterimdir; simülasyondan özel yayın gerektirmez.
 - Tüm kayıt saklanır; eski 20.000 örnek sınırı yoktur. Dosyaların boyutuna göre bellek kullanımı artar.
@@ -98,3 +98,7 @@ Oynatma hızı 1×, 2×, 3×, 4×, 5× ve 10× olarak ayarlanır. Zaman çubuğu
 - `tests/`: CSV, kayıt değişimi, HTTP, zamanlama ve gerçek BVRGym logger'ı için kontroller.
 
 Görüntüleyici için Python standart kütüphanesi yeterlidir; BVRGym yalnızca simülasyonu çalıştıran Python ortamında kurulu olmalıdır. Testler: `python -m unittest discover -s tests -p "test_*.py"` ve `node --test tests/stream.test.mjs tests/units.test.mjs`. Gerçek simülasyon kontrolü BVRGym kurulu ortamda `python tests/integration_bvrgym.py --bvrgym "..\BVRGym" --output "..\recordings\verification"` ile yapılır.
+
+Görünüm ve birim ayarları üst çubukta açılır panellerden seçilir. Nesne büyütme oranı doğrudan üst çubuktadır. Kayıt aç panelinden klasör/dosya seçebilir, açık dizini görebilir veya son kayıtları arayabilirsin. Paneller dışarı tıklayınca veya Escape ile kapanır.
+
+Sol listedeki uçağa veya sahnedeki etikete çift tıklama, nesneye yaklaşır ve kamera takibini açar. Gündüz görünümü koyu takım renkleri kullanır.

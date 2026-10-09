@@ -23,11 +23,43 @@ try{
   await page.goto('http://127.0.0.1:'+port,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.querySelector('#status').textContent==='Kayıt bekleniyor');
   assert.equal(await page.locator('#timeline').isDisabled(),true);
+  assert.equal(await page.locator('dialog').count(),0);
+  assert.equal(await page.locator('#object-scale').isVisible(),true);
+  const actions=await page.locator('.toolbar-actions').boundingBox();
+  assert.ok(Math.abs(actions.x+actions.width-1484)<2);
+  await page.locator('#open-settings').click();
+  assert.equal(await page.locator('#settings-panel').isVisible(),true);
+  await page.locator('#view-options summary').click();
+  await page.waitForFunction(()=>!document.querySelector('#settings-options').open);assert.equal(await page.locator('#settings-panel').isVisible(),false);
+  assert.equal(await page.locator('#view-options .popover').isVisible(),true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#view-options .popover').isVisible(),false);
+  await page.locator('#open-settings').click();await page.locator('h1').click();
+  await page.waitForFunction(()=>!document.querySelector('#settings-options').open);assert.equal(await page.locator('#settings-panel').isVisible(),false);
+  const stopsAligned=await page.evaluate(()=>{
+    const slider=document.querySelector('#playback-speed').getBoundingClientRect();
+    return [...document.querySelectorAll('[data-rate]')].every((button,index)=>{
+      const box=button.getBoundingClientRect();
+      return Math.abs(box.x+box.width/2-(slider.x+9+index*(slider.width-18)/7))<1;
+    });
+  });assert.equal(stopsAligned,true);
+
   async function files(directory){return (await fs.readdir(directory)).filter(name=>name.endsWith('.csv')).map(name=>path.join(directory,name));}
   await page.locator('#open-recording').click();await page.locator('#file-input').setInputFiles(await files(options.native));
   await page.waitForFunction(async()=>{const {buffer}=await import('/app.js');return buffer.complete&&buffer.packet.objects===5;});
-  await page.waitForFunction(()=>!document.querySelector('#record-dialog').open);
+  await page.waitForFunction(()=>!document.querySelector('#record-options').open);
   await page.waitForFunction(()=>!document.querySelector('#timeline').disabled);
+  await page.locator('#open-recording').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#recent-recordings .library-item').length>0);
+  await page.locator('#record-search').fill('no-such-recording-qa');
+  assert.equal(await page.locator('.recording-lists .library-item:visible').count(),0);
+  await page.locator('#record-search').fill('');
+  assert.ok(await page.locator('.recording-lists .library-item:visible').count()>0);
+  if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-record-menu.png'),fullPage:true});
+  await page.locator('#close-record-panel').click();
+  await page.locator('#record-info').click();
+  assert.equal(await page.locator('#record-info-panel').isVisible(),true);
+  await page.locator('#close-info').click();
   const times=await page.evaluate(async()=>{
     const {buffer}=await import('/app.js');
     const missiles=[...buffer.tracks.values()].filter(track=>track.samples[0].kind==='missile');
@@ -75,6 +107,51 @@ try{
       }
     }
   });
+  const physicalBefore=await page.evaluate(async()=>{const {buffer}=await import('/app.js');return buffer.entities(Number(document.querySelector('#timeline').value)).map(e=>[e.id,e.east_m,e.north_m,e.altitude_m]);});
+  for(const [unit,symbol,factor] of [['kms','km/s',.001],['kmh','km/sa',3.6],['kts','kt',3600/1852],['mach','Mach',null]]){
+    await page.locator('#open-settings').click();
+    await page.locator('#speed-unit').selectOption(unit);await page.locator('#altitude-unit').selectOption('m');await page.locator('#distance-unit').selectOption('km');
+    if(options.screenshot&&unit==='kts')await page.screenshot({path:options.screenshot.replace('.png','-settings.png'),fullPage:true});
+    await page.locator('#close-settings').click();await page.waitForTimeout(200);
+    assert.equal((await page.locator('#speed-unit-label').textContent()).trim(),symbol);
+    assert.equal((await page.locator('#altitude-unit-label').textContent()).trim(),'m');
+    assert.ok((await page.locator('#east').textContent()).endsWith('km'));
+    assert.ok((await page.locator('.distance-scale-label').textContent()).endsWith('km'));
+    assert.equal(await page.locator('#mach-measure').isVisible(),unit!=='mach');
+    await page.evaluate(async({unit,symbol,factor})=>{
+      const {scene,buffer}=await import('/app.js'),time=Number(document.querySelector('#timeline').value);
+      const id=document.querySelector('.entity.selected').closest('.aircraft-card').dataset.id,entity=buffer.at(id,time);
+      const expected=unit==='mach'?(entity.mach??entity.estimated_mach):(entity.true_airspeed_mps??entity.estimated_tas_mps)*factor;
+      const actual=Number(document.querySelector('#speed').textContent.replaceAll('.','').replace(',','.'));
+      if(Math.abs(actual-expected)>(unit==='kms'?.00051:unit==='mach'?.0051:.051))throw new Error('Panel unit conversion');
+      const altitude=Number(document.querySelector('#altitude').textContent.replaceAll('.','').replace(',','.'));
+      if(Math.abs(altitude-entity.altitude_m)>.51)throw new Error('Panel metric altitude');
+      for(const record of scene.models.values()){
+        if(!record.labelSpeedValue.textContent.endsWith(symbol)||!record.labelAltitudeValue.textContent.endsWith(' m'))throw new Error('Labels unit mismatch');
+      }
+    },{unit,symbol,factor});
+  }
+  assert.deepEqual(await page.evaluate(async()=>{const {buffer}=await import('/app.js');return buffer.entities(Number(document.querySelector('#timeline').value)).map(e=>[e.id,e.east_m,e.north_m,e.altitude_m]);}),physicalBefore);
+  await page.locator('#view-2d').click();await page.waitForTimeout(200);
+  await page.evaluate(async()=>{
+    const {scene,buffer}=await import('/app.js'),time=Number(document.querySelector('#timeline').value),seen=[];
+    const ctx=scene.flat.ctx,original=ctx.fillText;ctx.fillText=function(text,...args){seen.push(text);return original.call(this,text,...args);};
+    try{const entities=buffer.entities(time);scene.flat.draw(entities,buffer,time,entities[0].id);}finally{ctx.fillText=original;}
+    if(!seen.some(text=>text.endsWith(' Mach'))||!seen.some(text=>text.endsWith(' m')))throw new Error('2D unit labels');
+  });
+  await page.locator('#view-3d').click();
+  await page.reload();await page.waitForFunction(()=>Number(document.querySelector('#timeline').max)<2&&!document.querySelector('#timeline').disabled);
+  await seek(times.during);
+  assert.equal(await page.locator('#speed-unit').inputValue(),'mach');
+  assert.equal(await page.locator('#altitude-unit').inputValue(),'m');
+  assert.equal(await page.locator('#distance-unit').inputValue(),'km');
+  await page.locator('#open-settings').click();await page.locator('#reset-units').click();await page.locator('#close-settings').click();await page.waitForTimeout(200);
+  assert.equal(await page.locator('#speed-unit').inputValue(),'mps');
+  assert.equal(await page.locator('#altitude-unit').inputValue(),'ft');
+  assert.equal(await page.locator('#distance-unit').inputValue(),'nm');
+  assert.ok((await page.locator('#east').textContent()).endsWith('NM'));
+  assert.equal((await page.locator('#speed-unit-label').textContent()).trim(),'m/s');
+  assert.equal((await page.locator('#altitude-unit-label').textContent()).trim(),'ft');
   await page.evaluate(async time=>{
     const {scene,buffer}=await import('/app.js');
     const {MODEL_LENGTHS}=await import('/units.js');
@@ -134,7 +211,7 @@ try{
   assert.ok(await page.evaluate(async()=>{const {scene,buffer}=await import('/app.js');return [...scene.models].every(([id,record])=>record.model.scale.x===(buffer.tracks.get(id).samples[0].kind==='missile'?31.25:25));}));
   await page.locator('#object-scale').selectOption('1');await page.waitForTimeout(150);
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>record.model.scale.x===1);}));
-  await page.locator('#object-scale').selectOption('50');await page.locator('#grid').check();
+  await page.locator('#object-scale').selectOption('50');await page.locator('#view-options').evaluate(menu=>menu.open=true);await page.locator('#grid').check();
   await page.locator('#view-options summary').click();
   await page.locator('#toggle-altitude-guides').click();await page.waitForTimeout(150);
   assert.equal(await page.locator('#altitude-guides').isChecked(),false);
@@ -144,11 +221,11 @@ try{
   async function readScale(){
     assert.equal(await page.locator('#distance-scale').isVisible(),true);
     const scale=await page.locator('#distance-scale').evaluate(element=>({
-      metersPerPixel:Number(element.dataset.metersPerPixel),nauticalMiles:Number(element.dataset.nauticalMiles),
+      metersPerPixel:Number(element.dataset.metersPerPixel),meters:Number(element.dataset.meters),
       pixels:element.querySelector('.distance-scale-bar').getBoundingClientRect().width
     }));
     assert.ok(scale.pixels>30&&scale.pixels<=140.1);
-    assert.ok(Math.abs(scale.pixels*scale.metersPerPixel/(scale.nauticalMiles*1852)-1)<.001);
+    assert.ok(Math.abs(scale.pixels*scale.metersPerPixel/scale.meters-1)<.001);
     return scale;
   }
   const scale3d=await readScale();
@@ -156,7 +233,7 @@ try{
   assert.ok((await readScale()).metersPerPixel<scale3d.metersPerPixel);
   await page.evaluate(async()=>{
     const {scene}=await import('/app.js'),THREE=await import('three');
-    const bar=document.querySelector('.distance-scale-bar'),distance=Number(document.querySelector('#distance-scale').dataset.nauticalMiles)*1852;
+    const bar=document.querySelector('.distance-scale-bar'),distance=Number(document.querySelector('#distance-scale').dataset.meters);
     const start=scene.controls.target.clone(),end=start.clone().add(new THREE.Vector3(1,0,0).applyQuaternion(scene.camera.quaternion).multiplyScalar(distance));
     start.project(scene.camera);end.project(scene.camera);
     const projected=(end.x-start.x)*scene.canvas.clientWidth/2;
@@ -216,6 +293,26 @@ try{
   });
   await page.locator('#view-3d').click();await page.locator('#entity-list .entity[data-team="blue"]').click();await page.waitForTimeout(200);await checkFollow();
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-native.png'),fullPage:true});
+  assert.equal(await page.locator('#record-drop').count(),0);
+  assert.ok((await page.locator('#record-source').textContent()).includes('CSV'));
+  assert.equal(await page.locator('#object-scale option:checked').textContent(),'Nesne büyütme · 50×');
+  assert.equal(await page.locator('#open-settings').evaluate(node=>getComputedStyle(node).userSelect),'none');
+  await page.evaluate(async()=>{const {scene}=await import('/app.js');scene.follow=false;scene.zoom(.3);});
+  const beforeFocus=await page.evaluate(async()=>{const {scene}=await import('/app.js');return scene.camera.position.distanceTo(scene.controls.target);});
+  await page.locator('#entity-list .entity[data-team="red"]').dblclick();await page.waitForTimeout(250);
+  await checkFollow();
+  assert.ok(await page.evaluate(async before=>{const {scene}=await import('/app.js');return scene.camera.position.distanceTo(scene.controls.target)<before;},beforeFocus));
+  await page.evaluate(async()=>{const {scene}=await import('/app.js');scene.follow=false;});await page.locator('.flight-label').filter({has:page.locator('.flight-label-name', {hasText:'Red'})}).dblclick();await page.waitForTimeout(200);await checkFollow();
+  await page.locator('#toggle-theme').click();await page.waitForTimeout(200);
+  assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>[0x0756a5,0xae2432,0xa83215,0x8a5700].includes(record.trail.material.color.getHex()));}));
+  if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-day-3d.png'),fullPage:true});
+  await page.locator('#view-2d').click();await page.waitForTimeout(200);
+  const flatLabel=await page.evaluate(async()=>{const {scene}=await import('/app.js');scene.follow=false;const label=scene.flat.positions.find(p=>p.label).label;const rect=scene.canvas2d.getBoundingClientRect();return {x:rect.x+label.x+5,y:rect.y+label.y+5};});
+  await page.mouse.dblclick(flatLabel.x,flatLabel.y);await page.waitForTimeout(200);
+  assert.equal(await page.locator('#follow').getAttribute('aria-pressed'),'true');
+  if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-day-2d.png'),fullPage:true});
+  await page.locator('#toggle-theme').click();await page.locator('#view-3d').click();
+
   await page.locator('#entity-list .munition.flying').first().click();await page.waitForTimeout(200);
   assert.equal(await page.locator('#detail-title').textContent(),'Füze bilgisi');
   assert.equal(await page.locator('#speed-measure').isVisible(),true);
@@ -225,10 +322,10 @@ try{
   await page.locator('#file-input').setInputFiles({name:'F-16 (bad) [Blue].csv',mimeType:'text/csv',buffer:Buffer.from('Time\n0')});
   await page.waitForFunction(()=>!document.querySelector('#import-error').hidden);
   assert.ok((await page.locator('#import-error').textContent()).includes('sütunları'));
-  await page.locator('#close-record-dialog').click();
+  await page.locator('#close-record-panel').click();
   await page.locator('#open-recording').click();await page.locator('#file-input').setInputFiles(await files(options.recording));
   await page.waitForFunction(()=>Number(document.querySelector('#timeline').max)>1199);
-  await page.waitForFunction(()=>!document.querySelector('#record-dialog').open);
+  await page.waitForFunction(()=>!document.querySelector('#record-options').open);
   await seek(780);assert.equal(await page.locator('#entity-list .entity').count(),2);
   assert.equal(await page.locator('#entity-list .munition').count(),8);
   assert.ok(await page.locator('#entity-list .munition.spent').count()>0);
@@ -254,14 +351,35 @@ try{
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'true');
   await page.locator('#seek-time').press('Escape');await page.locator('#seek-time').evaluate(input=>input.blur());
   await seek(10);
-  await page.locator('#playback-speed').fill('1');await page.locator('#play-pause').click();
+  await page.locator('#playback-speed').focus();await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('#playback-rate').textContent(),'0,5×');
+  await page.keyboard.press('ArrowDown');await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('#playback-rate').textContent(),'0,25×');
+  assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'true');
+  await page.keyboard.press('Space');
+  const quarterStart=Number(await page.locator('#timeline').inputValue());await page.waitForTimeout(800);
+  const quarterAdvance=Number(await page.locator('#timeline').inputValue())-quarterStart;assert.ok(quarterAdvance>.13&&quarterAdvance<.32);
+  await page.keyboard.press('ArrowUp');
+  assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('#playback-rate').textContent(),'0,5×');
+  const halfStart=Number(await page.locator('#timeline').inputValue());await page.waitForTimeout(800);
+  const halfAdvance=Number(await page.locator('#timeline').inputValue())-halfStart;assert.ok(halfAdvance>.3&&halfAdvance<.6);
+  await page.keyboard.press('Space');
+  for(const rate of [1,2,3,4,5,10]){
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await page.locator('#playback-rate').textContent(),rate+'×');
+    assert.equal(await page.locator(`[data-rate="${rate}"]`).getAttribute('aria-pressed'),'true');
+  }
+  await page.keyboard.press('ArrowUp');assert.equal(await page.locator('#playback-rate').textContent(),'10×');
+  await page.locator('[data-rate="1"]').click();
+  await page.locator('#playback-speed').fill('3');await page.locator('#play-pause').click();
   const start=Number(await page.locator('#timeline').inputValue());await page.waitForTimeout(1000);
   const end=Number(await page.locator('#timeline').inputValue());assert.ok(end-start>1.4&&end-start<2.7);
   await page.locator('#play-pause').focus();
   const beforeBack=Number(await page.locator('#timeline').inputValue());await page.keyboard.press('ArrowLeft');
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'false');
   const afterBack=Number(await page.locator('#timeline').inputValue());assert.ok(afterBack<beforeBack-.5&&afterBack>beforeBack-1.1);
-  await page.waitForTimeout(300);assert.ok(Number(await page.locator('#timeline').inputValue())>afterBack+.3);
+  await page.waitForFunction(time=>Number(document.querySelector('#timeline').value)>time+.3,afterBack,{timeout:3000});
   const beforeForward=Number(await page.locator('#timeline').inputValue());await page.keyboard.press('Shift+ArrowRight');
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'false');
   assert.ok(Number(await page.locator('#timeline').inputValue())>beforeForward+9.9);
@@ -274,7 +392,7 @@ try{
   assert.ok(Math.abs(Number(await page.locator('#timeline').inputValue())-pausedTime-1)<.01);
   const pausedAfterSeek=Number(await page.locator('#timeline').inputValue());await page.waitForTimeout(200);
   assert.equal(Number(await page.locator('#timeline').inputValue()),pausedAfterSeek);
-  await seek(780);await page.locator('#playback-speed').fill('5');await page.waitForTimeout(200);
+  await seek(780);await page.locator('#playback-speed').fill('7');await page.waitForTimeout(200);
   assert.equal(await page.locator('#playback-rate').textContent(),'10×');
   assert.equal(await page.locator('#status').textContent(),'Duraklatıldı');
   await page.locator('#view-options summary').click();await page.locator('#label-mode').selectOption('selected');
@@ -316,6 +434,12 @@ try{
     assert.ok(rect.width>0&&rect.height>0&&rect.x>=0&&rect.x+rect.width<=431&&rect.y+rect.height<=851,id+' must fit the viewport');
   }
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-mobile.png'),fullPage:true});
+  await page.locator('#open-settings').click();
+  await page.waitForFunction(()=>{const menu=document.querySelector('#settings-options');const box=document.querySelector('#settings-panel').getBoundingClientRect();return menu.open&&box.x>=0&&box.x+box.width<=innerWidth&&box.y>=0&&box.y+box.height<=innerHeight;});const settings=await page.locator('#settings-panel').boundingBox();
+  assert.ok(settings.x>=0&&settings.y>=0&&settings.x+settings.width<=430&&settings.y+settings.height<=850);
+  for(const id of ['speed-unit','altitude-unit','distance-unit','reset-units'])assert.equal(await page.locator('#'+id).isVisible(),true);
+  if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-settings-mobile.png'),fullPage:true});
+  await page.locator('#close-settings').click();
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,nativeObjects:geometry,inventory:true,estimatedSpeed:true,nauticalMiles:true,sharedScale:true,headingGuides:true,altitudeGuides:true,importValidation:true,folderSelection:true,recentRecordings:true,replay2x:true,retainedMissileTrails:true,preferences:true,panelResize:true,compactDock:true,mobile:true,errors}));
 }finally{
@@ -325,3 +449,7 @@ try{
   if(!resolved.startsWith(prefix)||!path.basename(resolved).startsWith('bvrgym-csv-qa-'))throw new Error('Unsafe cleanup path');
   await fs.rm(resolved,{recursive:true,force:true});
 }
+
+
+
+

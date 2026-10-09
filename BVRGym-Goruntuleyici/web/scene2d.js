@@ -1,15 +1,15 @@
-import {MODEL_LENGTHS,METERS_PER_NM,altitudeLabel,headingOffset,distanceScale,speedLabel,visualScale} from './units.js';
+import {MODEL_LENGTHS,DISTANCE_UNITS,altitudeLabel,headingOffset,distanceScale,speedLabel,visualScale} from './units.js';
 
-export function updateScaleBar(element,metersPerPixel,width,mode){
+export function updateScaleBar(element,metersPerPixel,width,mode,unit='nm'){
   if(!element)return;
-  const scale=distanceScale(metersPerPixel,Math.min(140,width-112));
+  const scale=distanceScale(metersPerPixel,Math.min(140,width-112),unit);
   element.hidden=!scale;
   if(!scale)return;
-  const label=scale.nauticalMiles.toLocaleString('tr-TR',{maximumSignificantDigits:3})+' NM';
+  const label=scale.value.toLocaleString('tr-TR',{maximumSignificantDigits:3})+' '+scale.symbol;
   element.querySelector('.distance-scale-label').textContent=label;
   element.querySelector('.distance-scale-bar').style.width=scale.pixels+'px';
   element.dataset.metersPerPixel=metersPerPixel;
-  element.dataset.nauticalMiles=scale.nauticalMiles;
+  element.dataset.meters=scale.meters;
   element.setAttribute('aria-label','Mesafe ölçeği: '+label);
   element.title=mode==='3d'?'Görünüm merkezindeki mesafe ölçeği; perspektifte derinlikle değişir.':'Harita mesafe ölçeği';
 }
@@ -17,6 +17,7 @@ export function updateScaleBar(element,metersPerPixel,width,mode){
 export class Scene {
   constructor(canvas,onSelect,onPan){
     this.canvas=canvas;this.ctx=canvas.getContext('2d');this.scale=.045;this.center={east:0,north:0};
+    this.speedUnit='mps';this.altitudeUnit='ft';this.distanceUnit='nm';
     this.distanceScale=canvas.parentElement.querySelector('.distance-scale');
     this.objectScale=50;this.headingGuides=true;this.follow=true;this.grid=true;this.trail=true;this.onSelect=onSelect;this.onPan=onPan;this.positions=[];
     this.trailDuration=300;this.labelMode='all';this.labelNames=true;this.labelAltitude=true;this.labelSpeed=true;
@@ -26,6 +27,7 @@ export class Scene {
     canvas.addEventListener('pointerdown',event=>{canvas.setPointerCapture(event.pointerId);drag={x:event.clientX,y:event.clientY,east:this.center.east,north:this.center.north,moved:false};});
     canvas.addEventListener('pointermove',event=>{if(!drag)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(Math.hypot(dx,dy)>4)drag.moved=true;if(drag.moved){this.follow=false;this.center.east=drag.east-dx/this.scale;this.center.north=drag.north+dy/this.scale;this.onPan();}});
     canvas.addEventListener('pointerup',event=>{if(drag&&!drag.moved){const rect=canvas.getBoundingClientRect();const x=event.clientX-rect.left,y=event.clientY-rect.top;const found=this.positions.find(p=>Math.hypot(p.x-x,p.y-y)<30);if(found)this.onSelect(found.id);}drag=null;});
+    canvas.addEventListener('dblclick',event=>{const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;const found=this.positions.find(p=>p.label&&x>=p.label.x&&x<=p.label.right&&y>=p.label.y&&y<=p.label.bottom)||this.positions.find(p=>Math.hypot(p.x-x,p.y-y)<30);if(found)this.onFocus?.(found.id);});
     canvas.addEventListener('pointercancel',()=>{drag=null;});
     this.resize();
   }
@@ -37,6 +39,7 @@ export class Scene {
     this.center={east:(Math.min(...east)+Math.max(...east))/2,north:(Math.min(...north)+Math.max(...north))/2};
     this.scale=Math.min(.045,Math.max(.002,Math.min(this.width/Math.max(7000,Math.max(...east)-Math.min(...east)),this.height/Math.max(7000,Math.max(...north)-Math.min(...north)))/1.8));
   }
+  focusEntity(entity){this.follow=true;this.center={east:entity.east_m,north:entity.north_m};this.scale=Math.min(.8,Math.max(.002,70/((MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale))));}
   clear(){this.positions=[];}
   point(entity){return {x:this.width/2+(entity.east_m-this.center.east)*this.scale,y:this.height/2-(entity.north_m-this.center.north)*this.scale};}
   aircraft(x,y,heading,color){
@@ -57,21 +60,21 @@ export class Scene {
   }
   draw(entities,buffer,time,selected){
     const ctx=this.ctx;if(!this.width||!this.height)return;
-    const style=getComputedStyle(this.canvas);this.colors={map:style.getPropertyValue('--map').trim(),grid:style.getPropertyValue('--grid').trim(),text:style.getPropertyValue('--text').trim(),muted:style.getPropertyValue('--muted').trim(),blue:style.getPropertyValue('--blue').trim()};
+    const style=getComputedStyle(this.canvas);this.colors={map:style.getPropertyValue('--map').trim(),grid:style.getPropertyValue('--grid').trim(),text:style.getPropertyValue('--text').trim(),muted:style.getPropertyValue('--muted').trim(),blue:style.getPropertyValue('--blue').trim(),red:style.getPropertyValue('--red').trim(),missile:style.getPropertyValue('--missile').trim()};
     const focus=entities.find(e=>e.id===selected&&e.visible!==false);if(this.follow&&focus)this.center={east:focus.east_m,north:focus.north_m};
     ctx.clearRect(0,0,this.width,this.height);
-    let step=METERS_PER_NM;while(step*this.scale<45)step*=2;while(step*this.scale>150)step/=2;
+    let step=1/(DISTANCE_UNITS[this.distanceUnit]||DISTANCE_UNITS.nm).factor;while(step*this.scale<45)step*=2;while(step*this.scale>150)step/=2;
     if(this.grid){const pixels=step*this.scale;const origin=this.point({east_m:0,north_m:0});const x0=((origin.x%pixels)+pixels)%pixels,y0=((origin.y%pixels)+pixels)%pixels;ctx.strokeStyle=this.colors.grid;ctx.lineWidth=1;ctx.beginPath();for(let x=x0;x<this.width;x+=pixels){ctx.moveTo(x,0);ctx.lineTo(x,this.height);}for(let y=y0;y<this.height;y+=pixels){ctx.moveTo(0,y);ctx.lineTo(this.width,y);}ctx.stroke();}
     if(this.trail){for(const entity of entities){
       const samples=(buffer.tracks.get(entity.id)?.samples||[]).filter(s=>s.sim_time_s<=time&&(this.trailDuration<0||s.sim_time_s>=time-this.trailDuration));
       const stride=Math.max(1,Math.ceil(samples.length/1500));ctx.beginPath();let count=0;
       for(let i=0;i<samples.length;i+=stride){const p=this.point(samples[i]);count?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);count++;}
       if(count){const p=this.point(entity);ctx.lineTo(p.x,p.y);}
-      ctx.strokeStyle=entity.team==='red'?'#e88480':entity.kind==='missile'?'#ecc274':this.colors.blue;ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;
+      ctx.strokeStyle=entity.team==='red'?this.colors.red:entity.kind==='missile'?this.colors.missile:this.colors.blue;ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;
     }}
     this.positions=[];const labelRects=[];
     for(const entity of entities){if(entity.visible===false)continue;const p=this.point(entity);this.positions.push({...p,id:entity.id});if(p.x< -70||p.x>this.width+70||p.y< -70||p.y>this.height+70)continue;
-      const color=entity.kind==='missile'?(entity.team==='red'?'#f18c68':'#ecc274'):(entity.team==='red'?'#e88480':this.colors.blue);
+      const color=entity.kind==='missile'?(entity.team==='red'?this.colors.red:this.colors.missile):(entity.team==='red'?this.colors.red:this.colors.blue);
       if(entity.kind==='aircraft')this.aircraft(p.x,p.y,entity.heading_deg,color);
       else if(entity.kind==='missile')this.missile(p.x,p.y,entity.heading_deg,color);
       const visualLength=(MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale);
@@ -84,7 +87,7 @@ export class Scene {
         ctx.lineTo(p.x+end.east*this.scale,p.y-end.north*this.scale);ctx.stroke();ctx.restore();
       }
       if(this.labelMode!=='none'&&(this.labelMode!=='selected'||entity.id===selected)){
-        const name=this.labelNames?entity.name:'',speed=this.labelSpeed?speedLabel(entity):'',altitude=this.labelAltitude?altitudeLabel(entity.altitude_m):'';
+        const name=this.labelNames?entity.name:'',speed=this.labelSpeed?speedLabel(entity,this.speedUnit):'',altitude=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';
         if(!name&&!speed&&!altitude)continue;
         ctx.font='600 12px "Segoe UI",sans-serif';const nameWidth=Math.min(90,ctx.measureText(name).width);
         ctx.font='12px "Segoe UI",sans-serif';const speedWidth=ctx.measureText(speed).width,altitudeWidth=ctx.measureText(altitude).width;
@@ -98,7 +101,7 @@ export class Scene {
           labelY=overlap.bottom+3;
           if(labelY+labelHeight>this.height-8)labelY=Math.max(8,initialY-(i+1)*(labelHeight+3));
         }
-        labelRects.push({x:labelX,y:labelY,right:labelX+labelWidth,bottom:labelY+labelHeight});
+        const labelRect={x:labelX,y:labelY,right:labelX+labelWidth,bottom:labelY+labelHeight};labelRects.push(labelRect);this.positions.at(-1).label=labelRect;
         ctx.save();ctx.fillStyle=style.getPropertyValue('--panel').trim();ctx.strokeStyle=color;ctx.lineWidth=1;
         ctx.beginPath();ctx.roundRect(labelX,labelY,labelWidth,labelHeight,3);ctx.fill();ctx.stroke();
         ctx.fillStyle=this.colors.text;
@@ -109,7 +112,7 @@ export class Scene {
         ctx.restore();
       }
     }
-    updateScaleBar(this.distanceScale,1/this.scale,this.width,'2d');
+    updateScaleBar(this.distanceScale,1/this.scale,this.width,'2d',this.distanceUnit);
     ctx.font='14px "Segoe UI",sans-serif';ctx.fillStyle=this.colors.muted;
     if(!entities.length){ctx.fillStyle=this.colors.muted;ctx.textAlign='center';ctx.fillText('Uçuş verisi bekleniyor',this.width/2,this.height/2);ctx.textAlign='left';}
   }
