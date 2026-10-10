@@ -1,0 +1,701 @@
+<title>Angajman Sistemi Veri Akışı</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root{
+    --ground:#eceff3;
+    --surface:#f8fafc;
+    --surface-2:#e2e8ef;
+    --ink:#151a20;
+    --ink-2:#4a5663;
+    --ink-3:#73808d;
+    --line:#b6c1cd;
+    --line-soft:#ccd5de;
+    --accent:#8a5c08;
+    --accent-soft:#f0e2c4;
+    --alarm:#9c2d20;
+    --alarm-soft:#f3dad5;
+    --teal:#1a615f;
+    --teal-soft:#d4e6e5;
+    --radius:3px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0d1317;
+      --surface:#141c22;
+      --surface-2:#1c262e;
+      --ink:#dfe7ee;
+      --ink-2:#9aa8b5;
+      --ink-3:#74838f;
+      --line:#2f3d47;
+      --line-soft:#263239;
+      --accent:#e0a53f;
+      --accent-soft:#33280f;
+      --alarm:#e77966;
+      --alarm-soft:#381915;
+      --teal:#56b3af;
+      --teal-soft:#13302f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0d1317;
+    --surface:#141c22;
+    --surface-2:#1c262e;
+    --ink:#dfe7ee;
+    --ink-2:#9aa8b5;
+    --ink-3:#74838f;
+    --line:#2f3d47;
+    --line-soft:#263239;
+    --accent:#e0a53f;
+    --accent-soft:#33280f;
+    --alarm:#e77966;
+    --alarm-soft:#381915;
+    --teal:#56b3af;
+    --teal-soft:#13302f;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+    font-size:16px;
+    line-height:1.62;
+    margin:0;
+    padding:0 20px 96px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px;margin:0 auto}
+  .prose{max-width:68ch}
+
+  h1,h2,h3{font-family:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;text-wrap:balance;margin:0}
+  h1{font-size:2.45rem;font-weight:700;letter-spacing:-.012em;line-height:1.1}
+  h2{font-size:1.5rem;font-weight:600;letter-spacing:-.005em}
+  h3{font-size:1.08rem;font-weight:600}
+  p{margin:0}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.86em}
+  code{background:var(--surface-2);padding:.1em .34em;border-radius:var(--radius);color:var(--ink)}
+  .num{font-variant-numeric:tabular-nums}
+
+  .eyebrow{
+    font-family:"IBM Plex Sans Condensed",sans-serif;
+    text-transform:uppercase;letter-spacing:.14em;font-size:.72rem;font-weight:600;
+    color:var(--ink-3);
+  }
+
+  header.masthead{
+    border-bottom:1px solid var(--line);
+    padding:56px 0 28px;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  header.masthead .lede{color:var(--ink-2);max-width:62ch;font-size:1.06rem}
+  .stamp{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline}
+
+  section{padding-top:52px;display:flex;flex-direction:column;gap:18px}
+  .sechead{display:flex;flex-direction:column;gap:6px}
+
+  figure{margin:0;display:flex;flex-direction:column;gap:12px}
+  .plate{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px 20px;
+    overflow-x:auto;
+  }
+  .plate svg{display:block;min-width:720px;max-width:100%;height:auto;color:var(--ink)}
+  figcaption{color:var(--ink-2);font-size:.92rem;max-width:72ch}
+
+  /* diagram tokens */
+  .d-box{fill:var(--surface-2);stroke:var(--line);stroke-width:1}
+  .d-shell{fill:none;stroke:var(--line);stroke-width:1;stroke-dasharray:5 4}
+  .d-accent{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.2}
+  .d-alarm{fill:var(--alarm-soft);stroke:var(--alarm);stroke-width:1.2}
+  .d-teal{fill:var(--teal-soft);stroke:var(--teal);stroke-width:1.2}
+  .d-edge{fill:none;stroke:var(--ink-2);stroke-width:1.4}
+  .d-edge-soft{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:4 4}
+  .d-edge-alarm{fill:none;stroke:var(--alarm);stroke-width:1.6}
+  .d-dead{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:3 5}
+  .d-t{font-family:"IBM Plex Sans Condensed",sans-serif;font-size:13px;font-weight:600;fill:var(--ink)}
+  .d-s{font-family:"IBM Plex Sans",sans-serif;font-size:11.5px;fill:var(--ink-2)}
+  .d-m{font-family:"IBM Plex Mono",monospace;font-size:11px;fill:var(--ink-2)}
+  .d-cap{font-family:"IBM Plex Sans Condensed",sans-serif;font-size:11px;font-weight:600;letter-spacing:.1em;fill:var(--ink-3)}
+  .d-alarm-t{fill:var(--alarm)}
+  .d-accent-t{fill:var(--accent)}
+  .d-rule{stroke:var(--line-soft);stroke-width:1}
+
+  /* findings */
+  .findings{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .finding{
+    border-bottom:1px solid var(--line-soft);
+    padding:20px 0;
+    display:grid;grid-template-columns:132px 1fr;gap:4px 24px;align-items:start;
+  }
+  .chip{
+    display:inline-block;font-family:"IBM Plex Sans Condensed",sans-serif;
+    text-transform:uppercase;letter-spacing:.1em;font-size:.68rem;font-weight:700;
+    padding:3px 8px;border-radius:var(--radius);border:1px solid;
+    white-space:nowrap;
+  }
+  .chip-hata{color:var(--alarm);border-color:var(--alarm);background:var(--alarm-soft)}
+  .chip-fark{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+  .chip-eksik{color:var(--teal);border-color:var(--teal);background:var(--teal-soft)}
+  .chip-tamam{color:var(--ink);border-color:var(--ink-3);background:var(--surface-2)}
+  .chip-kapsam{color:var(--ink-3);border-color:var(--line);background:transparent}
+  .status{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:20px;display:flex;flex-direction:column;gap:12px}
+  .status p{color:var(--ink-2)}
+  .status strong{color:var(--ink)}
+  .fixnote{color:var(--ink);font-weight:500}
+  .finding h3{grid-column:2}
+  .finding .chip{grid-row:1;grid-column:1}
+  .finding .body{grid-column:2;color:var(--ink-2);display:flex;flex-direction:column;gap:8px;max-width:70ch}
+  .finding .body strong{color:var(--ink);font-weight:600}
+  .ref{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--ink-3)}
+
+  table{border-collapse:collapse;width:100%;font-size:.93rem}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-family:"IBM Plex Sans Condensed",sans-serif;text-transform:uppercase;letter-spacing:.09em;font-size:.72rem;color:var(--ink-3);font-weight:600;white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td.mono{font-size:.82rem;color:var(--ink-2);white-space:nowrap}
+
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius)}
+  .cols > div{background:var(--surface);padding:18px}
+  .cols h3{margin-bottom:6px}
+  .cols p{color:var(--ink-2);font-size:.93rem}
+  .cols ul{margin:8px 0 0;padding-left:18px;color:var(--ink-2);font-size:.93rem;display:flex;flex-direction:column;gap:4px}
+
+  .nope{display:flex;flex-direction:column;gap:10px}
+  .nope-row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;border-bottom:1px solid var(--line-soft);padding-bottom:8px}
+  .nope-row span:last-child{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--ink-3);text-align:right}
+
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  @media (max-width:640px){
+    h1{font-size:1.9rem}
+    .finding{grid-template-columns:1fr;gap:10px}
+    .finding h3,.finding .body,.finding .chip{grid-column:1}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="stamp">
+    <span class="eyebrow">Angajman Proje · mevcut durum</span>
+    <span class="eyebrow num">10 Ekim 2026</span>
+  </div>
+  <h1>Angajman sistemi veri akışı</h1>
+  <p class="lede">Bugün çalışan sistem iki ayrı süreçten oluşuyor ve aralarındaki tek bağ bir klasör. Ağ üzerinden hiçbir veri paylaşılmıyor, hiçbir dış komut kabul edilmiyor, C++ tarafında kod yok. Aşağıdakiler <span class="mono">scenario.yaml</span> ile kısa bir uçuş koşulup çıktıları okunarak doğrulandı.</p>
+</header>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Durum</span>
+    <h2>Bu analizden sonra ne değişti</h2>
+  </div>
+  <div class="status prose">
+    <p><strong>Düzeltildi.</strong> Kayıt BVR alanlarına indirildi: uçak 19, füze 17 sütun; takma ad tekrarları kalktı. <span class="mono">Latitude</span> tekrar <span class="mono">position/lat-gc-deg</span>. Uygulanan dış komut snapshot başına kaydediliyor. <span class="mono">events.jsonl</span> ve <span class="mono">manifest.json</span> eklendi, <span class="mono">state/</span> klasörü ve <span class="mono">KAYIT_ICERIGI.txt</span> kalktı. Arayüzde ölçülen hız <span class="mono">velocities/vt-fps</span>'ten okunuyor, mühimmat sahipliği dosya adından çözülüyor, manifest koordinat referansı doğrulanıyor.</p>
+    <p><strong>Arayüz.</strong> Görünüm menüsündeki <strong>Füze vuruş bilgisi</strong> kutusu (varsayılan kapalı) hem zaman çubuğu olay işaretlerini hem mühimmat sonucunu açıyor: işarete basmak o ana atlıyor, mühimmat <strong>İsabet</strong> / <strong>Kayıp</strong> gösteriyor. Kayıt adına basınca açılan oturum paneli manifestin bildirdiklerini — enlem/irtifa referansı, fizik ve komut adımı, snapshot frekansı, sütun kaynak listesi — gösteriyor. Sonuç hiçbir durumda ölçümden çıkarılmıyor.</p>
+    <p><strong>Açık kalanlar.</strong> BVRGym'in iç işleyişine dokunulmaması kararı gereği füze fırlatma hızı ve <span class="mono">is_target_lost()</span> olduğu gibi bırakıldı. ACMI yazıcı/okuyucu ve <span class="mono">fdm.run()</span> kontrolü henüz yapılmadı. Komut sütunları kaydediliyor ama arayüzde gösterilmiyor; hedef atama çizgisi de eklenmedi. Planlanan rota, geometri ve zarf kayıtları kapsam dışı.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Şekil 1</span>
+    <h2>Süreçler ve aralarındaki bağ</h2>
+  </div>
+  <figure>
+    <div class="plate">
+      <svg viewBox="0 0 1020 470" role="img" aria-label="Python uçuş süreci CSV klasörüne yazar; ayrı görüntüleyici süreci klasörü yoklayarak okur ve tarayıcıya JSON verir. Geri yönde komut yolu yoktur.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+          </marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="var(--ink-3)"/>
+          </marker>
+        </defs>
+
+        <!-- process shells -->
+        <rect class="d-shell" x="24" y="46" width="286" height="330" rx="4"/>
+        <text class="d-cap" x="24" y="36">SÜREÇ 1 · PYTHON UÇUŞ</text>
+        <rect class="d-shell" x="582" y="46" width="236" height="330" rx="4"/>
+        <text class="d-cap" x="582" y="36">SÜREÇ 2 · GÖRÜNTÜLEYİCİ</text>
+        <rect class="d-shell" x="856" y="46" width="140" height="330" rx="4"/>
+        <text class="d-cap" x="856" y="36">TARAYICI</text>
+
+        <!-- process 1 contents -->
+        <rect class="d-box" x="44" y="62" width="246" height="34" rx="3"/>
+        <text class="d-t" x="56" y="84">scenario.yaml</text>
+        <text class="d-m" x="196" y="84">YAML · 2 ajan</text>
+
+        <rect class="d-box" x="44" y="112" width="246" height="46" rx="3"/>
+        <text class="d-t" x="56" y="131">bvrgym_sim.py</text>
+        <text class="d-s" x="56" y="148">ajan fabrikası · sabit komut döngüsü</text>
+
+        <rect class="d-teal" x="44" y="174" width="246" height="62" rx="3"/>
+        <text class="d-t" x="56" y="193">BaseBVRAgent ×2</text>
+        <text class="d-s" x="56" y="210">F16BVR + PID · AAMBVR ×2 + PN güdüm</text>
+        <text class="d-m" x="56" y="227">6 ayrı JSBSim FGFDMExec · dt 8,33 ms</text>
+
+        <rect class="d-accent" x="44" y="252" width="246" height="46" rx="3"/>
+        <text class="d-t" x="56" y="271">recorder.Recorder</text>
+        <text class="d-s" x="56" y="288">ham property okuma · hesap yok</text>
+
+        <rect class="d-box" x="44" y="314" width="246" height="46" rx="3"/>
+        <text class="d-t" x="56" y="333">time.sleep(sleep_s)</text>
+        <text class="d-s" x="56" y="350">yaklaşık gerçek zaman kapısı</text>
+
+        <!-- internal arrows -->
+        <path class="d-edge" d="M167,96 L167,110" marker-end="url(#a1)"/>
+        <path class="d-edge" d="M167,158 L167,172" marker-end="url(#a1)"/>
+        <path class="d-edge" d="M167,236 L167,250" marker-end="url(#a1)"/>
+        <path class="d-edge" d="M167,298 L167,312" marker-end="url(#a1)"/>
+        <text class="d-s" x="178" y="168">apply_action</text>
+        <text class="d-s" x="178" y="247">record()</text>
+
+        <!-- disk -->
+        <rect class="d-accent" x="356" y="146" width="180" height="134" rx="3"/>
+        <text class="d-t" x="368" y="167">recordings/&lt;oturum&gt;/</text>
+        <line class="d-rule" x1="368" y1="176" x2="524" y2="176"/>
+        <text class="d-m" x="368" y="194">CSV · uçak 19 / füze 17</text>
+        <text class="d-m" x="368" y="212">events.jsonl</text>
+        <text class="d-m" x="368" y="230">manifest.json</text>
+        <text class="d-s" x="368" y="252">disk · tek buluşma noktası</text>
+        <text class="d-s" x="368" y="269">ortak kütüphane veya import yok</text>
+
+        <!-- process 2 contents -->
+        <rect class="d-box" x="600" y="112" width="200" height="62" rx="3"/>
+        <text class="d-t" x="612" y="131">RecordingStore</text>
+        <text class="d-s" x="612" y="148">doğrula · ECEF · yerel düzlem</text>
+        <text class="d-m" x="612" y="165">0,25 s yokla · 2 s sakinlik</text>
+
+        <rect class="d-box" x="600" y="190" width="200" height="62" rx="3"/>
+        <text class="d-t" x="612" y="209">server.py</text>
+        <text class="d-s" x="612" y="226">yerel HTTP · salt okunur</text>
+        <text class="d-m" x="612" y="243">127.0.0.1:8765</text>
+
+        <rect class="d-box" x="600" y="268" width="200" height="46" rx="3"/>
+        <text class="d-t" x="612" y="287">telemetry.py</text>
+        <text class="d-s" x="612" y="304">konum hızı · ISA Mach tahmini</text>
+
+        <path class="d-edge" d="M700,174 L700,188" marker-end="url(#a1)"/>
+        <path class="d-edge-soft" d="M700,268 L700,256" marker-end="url(#a2)"/>
+
+        <!-- browser -->
+        <rect class="d-box" x="874" y="112" width="104" height="202" rx="3"/>
+        <text class="d-t" x="886" y="133">web/</text>
+        <text class="d-s" x="886" y="152">stream.js</text>
+        <text class="d-s" x="886" y="170">scene.js 3D</text>
+        <text class="d-s" x="886" y="188">scene2d.js</text>
+        <text class="d-s" x="886" y="206">units.js</text>
+        <text class="d-s" x="886" y="224">inventory.js</text>
+        <line class="d-rule" x1="886" y1="238" x2="966" y2="238"/>
+        <text class="d-s" x="886" y="256">interpolasyon</text>
+        <text class="d-s" x="886" y="274">birim çevrimi</text>
+        <text class="d-s" x="886" y="292">taktik geometri</text>
+        <text class="d-s d-alarm-t" x="886" y="310">yok</text>
+
+        <!-- cross-process arrows -->
+        <path class="d-edge" d="M296,275 C322,275 330,213 354,213" marker-end="url(#a1)"/>
+        <text class="d-s" x="300" y="300">CSV yazımı</text>
+        <text class="d-m" x="300" y="316">~12 Hz snapshot</text>
+
+        <path class="d-edge" d="M538,213 C560,213 572,143 598,143" marker-end="url(#a1)"/>
+        <text class="d-s" x="540" y="120">klasör imzası</text>
+        <text class="d-m" x="540" y="136">ad+boyut+mtime</text>
+
+        <path class="d-edge" d="M802,205 L872,205" marker-end="url(#a1)"/>
+        <text class="d-s" x="806" y="196">GET /api/state</text>
+        <text class="d-m" x="806" y="180">2000 örnek/parça</text>
+
+        <path class="d-edge-soft" d="M872,232 L804,232" marker-end="url(#a2)"/>
+        <text class="d-s" x="806" y="250">POST · yalnızca</text>
+        <text class="d-s" x="806" y="266">kayıt/dizin seçimi</text>
+
+        <!-- the missing command path -->
+        <path class="d-dead" d="M600,352 L314,352"/>
+        <line x1="449" y1="340" x2="465" y2="364" stroke="var(--alarm)" stroke-width="1.6"/>
+        <line x1="465" y1="340" x2="449" y2="364" stroke="var(--alarm)" stroke-width="1.6"/>
+        <text class="d-s d-alarm-t" x="480" y="348">komut yolu yok</text>
+        <text class="d-s" x="480" y="364">arayüz simülasyona yazamaz</text>
+
+        <!-- absent channels strip -->
+        <line class="d-rule" x1="24" y1="404" x2="996" y2="404"/>
+        <text class="d-cap" x="24" y="428">HİÇ KURULMAMIŞ KANALLAR</text>
+        <text class="d-s" x="24" y="450">UDP durum yayını · çerçevelenmiş TCP komut/olay · ACMI · canlı köprü · C++ paketleri · JSBSim native output (data_output_xml = None)</text>
+      </svg>
+    </div>
+    <figcaption>İki süreç yalnızca disk üzerinden buluşuyor. Görüntüleyici klasörü <span class="mono">0,25 s</span> aralıkla yokluyor, imza <span class="mono">2 s</span> değişmeyince tüm klasörü baştan okuyor — yani kayıt bitmeden canlı akış olmuyor. Tarayıcıya giden POST uçları yalnızca hangi kaydın açılacağını seçiyor.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Şekil 2</span>
+    <h2>Bir döngü adımında ne oluyor</h2>
+  </div>
+  <figure>
+    <div class="plate">
+      <svg viewBox="0 0 1020 330" role="img" aria-label="Bir dış döngü adımı 83,3 milisaniye ilerletir; içinde on fizik karesi koşar ama yalnızca sonunda bir snapshot kaydedilir. Uçaklar ve füzeler sırayla ilerletildiği için füze kısmen ilerlemiş hedefi okur.">
+        <defs>
+          <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <text class="d-cap" x="24" y="28">DIŞ DÖNGÜ ADIMI · 83,3 ms SİMÜLASYON</text>
+
+        <!-- sequence boxes -->
+        <rect class="d-teal" x="24" y="44" width="150" height="54" rx="3"/>
+        <text class="d-t" x="36" y="64">blue uçak</text>
+        <text class="d-m" x="36" y="82">apply_action()</text>
+
+        <rect class="d-box" x="186" y="44" width="150" height="54" rx="3"/>
+        <text class="d-t" x="198" y="64">blue füzeleri</text>
+        <text class="d-m" x="198" y="82">aktifse step()</text>
+
+        <rect class="d-teal" x="348" y="44" width="150" height="54" rx="3"/>
+        <text class="d-t" x="360" y="64">red uçak</text>
+        <text class="d-m" x="360" y="82">apply_action()</text>
+
+        <rect class="d-box" x="510" y="44" width="150" height="54" rx="3"/>
+        <text class="d-t" x="522" y="64">red füzeleri</text>
+        <text class="d-m" x="522" y="82">aktifse step()</text>
+
+        <rect class="d-accent" x="672" y="44" width="150" height="54" rx="3"/>
+        <text class="d-t" x="684" y="64">record()</text>
+        <text class="d-m" x="684" y="82">tek snapshot</text>
+
+        <rect class="d-box" x="834" y="44" width="150" height="54" rx="3"/>
+        <text class="d-t" x="846" y="64">sleep(0,08)</text>
+        <text class="d-m" x="846" y="82">gerçek saniye</text>
+
+        <path class="d-edge" d="M176,71 L184,71" marker-end="url(#b1)"/>
+        <path class="d-edge" d="M338,71 L346,71" marker-end="url(#b1)"/>
+        <path class="d-edge" d="M500,71 L508,71" marker-end="url(#b1)"/>
+        <path class="d-edge" d="M662,71 L670,71" marker-end="url(#b1)"/>
+        <path class="d-edge" d="M824,71 L832,71" marker-end="url(#b1)"/>
+
+        <!-- stale target read -->
+        <path class="d-edge-alarm" d="M261,104 C261,140 410,140 423,106" marker-end="url(#b1)"/>
+        <text class="d-s d-alarm-t" x="272" y="156">blue füzesi, henüz bu adımda ilerletilmemiş red uçağını hedef olarak okur</text>
+
+        <!-- physics zoom -->
+        <line class="d-rule" x1="24" y1="186" x2="996" y2="186"/>
+        <text class="d-cap" x="24" y="210">AYNI ADIMIN İÇİ · F16BVR.step()</text>
+
+        <path class="d-edge" d="M24,246 L996,246"/>
+        <g>
+          <rect class="d-accent" x="24" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="121" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="218" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="315" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="412" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="509" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="606" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="703" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="800" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-box" x="897" y="234" width="24" height="24" rx="2"/>
+          <rect class="d-accent" x="972" y="234" width="24" height="24" rx="2"/>
+        </g>
+        <text class="d-m" x="24" y="282">fdm.run() ×10 · Control_time_step</text>
+        <text class="d-s d-accent-t" x="24" y="300">kaydedilen kare</text>
+        <text class="d-s" x="740" y="282">fizik 120 Hz</text>
+        <text class="d-s d-accent-t" x="740" y="300">kayıt 12 Hz · 10 karede 1</text>
+      </svg>
+    </div>
+    <figcaption>Sayılar ölçüldü: <span class="mono num">dt = 0,00833333 s</span>, <span class="mono">Control_time_step = 10</span>, <span class="mono">scenario.yaml</span> içindeki <span class="mono">sim_time_step = 1</span> (BVRGym varsayılanı 6). Yani her dış adım <span class="mono num">83,3 ms</span> ilerliyor ve bunun tek bir karesi kaydediliyor. Sleep kapalıyken <span class="mono num">3,08 s</span> simülasyon <span class="mono num">0,04 s</span> duvar saatinde koştu — fizik yaklaşık 77× hızlı, yani sleep gerçek zamanı tutan tek şey.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Şekil 3</span>
+    <h2>Enlem zinciri nerede kopuyor</h2>
+  </div>
+  <figure>
+    <div class="plate">
+      <svg viewBox="0 0 1020 290" role="img" aria-label="BVRGym jeosantrik enlemle doğuyor, recorder Latitude sütununa jeodezik enlemi yazıyor, görüntüleyici o sütunu jeosantrik kabul ederek ECEF kuruyor; sonuç 18,8 kilometre mutlak konum hatası.">
+        <defs>
+          <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+          </marker>
+          <marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="var(--alarm)"/>
+          </marker>
+        </defs>
+
+        <rect class="d-box" x="24" y="56" width="176" height="78" rx="3"/>
+        <text class="d-t" x="36" y="78">scenario.yaml</text>
+        <text class="d-s" x="36" y="97">spawn lat</text>
+        <text class="d-m" x="36" y="116">59.0</text>
+
+        <rect class="d-teal" x="240" y="56" width="212" height="78" rx="3"/>
+        <text class="d-t" x="252" y="78">JSBSim · F16BVR</text>
+        <text class="d-m" x="252" y="97">ic/lat-gc-deg ← 59.0</text>
+        <text class="d-s" x="252" y="116">jeosantrik girdi, jeosantrik dünya</text>
+
+        <rect class="d-alarm" x="492" y="36" width="236" height="118" rx="3"/>
+        <text class="d-t" x="504" y="58">recorder._physics()</text>
+        <line class="d-rule" x1="504" y1="68" x2="716" y2="68"/>
+        <text class="d-m" x="504" y="86">lat-gc-deg   59.0000225</text>
+        <text class="d-m" x="504" y="104">lat-geod-deg 59.1694424</text>
+        <line class="d-rule" x1="504" y1="114" x2="716" y2="114"/>
+        <text class="d-m d-alarm-t" x="504" y="132">Latitude ← lat-geod-deg</text>
+        <text class="d-s" x="504" y="148">iki sütun da CSV'de var</text>
+
+        <rect class="d-alarm" x="768" y="56" width="228" height="78" rx="3"/>
+        <text class="d-t" x="780" y="78">recordings.ecef()</text>
+        <text class="d-s" x="780" y="97">Latitude'u jeosantrik sayar</text>
+        <text class="d-m" x="780" y="116">yarıçap + h-sl-meters</text>
+
+        <path class="d-edge" d="M202,95 L236,95" marker-end="url(#c1)"/>
+        <path class="d-edge" d="M454,95 L488,95" marker-end="url(#c1)"/>
+        <path class="d-edge-alarm" d="M730,95 L764,95" marker-end="url(#c2)"/>
+
+        <line class="d-rule" x1="24" y1="186" x2="996" y2="186"/>
+        <text class="d-cap" x="24" y="210">ÖLÇÜLEN SONUÇ</text>
+
+        <text class="d-t" x="24" y="244">18 837 m</text>
+        <text class="d-s" x="24" y="262">mutlak konum hatası · uçak haritada kuzeye kayar</text>
+
+        <text class="d-t" x="372" y="244">−157 m</text>
+        <text class="d-s" x="372" y="262">28,2 km ayrımda bağıl hata · %0,56</text>
+
+        <text class="d-t" x="712" y="244">0 m</text>
+        <text class="d-s" x="712" y="262">veri kaybı · ham sütunların ikisi de kayıtta</text>
+      </svg>
+    </div>
+    <figcaption>Hata kayıtta değil, sütun takma adında: <span class="mono">recorder.py</span> <span class="mono">Latitude</span> sütununa jeodezik enlemi koyuyor, <span class="mono">recordings.py</span> ise o sütunu jeosantrik kabul edip JSBSim'in radyal irtifasıyla eşleştiriyor. İki uçak benzer şekilde kaydığı için sahnedeki bağıl geometri yaklaşık doğru kalıyor; bozulan şey mutlak coğrafi konum.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Bulgular</span>
+    <h2>Ne çalışmıyor, ne farklı, ne eksik</h2>
+    <p class="prose" style="color:var(--ink-2)">Sıra, mevcut sisteme verdiği zarara göre. Her satır kod okunarak bulundu ve çalıştırılarak doğrulandı.</p>
+  </div>
+
+  <div class="findings">
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Latitude sütunu jeodezik, okuyucu jeosantrik bekliyor</h3>
+      <div class="body">
+        <p>Şekil 3'teki zincir. <strong>18 837 m</strong> mutlak konum hatası, 28,2 km'lik ayrımda <strong>−157 m</strong> bağıl hata. Veri kaybı yok: hem <span class="mono">position/lat-gc-deg</span> hem <span class="mono">position/lat-geod-deg</span> kayıtta duruyor, yalnızca takma ad yanlış sütunu gösteriyor.</p>
+        <p class="fixnote">Düzeltildi: <span class="mono">Latitude</span> artık <span class="mono">position/lat-gc-deg</span>. Jeodezik enlem ayrı sütunda kalıyor; WGS84 dönüşümü ACMI ihracatına bırakıldı. <span class="mono">manifest.json</span> referansı açıkça bildiriyor.</p>
+        <p class="ref">src/recorder.py · TACVIEW_COLUMNS</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-kapsam">Kapsam dışı</span>
+      <h3>Füze Mach değeriyle fırlatılıyor</h3>
+      <div class="body">
+        <p>BVRGym'in kendi kodunda: <span class="mono">launch()</span> taşıyıcının <span class="mono">get_mach()</span> çıktısını <span class="mono">vel</span> olarak geçiyor, <span class="mono">reset()</span> ise bu değeri m/s sayıp <span class="mono">ic/u-fps</span>'e çeviriyor. Yani füze <strong>~300 m/s yerine ~1 m/s</strong> ile doğuyor. Mimari belgede bilinen sorun olarak yazılı; henüz düzeltilmedi ve atış denenmediği için pratikte hiç tetiklenmedi.</p>
+        <p class="ref">BVRGym/jsb_gym/simObjects/missiles.py:64</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-kapsam">Kapsam dışı</span>
+      <h3><span class="mono">sim_time_step = 1</span> füze mesafe geçmişini düzleştiriyor</h3>
+      <div class="body">
+        <p><span class="mono">AAMBVR.step()</span> önce <span class="mono">target_norm_old</span>'u, sonra iç döngüde <span class="mono">target_norm</span>'u hesaplıyor. Tek iterasyonda ikisi <strong>aynı anın ölçümü</strong> oluyor; <span class="mono">is_target_lost()</span> buna dayanıyor (şu an BVRGym'de yorumda) ve kayıttaki iki sütun birbirinin kopyası hâline geliyor. BVRGym varsayılanı 6; <span class="mono">scenario.yaml</span> bunu 1'e çekiyor.</p>
+        <p class="ref">scenario.yaml · world.sim_time_step · missiles.py:116-121</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Ölçülen hız kayıtta var, arayüzde tahmin olarak görünüyor</h3>
+      <div class="body">
+        <p>Recorder <span class="mono">velocities/vt-fps</span>'i ham olarak yazıyor ama arayüzün beklediği <span class="mono">TAS</span> (m/s) sütununu yazmıyor — dönüşüm yapmama kararının doğal sonucu. Arayüz de ölçüm yok sanıp konumdan hız türetiyor: kısa koşuda <strong>297,65 m/s</strong> gösterdi, gerçek spawn <strong>300 m/s</strong>. Ölçülen ile tahmin edilenin karışmaması ilkesine aykırı; çözüm dönüşümü gösterim katmanına taşımak.</p>
+        <p class="fixnote">Düzeltildi: arayüz <span class="mono">TAS</span> yoksa <span class="mono">velocities/vt-fps</span>'i ×0,3048 ile okuyor. Yeni kayıtta ölçülen hız 299,96 m/s görünüyor, tahmin devre dışı.</p>
+        <p class="ref">recordings.py · SOURCE_FIELDS</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Taşıyıcı kimliği dosya adında var, arayüz yine takıma göre tahmin ediyor</h3>
+      <div class="body">
+        <p>Yeni recorder <span class="mono">AIM-120 AMRAAM (KE--blue--0) [Blue].csv</span> yazıyor; yani hangi uçağın hangi mühimmatı olduğu <strong>artık belirsiz değil</strong>. Arayüz hâlâ eski BVRGym logger'ının <span class="mono">(AIM0)</span> biçimine göre davranıp sahipliği renkten çıkarıyor ve aynı takımda iki uçak olunca "belirsiz" diyor. Mimari belgedeki "taşıyıcı kimliği yok" sınırı bu kayıt için geçerliliğini yitirdi.</p>
+        <p class="fixnote">Düzeltildi: sahiplik önce dosya adındaki ajan anahtarından çözülüyor, yoksa takım kuralına düşülüyor. Uyarı artık yalnızca gerçekten çözülemediğinde çıkıyor.</p>
+        <p class="ref">recordings.py · metadata() · assemble()</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Belgeler kaynağı hâlâ BVRGym'in yerleşik logger'ı sanıyor</h3>
+      <div class="body">
+        <p><span class="mono">VERI_AKISI.md</span> ve <span class="mono">README.md</span> "değiştirilmeyen yerleşik TacviewLogger" diyor ve <span class="mono">Latitude</span>'un jeosantrik olduğunu yazıyor; gerçek kaynak artık 75 sütunlu kendi recorder'ımız. Silinmiş dosyalara atıf da duruyor: <span class="mono">bvrgym_sim_template_yaml_config.py</span>, <span class="mono">agent_ucus.py</span>, <span class="mono">ucus.py</span>.</p>
+        <p class="ref">CORE_MIMARI.md · docs/mimari · BVRGym-Goruntuleyici/README.md · VERI_AKISI.md</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Verdiğin komutlar hiçbir yere kaydedilmiyor</h3>
+      <div class="body">
+        <p>Kayıtta uygulanmış gaz (<span class="mono">fcs/throttle-cmd-norm</span>) var ama <strong>komut edilen heading ve irtifa yok</strong>. Kendi kararlarının sonucunu değerlendirmek bu projenin asıl amacı olduğuna göre, en kritik eksik kayıt bu. Mimaride <span class="mono">events.jsonl</span> olarak planlı.</p>
+        <p class="fixnote">Düzeltildi: <span class="mono">command/heading-deg</span>, <span class="mono">command/altitude-m</span>, <span class="mono">command/throttle-norm</span> sütunları snapshot başına yazılıyor; komut edilen hedefle gerçekleşen uçuş aynı satırda karşılaştırılabiliyor.</p>
+        <p class="ref">recorder.py · COMMAND_COLUMNS</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Olaylar zaman damgalı değil, yalnızca anlık bayrak</h3>
+      <div class="body">
+        <p><span class="mono">state/</span> altındaki CSV'ler <span class="mono">active</span>, <span class="mono">target_hit</span>, <span class="mono">target_lost</span>, <span class="mono">healthPoints</span> ve hedef adını snapshot başına yazıyor — doğru ve hesapsız. Ama "şu anda fırlatıldı", "şu anda isabet" diye <strong>ayrı bir olay kaydı yok</strong>; olaylar bayrak değişiminden geriye dönük çıkarılmak zorunda. Arayüz <span class="mono">state/</span> klasörünü hiç okumuyor: <span class="mono">glob('*.csv')</span> alt klasöre inmiyor.</p>
+        <p class="fixnote">Düzeltildi: <span class="mono">events.jsonl</span> altı olay türünü zaman damgasıyla tutuyor ve gerçek atışla doğrulandı. Zaman, değişimin görüldüğü snapshot'ın zamanıdır — fizik anı değil. Arayüz bunları <strong>Füze vuruş bilgisi</strong> kutusu açıkken zaman çubuğunda ve mühimmat durumunda gösteriyor.</p>
+        <p class="ref">recorder.py · _detect_events()</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-eksik">Eksik</span>
+      <h3>Tacview uyumluluğu hiç doğrulanmamış</h3>
+      <div class="body">
+        <p>Kök CSV'ler Tacview sütun adlarını taşıyor ama Tacview'in asıl biçimi <strong>ACMI</strong>; <span class="mono">Dogrulama.md</span> da "Tacview uygulamasında görsel karşılaştırma yapılmadı" diyor. Üstüne 67 ham sütun eklenmiş bir CSV'nin Tacview tarafından okunup okunmayacağı test edilmedi. Ters yön de yok: arayüz <span class="mono">.acmi</span> dosyası açamıyor, yani Tacview için alınmış bir kayıt bizde çalışmıyor.</p>
+        <p class="ref">Dogrulama.md · ACMI yazıcı/okuyucu yok</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-eksik">Eksik</span>
+      <h3>Senaryo süresi JSBSim script sınırını aşabilir</h3>
+      <div class="body">
+        <p>Uçak scripti <span class="mono">end="700"</span>, füze scripti <span class="mono">end="200.008"</span> saniyede bitiyor. <span class="mono">duration_s</span> bunun üzerine çıkarsa <span class="mono">fdm.run()</span> sessizce <span class="mono">False</span> dönmeye başlar ve kimse kontrol etmiyor. Bugün <span class="mono num">180 s</span> olduğu için görünmüyor.</p>
+        <p class="ref">BVRGym/scripts/f16_test.xml · AIM_test.xml</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="chip chip-tamam">Düzeltildi</span>
+      <h3>Takma ad sütunları ham sütunları tekrarlıyor</h3>
+      <div class="body">
+        <p>75 sütunun 8'i (<span class="mono">Time, Longitude, Latitude, Altitude, Roll/Pitch/Yaw (deg), Mach</span>) ham karşılıklarının <strong>birebir kopyası</strong> — arayüz sözleşmesi için var. Zararsız ama ACMI yazıcı geldiğinde gereksiz kalacak. Küçük not: bunlar olmasa enlem hatası da doğamazdı.</p>
+        <p class="fixnote">Düzeltildi: takma adlar tek kaynak oldu, kopya sütunlar kalktı. Uçak 19, füze 17 sütun; hangi takma adın hangi propertyden geldiği <span class="mono">manifest.json</span> içinde yazılı.</p>
+        <p class="ref">recorder.py · TACVIEW_COLUMNS + BVR_FIELDS</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Kayıt içeriği</span>
+    <h2>Şu anda neler kaydediliyor</h2>
+    <p class="prose" style="color:var(--ink-2)">Kısa bir iki uçaklı koşunun ürettiği klasör, BVR indirimi sonrası hâliyle. Recorder hiçbir birim dönüşümü ve hesap yapmıyor.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Dosya</th><th>İçerik</th><th>Alanlar</th><th>Kaynak</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">F-16 (KE--blue) [Blue].csv</td>
+          <td>Uçak fiziği + uygulanan dış komut, snapshot başına bir satır</td>
+          <td class="mono num">19 sütun</td>
+          <td>JSBSim property ham değer ve birim; <span class="mono">command/*</span> bizim komutumuz</td>
+        </tr>
+        <tr>
+          <td class="mono">AIM-120 AMRAAM (KE--blue--0) [Blue].csv</td>
+          <td>Füze fiziği; başlıkla açılır, atıştan sonra dolar</td>
+          <td class="mono num">17 sütun</td>
+          <td><span class="mono">Time</span> taşıyıcının, <span class="mono">simulation/sim-time-sec</span> füzenin saati</td>
+        </tr>
+        <tr>
+          <td class="mono">events.jsonl</td>
+          <td>Hedef ataması, fırlatma, isabet, kayıp, sağlık değişimi</td>
+          <td class="mono">5 olay türü</td>
+          <td>BVRGym bayrak değişimi; karar burada hesaplanmaz</td>
+        </tr>
+        <tr>
+          <td class="mono">manifest.json</td>
+          <td>Senaryo, sütun kaynak/birim listesi, koordinat referansı, fizik adımı</td>
+          <td class="mono">JSON</td>
+          <td>Sütunun yanlış referansta çözülmesini önler</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h3>Kayıtta olan</h3>
+      <ul>
+        <li>Jeosantrik enlem, boylam, radyal MSL irtifa</li>
+        <li>Jeodezik enlem ayrı sütunda (ACMI için)</li>
+        <li>Roll / pitch / yaw, Mach, TAS (ft/s)</li>
+        <li>NED hız bileşenleri, yük katsayısı, yakıt</li>
+        <li>Uygulanan gaz ve komut edilen heading / irtifa / gaz</li>
+        <li>Zaman damgalı olaylar ve oturum manifesti</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Henüz kayıtta olmayan</h3>
+      <ul>
+        <li>Mesafe, closure, ATA/AA gibi geometri</li>
+        <li>Zarf ve değerlendirme sonuçları</li>
+        <li>Plan veya rota</li>
+      </ul>
+      <p style="margin-top:10px">Hepsi C++ hesap katmanına ait; ayrı kayıt dosyaları olarak sonra eklenecek.</p>
+    </div>
+    <div>
+      <h3>Bilinçli olarak dışarıda</h3>
+      <ul>
+        <li>Kuvvet / moment toplamları, atalet, kütle</li>
+        <li>Atmosfer, rüzgâr, yer teması</li>
+        <li>Kontrol yüzeyi konumları, gövde hızları</li>
+        <li>Açısal hızlar, alpha / beta</li>
+        <li>Aerodinamik katsayılar, motor iç durumları</li>
+      </ul>
+      <p style="margin-top:10px">Gerekirse <span class="mono">BVR_FIELDS</span> listesine eklenir.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Dış iletişim</span>
+    <h2>Diğer node'larla ne paylaşılıyor</h2>
+  </div>
+  <div class="prose">
+    <p style="color:var(--ink-2)">Kısa cevap: hiçbir şey. Kod tabanında uçuş verisi taşıyan tek bir socket yok. Tek ağ ucu, görüntüleyicinin tarayıcıya JSON verdiği yerel HTTP sunucusu — ve o da uçuş süreciyle hiç konuşmuyor.</p>
+  </div>
+  <div class="nope">
+    <div class="nope-row"><span>UDP durum yayını</span><span>yok</span></div>
+    <div class="nope-row"><span>Çerçevelenmiş TCP komut / olay kanalı</span><span>yok</span></div>
+    <div class="nope-row"><span>JSBSim native output (SOCKET / CSV / FlightGear)</span><span>data_output_xml = None</span></div>
+    <div class="nope-row"><span>ACMI yazımı veya Tacview canlı protokolü</span><span>yok</span></div>
+    <div class="nope-row"><span>C++ paketleri ve komut yöneticisi</span><span>kod yok</span></div>
+    <div class="nope-row"><span>Simülasyona dış komut girişi</span><span>yok · komutlar döngüde sabit</span></div>
+    <div class="nope-row"><span>Görüntüleyici → tarayıcı durum akışı</span><span>GET 127.0.0.1:8765/api/state</span></div>
+    <div class="nope-row"><span>Tarayıcı → görüntüleyici</span><span>POST · yalnızca dizin ve kayıt seçimi</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead prose">
+    <span class="eyebrow">Sonuç</span>
+    <h2>Mimariye göre nerede durduğumuz</h2>
+  </div>
+  <div class="prose" style="display:flex;flex-direction:column;gap:14px;color:var(--ink-2)">
+    <p>Mimari belgedeki 6 aşamadan hiçbiri tamamlanmadı, ama ikisinin malzemesi hazır: <strong style="color:var(--ink)">kayıt katmanı</strong> hesapsız ham veriyi doğru üretiyor, <strong style="color:var(--ink)">görüntüleyici</strong> ise aynı veriyi oynatıyor. Eksik olan sözleşmenin yazılı olmamasıydı — enlem hatası tam olarak bunun belirtisiydi. <span class="mono">manifest.json</span> artık hangi referansın taşındığını kaydın içinde bildiriyor ve okuyucu bunu doğruluyor.</p>
+    <p>Hesapların C++'a taşınması bakımından kayıt tarafı temiz: recorder gerçekten hiçbir şey hesaplamıyor. Hesap yapan tek yer görüntüleyici — <span class="mono">telemetry.py</span>'deki konum hızı ve ISA Mach tahmini, <span class="mono">recordings.py</span>'deki ECEF ve yerel düzlem dönüşümü. Bunlardan ilk ikisi gerçekten C++ hesap katmanına ait; ECEF ve birim çevrimi ise çizim için gereken gösterim matematiği ve orada kalabilir.</p>
+    <p>Tacview konusunda iki yönün de ayrı iş olduğunu not etmek gerekiyor: <strong style="color:var(--ink)">bizden Tacview'e</strong> gerçek ACMI yazmak, <strong style="color:var(--ink)">Tacview'den bize</strong> ise arayüze ACMI okuyucu eklemek. ACMI, WGS84 jeodezik enlem ve referans noktası istediği için dönüşüm şart — ama bu dönüşüm kaydın kendisinde değil, açıkça bir ihracat adımında yaşayabilir. Ham CSV sayısal gerçeğin kaynağı olarak kalır.</p>
+  </div>
+</section>
+
+</div>

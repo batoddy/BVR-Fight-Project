@@ -1,6 +1,6 @@
 # BVRGym uçuş kayıt görüntüleyicisi
 
-Veri kaynağı BVRGym'in yerleşik `TacviewLogger` sınıfının ürettiği CSV dosyalarıdır. Aynı dosyalar Tacview ve bu arayüzde açılır. BVRGym kaynak kodları değiştirilmez; uçuş kodu görüntüleyiciyi import etmez. Görüntüleyici kayıtları yalnızca okur, dosyalara veya simülasyona yazmaz.
+Veri kaynağı Tacview sütun adları taşıyan CSV kayıtlarıdır: `Workspace/src/recorder.py` (bizim recorder'ımız) ve BVRGym'in yerleşik `TacviewLogger` sınıfı. Aynı dosyalar Tacview ve bu arayüzde açılır. BVRGym kaynak kodları değiştirilmez; uçuş kodu görüntüleyiciyi import etmez. Görüntüleyici kayıtları yalnızca okur, dosyalara veya simülasyona yazmaz.
 
 ## Başlatma ve kayıt açma
 
@@ -10,14 +10,16 @@ Workspace klasöründe, kendi Python ortamın etkin durumdayken:
 python .\BVRGym-Goruntuleyici\viewer.py
 ```
 
-Tarayıcıda http://127.0.0.1:8765 adresini aç. **Kayıt aç → Dizin değiştir** ile klasörlere göz at veya dizin yolunu yaz. Örneğin Workspace/recordings klasöründe **Bu dizini kullan** de: bu dizindeki CSV'ler ve bir alt seviyedeki kayıt klasörleri aşağıda listelenir. Listeden istediğin kaydı aç. Dizin değiştirmek mevcut uçuşu kapatmaz; yeni uçuş yalnızca listeden seçildiğinde yüklenir. **Yenile** yeni kayıt klasörlerini listeler.
+Tarayıcıda http://127.0.0.1:8765 adresini aç. **Kayıt aç → Kayıt klasörü değiştir** ile Windows’un klasör seçme penceresinden örneğin Workspace/recordings klasörünü seç: bu dizindeki CSV'ler ve bir alt seviyedeki kayıt klasörleri aşağıda listelenir. Listeden istediğin kaydı aç. Dizin değiştirmek mevcut uçuşu kapatmaz; yeni uçuş yalnızca listeden seçildiğinde yüklenir. **Yenile** yeni kayıt klasörlerini listeler.
+
+Arayüzü denemek için hazır bir kayıt istersen, Workspace klasöründen `python BVRGym-Goruntuleyici/tests/ornek_kayit.py` çalıştır: iki uçaklı gerçek bir uçuş koşar ve `recordings/` altına olaylı bir kayıt bırakır — uzun menzilden atılan füze kaybedilir, yakından atılan isabet eder. Normal uçuş yolu otomatik atış yapmaz; bu script yalnızca deneme kaydı üretir.
 
 Son seçilen dizin tarayıcıda hatırlanır. Dosya yükleme, CSV içeriklerini tarayıcıya kopyalama ve eski son-kayıt deposu kaldırıldı. Açılan kayıt klasörü izlenir; dosyalar değiştiğinde yeniden okunur. Başlangıçta Workspace/recordings varsa kullanılır, yoksa mevcut BVRGym/data_output dizini listelenir.
 
 İstersen başlangıçta izlenecek klasörü terminalden de verebilirsin. Görüntüleyici klasöründe:
 
 ```powershell
-python .\viewer.py --recording "..\recordings\agent_ucus"
+python .\viewer.py --recording "..\recordings\20261010_120143_831939"
 ```
 
 Varsayılan klasör Workspace/BVRGym/data_output/tacview'dir. BVRGym'in kendi klasöründe `python -m tests.test_tacview` bu kaydı oluşturur. Farklı port için `--port 8766` kullan. Ctrl+C yalnızca görüntüleyiciyi kapatır.
@@ -28,9 +30,11 @@ Varsayılan klasör Workspace/BVRGym/data_output/tacview'dir. BVRGym'in kendi kl
 - Yan paneller iç kenardaki oklarla kapanır; kenarları sürüklenerek genişlikleri ayarlanır.
 - Oynatma alanının üst kenarını sürükleyerek yüksekliğini değiştir. Temel kontroller daraltıldığında görünür kalır. Hızlar 0,25×, 0,5×, 1×, 2×, 3×, 4×, 5×, 10×; ↑ / ↓ hızı bir kademe artırır/azaltır; hız değişikliği duraklatmayı bozmaz.
 - Zaman alanına saniye veya dakika:saniye yazarak git. Boşluk oynatır/duraklatır, sağ/sol ok 1 saniye, Shift ile 10 saniye sarar.
+- Görünüm menüsündeki **Füze vuruş bilgisi** kutusu kapalı gelir. Açtığında, kayıt `events.jsonl` içeriyorsa olaylar zaman çubuğunun üstüne işaretlenir: fırlatma turuncu, isabet kırmızı, hedef ataması mavi, sağlık değişimi soluk kırmızı. İşarete basmak o ana atlar; üzerine gelince olayın kendisi yazılır. Aynı kutu mühimmat sonucunu da açar. Kapalıyken çubuk boş kalır ve mühimmat eskisi gibi yalnızca **Atıldı** der. Kayıtta olay yoksa kutunun etkisi olmaz.
+- Kayıt adına basınca açılan panel, kaydın kendisi hakkında bildirdiklerini gösterir: senaryo, enlem/irtifa referansı, birim dönüşümü, fizik ve komut adımı, snapshot frekansı ve sütun kaynak listesi. `manifest.json` yoksa bu açıkça yazılır; değer uydurulmaz.
 - Kamera menüsünde Serbest kamera, Üstten ve Tüm nesneler bulunur. Serbest kamera takibi bırakır; Takip düğmesi seçili nesneyi izler.
 - Nesne listesinden arama/filtre yap, göz düğmesiyle nesneyi gizle. Füze kaydı bittiğinde seçim korunur; son ölçüm olduğu açıkça belirtilir.
-- Görünüm menüsünde iz süresi, biten füze izleri, yer referansı ve etiketleri ayarla. Uçak/füze ölçeği dünya boyutuna göre sabittir; yakınlaştırdığında ekranda büyür.
+- Görünüm menüsünde iz süresi, biten füze izleri, füze vuruş bilgisi, yer referansı ve etiketleri ayarla. Uçak/füze ölçeği dünya boyutuna göre sabittir; yakınlaştırdığında ekranda büyür.
 - Tema, panel boyutları, görünüm ve etiket tercihleri tarayıcıda hatırlanır. Dar ekranda paneller sahnenin üzerinde açılır.
 
 ## Ölçek, birimler ve mühimmat
@@ -47,9 +51,9 @@ Kesikli yön çizgisi modelin doğrudan burnundan başlar ve üç boyutlu burun 
 
 TAS ölçümü yoksa [Tacview'in yaklaşımına](https://raia-software-inc.gitbook.io/tacview/technical-documentation/formulas) benzer şekilde, son 1 saniyedeki üç boyutlu konum değişimi süreye bölünür. Başlangıçta mevcut kısa aralık kullanılır; ilk örnekte sonraki aralıktan tahmin yapılır. Tek örnekte hesaplanamaz. Rüzgâr kaydedilmediği için bu değer kesin hava hızı değildir; rüzgârsız uçuşta TAS'a yaklaşır. Mach, ISA sıcaklığından tahmin edilir. Kayıttaki TAS/Mach varsa daima önceliklidir. Bunlar CSV'ye yazılmaz.
 
-Sol listede uçak kartları ve altlarında mühimmat bulunur. Boş yerleşik mühimmat dosyaları da sayılır. Kaydın ilk füze ölçümünden önce **Uçakta**, kayıt aralığında **Havada**, sonrasında koyu **Atıldı** görünür. Atıldı isabet/imha anlamına gelmez. Boş dosya yalnızca atış kaydı bulunmadığını gösterir.
+Sol listede uçak kartları ve altlarında mühimmat bulunur. Boş mühimmat dosyaları da sayılır. Kaydın ilk füze ölçümünden önce **Uçakta**, kayıt aralığında **Havada**, sonrasında **Atıldı** görünür. Atıldı isabet/imha anlamına gelmez; yalnızca ölçümün bittiğini söyler. Görünüm menüsündeki **Füze vuruş bilgisi** açıkken ve kayıtta olay varken sonuç da görünür: `missile_hit` sonrası kırmızı **İsabet**, `missile_lost` sonrası gri **Kayıp**. Sonuç yalnızca kayıttaki olaydan okunur, ölçümden çıkarılmaz; kutu kapalıyken hiç gösterilmez. Boş dosya yalnızca atış kaydı bulunmadığını gösterir.
 
-BVRGym CSV dosya adında takım vardır, taşıyıcı uçak kimliği yoktur. Aynı renkte tek uçak varsa mühimmat ona bağlanır. Birden fazla uçak varsa sahip tahmin edilmez; ayrı, belirsiz mühimmat grubunda açıklanır. Kayıtta bulunmayan yük veya füze adedi uydurulmaz.
+Kendi recorder'ımızın dosya adı taşıyıcı ajan anahtarını içerir (`AIM-120 AMRAAM (KE--blue--0)`), sahiplik buradan kesin çözülür. Yerleşik BVRGym logger'ının adında yalnızca takım vardır: aynı renkte tek uçak varsa mühimmat ona bağlanır, birden fazlaysa sahip tahmin edilmez ve ayrı, belirsiz mühimmat grubunda açıklanır. Kayıtta bulunmayan yük veya füze adedi uydurulmaz.
 
 ## Uçuş kodundaki kayıt
 
@@ -66,14 +70,14 @@ while not done:
 
 Yerleşik kayıt çağrısı tamamlanan environment'ın verilerini diske yazar. Kendi döngünde erken çıkış için `finally` içinde `env.tacview_logger.save_logs()` kullanabilirsin; logger'ın oluşturulmuş olması gerekir. Her simülasyon için ayrı çıktı klasörü seç: BVRGym'in `save_logs()` metodu seçilen klasörü silip yeniden oluşturur.
 
-`examples/tacview_flight.py`, BVRGym environment'ıyla kısa bir örnektir. `Workspace/src/agent_ucus.py` ise mevcut iki ajanlı uçuşu aynı yerleşik `TacviewLogger` ile kaydeder. Ham `F16BVR` nesneleriyle çalışan `Workspace/src/ucus.py`, aynı logger'a uçakları tanıtan küçük bir senaryo bağlamı kullanır. Bu kodların görüntüleyiciye bağımlılığı yoktur.
+`examples/tacview_flight.py`, BVRGym environment'ıyla kısa bir örnektir. Mevcut iki uçaklı uçuş ise `Workspace/src/bvrgym_sim.py` ile koşar ve `Workspace/src/recorder.py` ile kaydeder. Bu kodların görüntüleyiciye bağımlılığı yoktur.
 
 ## Veri sözleşmesi
 
 - Dosya adı: `MODEL (ÇAĞRI_ADI) [RENK].csv`. Uçak/füze modeli ve takım bu yerleşik Tacview adlandırmasından okunur; port tabanlı nesne ayarı yoktur.
-- `Time`: simülasyon başlangıcından itibaren saniye. Füzelerin kaydında BVRGym taşıyıcı uçağın saatini kullanır.
+- `Time`: simülasyon başlangıcından itibaren saniye. Füzelerin kaydında taşıyıcı uçağın saati kullanılır; füzenin kendi saati ayrı `simulation/sim-time-sec` sütunundadır.
 - `Longitude`, `Latitude`: derece; `Altitude`: metre, deniz seviyesine göre.
-- `Roll (deg)`, `Pitch (deg)`, `Yaw (deg)`: derece. Sütun sırası önemli değildir. Konum ve zaman zorunludur; yönelim yoksa sıfır kullanılır. İsteğe bağlı `TAS` (m/s) ve `Mach` sütunları varsa okunur. Yerleşik BVRGym logger'ı bunları yazmadığında konum ve zamandan yaklaşık hız, standart atmosferden yaklaşık Mach hesaplanır. Ölçülen ve hesaplanan değerler ayrı tutulur; hesaplanan değerler bilgi panelindeki başlık ve açıklamada belirtilir. Konumdan hesaplanan hız TAS olarak adlandırılmaz. Kompakt etiketlerin üst satırında solda ad, sağda seçilen birimde hız; alt satırın ortasında irtifa bulunur; bilgi paneli birime uygun ondalık hassasiyetini korur.
+- `Roll (deg)`, `Pitch (deg)`, `Yaw (deg)`: derece. Sütun sırası önemli değildir. Konum ve zaman zorunludur; yönelim yoksa sıfır kullanılır. İsteğe bağlı `TAS` (m/s) ve `Mach` sütunları varsa okunur; `TAS` yoksa ham `velocities/vt-fps` sütunu ×0,3048 ile okunur. Hiç hız ölçümü yoksa konum ve zamandan yaklaşık hız, standart atmosferden yaklaşık Mach hesaplanır. Ölçülen ve hesaplanan değerler ayrı tutulur; hesaplanan değerler bilgi panelindeki kısa başlık ve üzerine gelince açıklamada belirtilir. Konumdan hesaplanan hız TAS olarak adlandırılmaz. Kompakt etiketlerin üst satırında solda ad, sağda seçilen birimde hız; alt satırın ortasında irtifa bulunur; bilgi paneli birime uygun ondalık hassasiyetini korur.
 - Kullanılmayan mühimmatın boş CSV dosyalarından envanter bilgisi okunur; uçuş izi veya sahnede füze oluşturulmaz. Hatalı ölçüm veya geriye giden zaman, dosya ve satır bilgisiyle bildirilir; önceki geçerli kayıt korunur.
 - Ham kayıt dosyaları değiştirilmez veya başka bir formata çevrilmez. HTTP'deki JSON yalnızca tarayıcıya sunulan iç gösterimdir; simülasyondan özel yayın gerektirmez.
 - Tüm kayıt saklanır; eski 20.000 örnek sınırı yoktur. Dosyaların boyutuna göre bellek kullanımı artar.
@@ -91,9 +95,10 @@ Oynatma hızı 0,25×, 0,5×, 1×, 2×, 3×, 4×, 5× ve 10× olarak ayarlanır.
 - `viewer.py`: kayıt klasörünü ve yerel HTTP arayüzünü başlatır.
 - `recordings.py`: yerleşik CSV'leri okur, doğrular ve klasör değişimlerini izler.
 - `telemetry.py`: kayıttan hız ve standart atmosfer Mach tahminleri; özgün değerleri değiştirmez.
+- `native_picker.py`: Windows klasör seçme penceresi; seçim iptali mevcut dizini korur.
 - `server.py`: kayıt seçimi ve tarayıcıya veri sunumu; uçuş komutu içermez.
 - `web/`: görselleştirme ve ortak zamanlı kayıt oynatma.
-- `tests/`: CSV, kayıt değişimi, HTTP, zamanlama ve gerçek BVRGym logger'ı için kontroller.
+- `tests/`: CSV, kayıt değişimi, HTTP, zamanlama ve gerçek BVRGym logger'ı için kontroller. `tests/ornek_kayit.py` test değil, deneme kaydı üreten araçtır.
 
 Görüntüleyici için Python standart kütüphanesi yeterlidir; BVRGym yalnızca simülasyonu çalıştıran Python ortamında kurulu olmalıdır. Testler: `python -m unittest discover -s tests -p "test_*.py"` ve `node --test tests/stream.test.mjs tests/units.test.mjs tests/range.test.mjs`. Gerçek simülasyon kontrolü BVRGym kurulu ortamda `python tests/integration_bvrgym.py --bvrgym "..\BVRGym" --output "..\recordings\verification"` ile yapılır.
 
@@ -109,10 +114,10 @@ Sol listedeki uçağa veya sahnedeki etikete çift tıklama, nesneye yaklaşır 
 
 ## İnceleme sonrası düzeltmeler
 
-- Yerleşik logger'ın `Latitude` değeri **jeosantrik enlemdir** (`position/lat-gc-deg`). ECEF dönüşümü WGS84 ellipsoidinin jeosantrik yöndeki deniz seviyesi yarıçapına JSBSim'in radyal MSL irtifasını ekler. Yerel kuzey/doğu düzlemi için jeodezik enlem ayrıca hesaplanır. CSV'deki sayılar değişmez. JSBSim'de `h-sl` ile jeodezik irtifa aynı tanım değildir; [kaynak kodundaki GetAltitudeASL](https://github.com/JSBSim-Team/jsbsim/blob/master/src/models/FGPropagate.cpp) esas alınır.
+- `Latitude` değeri **jeosantrik enlemdir** (`position/lat-gc-deg`); recorder'ımız da bu sütuna aynı referansı yazar ve `manifest.json` içinde açıkça bildirir. ECEF dönüşümü WGS84 ellipsoidinin jeosantrik yöndeki deniz seviyesi yarıçapına JSBSim'in radyal MSL irtifasını ekler. Yerel kuzey/doğu düzlemi için jeodezik enlem ayrıca hesaplanır. CSV'deki sayılar değişmez. JSBSim'de `h-sl` ile jeodezik irtifa aynı tanım değildir; [kaynak kodundaki GetAltitudeASL](https://github.com/JSBSim-Team/jsbsim/blob/master/src/models/FGPropagate.cpp) esas alınır.
 - Konumdan türetilen hız, rüzgâr bilinmediği için kesin TAS değildir; Mach da bu hızdan ve ISA atmosferinden tahmin edilir. Kayıtta TAS/Mach varsa bunlar önceliklidir.
 - Bir uçağın ölçümü bittiğinde son konumu korunur, etiketi soluk/kesikli olur ve bilgi paneli **Ölçüm bitti · son konum sabit** yazar. Kayıt sonu imha anlamına gelmez. Yönelim sütunu yoksa açı yerine — ve yön çizgisi kapalıdır.
-- F-16 ve AIM-120 dışındaki modeller genel geometriyle belirtilir; bilinmeyen takım nötr renktedir. Mühimmat kartları sol paneldedir, sağ panel yalnızca sayısal özet verir.
+- F-16 ve AIM-120 dışındaki modeller genel geometriyle belirtilir; bilinmeyen takım nötr renktedir. Mühimmat her iki panelde de tek yatay sıradaki füze simgeleriyle gösterilir: uçaktakiler sarı, havadakiler parlak turuncu, kaydı bitenler gri. Üzerine gelince adı ve durumu görünür.
 - İz pencereleri ikili aramayla bulunur; çizilecek nokta sayısı sınırlandırılır ve 2D izler önbelleğe alınır. Tüm ham örnekler oynatma için korunur.
 - Kayıt açma da otomatik yenilemeyle aynı bekleme/doğrulama yolunu kullanır. İki saniye değişmeyen dosyalar okunur, okuma sonrası imzalar tekrar kontrol edilir; hata olursa önceki geçerli kayıt ve adı korunur. Yerleşik CSV'de **yazım tamamlandı işareti yoktur**; iki saniyeden uzun yazım duraklamasını kesin olarak ayırt etmek mümkün değildir. Simülasyon `save_logs()` işlemini tamamladıktan sonra kaydı açmak en güvenilir yöntemdir.
 - Aynı takımdaki birden fazla uçağın aynı numaralı mühimmatı BVRGym logger'ında aynı dosyaya yazılabilir. Arayüz bunu uyarır, sahipliği tahmin etmez. Üzerine yazılmış veri CSV'den geri getirilemez; BVRGym kaynakları değiştirilmedi.

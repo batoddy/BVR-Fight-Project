@@ -37,7 +37,6 @@ class ReviewFixes(unittest.TestCase):
             self.assertEqual(store.session,session)
             self.assertEqual(store.catalog(),[])
             self.assertEqual(store.packet()['recording'],str(first.resolve()))
-            with self.assertRaises(ValueError):store.browse(str(base/'does-not-exist'))
 
     def test_replacement_waits_and_bad_snapshot_preserves_name_and_session(self):
         with tempfile.TemporaryDirectory() as tmp:

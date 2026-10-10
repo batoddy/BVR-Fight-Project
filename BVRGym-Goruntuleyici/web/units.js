@@ -40,9 +40,11 @@ export function headingOffset(heading,length){
   return {east:Math.sin(angle)*length,north:Math.cos(angle)*length};
 }
 
-export function munitionState(munition,time){
+export function munitionState(munition,time,showOutcome=false){
   if(munition.record_start_s==null)return 'carried';
   if(time<munition.record_start_s)return 'carried';
   if(time<=munition.record_end_s)return 'flying';
+  // Sonuç yalnızca istenirse gösterilir; kayıtta olay varsa ne olduğunu o söyler.
+  if(showOutcome&&munition.outcome&&(munition.outcome_time_s==null||time>=munition.outcome_time_s))return munition.outcome;
   return 'spent';
 }

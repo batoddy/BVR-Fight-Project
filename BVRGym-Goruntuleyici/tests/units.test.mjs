@@ -52,3 +52,16 @@ test('Inventory distinguishes carried, flying and spent at the replay time',()=>
   assert.equal(munitionState(recorded,21),'spent');
   assert.equal(munitionState({record_start_s:null},100),'carried');
 });
+test('Recorded outcome is shown only when asked, and only after it happened',()=>{
+  const hit={record_start_s:10,record_end_s:20,outcome:'hit',outcome_time_s:20.5};
+  const lost={record_start_s:10,record_end_s:20,outcome:'lost',outcome_time_s:20.5};
+  // Kapali: kayitta olay olsa da sonuc gosterilmez.
+  assert.equal(munitionState(hit,21),'spent');
+  assert.equal(munitionState(hit,21,false),'spent');
+  // Acik: sonuc ancak olay aninda ve sonrasinda gorunur.
+  assert.equal(munitionState(hit,20,true),'flying');
+  assert.equal(munitionState(hit,20.5,true),'hit');
+  assert.equal(munitionState(lost,21,true),'lost');
+  // Olaysiz kayit her iki durumda da yalnizca olcumun bittigini soyler.
+  assert.equal(munitionState({record_start_s:10,record_end_s:20},21,true),'spent');
+});

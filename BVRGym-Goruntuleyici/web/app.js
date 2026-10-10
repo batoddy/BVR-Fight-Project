@@ -7,7 +7,7 @@ import {inventoryPanel} from './inventory.js';
 
 const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
-  altitudeGuides:true,headingGuides:true,objectScale:50,trail:true,trailDuration:300,history:true,grid:true,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm'};
+  altitudeGuides:true,headingGuides:true,objectScale:50,trail:true,trailDuration:300,history:true,grid:true,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm'};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
@@ -18,7 +18,7 @@ const buffer=new SampleBuffer(),replayClock=new ReplayClock();
 const playbackRates=[.25,.5,1,2,3,4,5,10],hiddenObjects=new Set();
 const teamOrder={blue:0,red:1};
 let selected=null,viewTime=null,paused=true,scrubbing=false,lastReceive=0,connectionError=null,
-  lastLabels=0,listSignature='',filter='all',query='',scene,webglError=null;
+  lastLabels=0,listSignature='',detailInventorySignature='',filter='all',query='',scene,webglError=null;
 
 function theme(){el('toggle-theme').setAttribute('aria-checked',String(document.documentElement.dataset.theme==='dark'));}
 theme();el('toggle-theme').onclick=()=>{
@@ -126,13 +126,16 @@ function viewSettings(){
   el('toggle-altitude-guides').setAttribute('aria-pressed',String(scene.altitudeGuides));
   scene.labelMode=el('label-mode').value;scene.labelNames=el('label-names').checked;scene.labelAltitude=el('label-altitude').checked;scene.labelSpeed=el('label-speed').checked;
   Object.assign(preferences,{altitudeGuides:scene.altitudeGuides,headingGuides:scene.headingGuides,objectScale:scene.objectScale,trail:scene.trail,grid:scene.grid,trailDuration:scene.trailDuration,history:el('show-history').checked,
-    labelMode:scene.labelMode,labelNames:scene.labelNames,labelAltitude:scene.labelAltitude,labelSpeed:scene.labelSpeed});save();
+    labelMode:scene.labelMode,labelNames:scene.labelNames,labelAltitude:scene.labelAltitude,labelSpeed:scene.labelSpeed,
+    missileOutcomes:el('missile-outcomes').checked});save();
+  // Mühimmat durumu ve olay işaretleri bu tercihe bağlı: bir sonraki karede yenilensinler.
+  listSignature='';detailInventorySignature='';
 }
-for(const [id,key] of [['altitude-guides','altitudeGuides'],['heading-guides','headingGuides'],['trail','trail'],['grid','grid'],['show-history','history'],['label-names','labelNames'],['label-altitude','labelAltitude'],['label-speed','labelSpeed']])el(id).checked=preferences[key];
+for(const [id,key] of [['altitude-guides','altitudeGuides'],['heading-guides','headingGuides'],['trail','trail'],['grid','grid'],['show-history','history'],['label-names','labelNames'],['label-altitude','labelAltitude'],['label-speed','labelSpeed'],['missile-outcomes','missileOutcomes']])el(id).checked=preferences[key];
 el('object-scale').value=[1,25,50,100].includes(preferences.objectScale)?preferences.objectScale:50;
 el('trail-duration').value=[60,300,-1].includes(preferences.trailDuration)?preferences.trailDuration:300;
 el('label-mode').value=['all','selected','none'].includes(preferences.labelMode)?preferences.labelMode:'all';
-for(const id of ['altitude-guides','heading-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','trail-duration','label-mode'])el(id).onchange=viewSettings;
+for(const id of ['altitude-guides','heading-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','missile-outcomes','trail-duration','label-mode'])el(id).onchange=viewSettings;
 viewSettings();updateFollow();
 el('toggle-altitude-guides').onclick=()=>{el('altitude-guides').checked=!el('altitude-guides').checked;viewSettings();};
 const toolbarMenus=[...document.querySelectorAll('.toolbar-menu')];
@@ -182,6 +185,36 @@ function updateTimeline(){
     el('timeline-last').textContent=formatTime(bounds.last);el('timeline').setAttribute('aria-valuetext',formatTime(viewTime??bounds.first));}
   if(document.activeElement!==el('seek-time'))el('seek-time').value=formatTime(viewTime??0);
   el('play-pause').textContent=paused?'▶':'Ⅱ';el('play-pause').setAttribute('aria-label',paused?'Oynat':'Duraklat');el('play-pause').setAttribute('aria-pressed',String(paused));
+  drawEventMarks(bounds);
+}
+// Kayittaki olaylar zaman cubuguna isaretlenir; olay yoksa cubuk eskisi gibi bos kalir.
+const eventLabels={target_assigned:'Hedef atandı',target_cleared:'Hedef kaldırıldı',missile_launched:'Fırlatma',
+  missile_hit:'İsabet',missile_lost:'Kayıp',health_changed:'Sağlık değişti'};
+function eventText(event){
+  const parts=[eventLabels[event.type]||event.type];
+  if(event.agent)parts.push(event.agent);
+  if(event.ammo!=null)parts.push('mühimmat '+event.ammo);
+  if(event.target)parts.push('→ '+event.target);
+  if(event.type==='health_changed')parts.push(event.from+' → '+event.to);
+  return parts.join(' · ')+' · '+formatTime(event.sim_time_s);
+}
+function drawEventMarks(bounds){
+  const events=preferences.missileOutcomes?buffer.packet.events||[]:[],host=el('timeline-events');
+  const span=bounds?bounds.last-bounds.first:0;
+  const signature=bounds&&span>0&&events.length?buffer.packet.session+':'+events.length+':'+bounds.first+':'+bounds.last:'';
+  if(host.dataset.signature===signature)return;
+  host.dataset.signature=signature;host.replaceChildren();
+  if(!signature)return;
+  for(const event of events){
+    const fraction=(event.sim_time_s-bounds.first)/span;
+    if(!Number.isFinite(fraction)||fraction<0||fraction>1)continue;
+    const mark=document.createElement('button');
+    mark.className='timeline-event';mark.dataset.event=event.type;
+    mark.style.left=(fraction*100)+'%';
+    mark.title=eventText(event);mark.setAttribute('aria-label',mark.title);
+    mark.onclick=()=>seek(event.sim_time_s);
+    host.append(mark);
+  }
 }
 function playPause(){const bounds=buffer.bounds();if(!bounds)return;if(paused&&viewTime>=bounds.last)seek(bounds.first);paused=!paused;replayClock.seek(viewTime,performance.now()/1000);updateTimeline();}
 el('play-pause').onclick=playPause;
@@ -232,7 +265,7 @@ function renderList(){
     .sort((a,b)=>(teamOrder[a.team]??2)-(teamOrder[b.team]??2));
   if(selected===null&&entries.length)selected=entries.find(entry=>buffer.at(entry.id,viewTime))?.id??entries[0].id;
   const state=entry=>viewTime<entry.record_start_s?'Başlamadı':viewTime>=entry.record_end_s?'Son ölçüm':'Kayıtta';
-  const signature=buffer.session+entries.map(entry=>entry.id+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime)+(m.id===selected)).join(',');
+  const signature=buffer.session+entries.map(entry=>entry.id+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)+(m.id===selected)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)+(m.id===selected)).join(',');
   if(signature===listSignature)return;listSignature=signature;
   el('entity-list').replaceChildren();el('object-count').textContent=entries.length;
   el('list-empty').hidden=entries.length>0;el('list-empty').textContent=buffer.bounds()?'Bu filtrede uçak yok.':'Kayıt açarak başla.';
@@ -245,7 +278,7 @@ function renderList(){
     const eye=document.createElement('button');eye.className='entity-visibility';eye.textContent=hiddenObjects.has(entry.id)?'○':'◉';
     eye.setAttribute('aria-label',entry.name+(hiddenObjects.has(entry.id)?' göster':' gizle'));eye.setAttribute('aria-pressed',String(!hiddenObjects.has(entry.id)));
     eye.onclick=()=>{if(hiddenObjects.has(entry.id))hiddenObjects.delete(entry.id);else hiddenObjects.add(entry.id);listSignature='';renderList();};
-    row.append(button,eye);card.append(row,inventoryPanel(inventories[entry.id]||[],viewTime,selected,selectEntity));el('entity-list').append(card);
+    row.append(button,eye);card.append(row,inventoryPanel(inventories[entry.id]||[],viewTime,selected,selectEntity,preferences.missileOutcomes));el('entity-list').append(card);
   }
   const unassigned=(buffer.packet.unassigned_inventory||[]).filter(entry=>filter==='all'||entry.team===filter);
   if(unassigned.length){
@@ -253,7 +286,7 @@ function renderList(){
     const section=document.createElement('section');section.className='aircraft-card unassigned';
     const title=document.createElement('h3');title.textContent='Sahibi eşleşmeyen mühimmat';
     const note=document.createElement('p');note.className='data-note';note.textContent='Kayıt, taşıyıcı uçağı ayırt etmiyor.';
-    section.append(title,note,inventoryPanel(unassigned,viewTime,selected,selectEntity));el('entity-list').append(section);
+    section.append(title,note,inventoryPanel(unassigned,viewTime,selected,selectEntity,preferences.missileOutcomes));el('entity-list').append(section);
   }
 }
 el('object-search').oninput=event=>{query=event.target.value.toLocaleLowerCase('tr');listSignature='';renderList();};
@@ -306,19 +339,21 @@ function labels(){
   el('speed').textContent=displayedSpeed==null?'—':number(displayedSpeed,SPEED_UNITS[preferences.speedUnit].digits);
   el('mach').textContent=mach==null?'—':number(mach,2);
   el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';
-  el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · konumdan hesaplanan':'Hava hızı · TAS';
+  el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · hesaplanan':'Hava hızı · TAS';
   el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · tahmini':'Mach';
   el('missing-data').hidden=!estimatedSpeed&&!estimatedMach&&speed!=null&&mach!=null;
-  el('missing-data').textContent=[estimatedSpeed?'Hız konum değişiminden hesaplanır; hava hızı değildir.':null,
-    estimatedMach?'Mach standart atmosferden tahmin edilir.':null,speed==null?'Hız ölçümü yetersiz.':null,mach==null?'Mach bilgisi yok.':null].filter(Boolean).join(' ');
-  el('missing-data').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
+  el('missing-data').textContent=[speed==null?'Hız bilgisi yok.':null,mach==null?'Mach bilgisi yok.':null].filter(Boolean).join(' ');
+  el('missing-data').hidden=!el('missing-data').textContent;
+  el('speed-measure').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
   el('east').textContent=distanceLabel(entity.east_m,preferences.distanceUnit);el('north').textContent=distanceLabel(entity.north_m,preferences.distanceUnit);
   const parentId=first.kind==='aircraft'?first.id:entity.owner_id;
   const owned=buffer.packet.inventory?.[parentId]||[];
   el('detail-inventory').hidden=first.kind!=='aircraft';
-  // The aircraft list already contains the interactive inventory; avoid rebuilding it here.
-  const summary=owned.reduce((counts,m)=>{counts[munitionState(m,viewTime)]++;return counts;},{carried:0,flying:0,spent:0});
-  el('detail-inventory-list').textContent=owned.length?`${summary.carried} uçakta · ${summary.flying} havada · ${summary.spent} atıldı`:'Mühimmat bilgisi yok.';
+  const inventorySignature=buffer.session+first.id+owned.map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)+(m.id===selected)).join('|');
+  if(inventorySignature!==detailInventorySignature){
+    detailInventorySignature=inventorySignature;
+    el('detail-inventory-list').replaceChildren(inventoryPanel(owned,viewTime,selected,selectEntity,preferences.missileOutcomes));
+  }
   el('entity-interval').textContent=formatTime(first.record_start_s)+' – '+formatTime(first.record_end_s);el('jump-entity').disabled=false;
 }
 el('jump-entity').onclick=()=>seek(buffer.tracks.get(selected)?.samples[0].record_start_s);
@@ -329,7 +364,58 @@ const recordingMenu=setupRecordingMenu({
 const libraries=()=>recordingMenu.refresh();
 const recordingError=message=>recordingMenu.error(message);
 el('empty-open').onclick=()=>recordingMenu.open();
-el('record-info').onclick=event=>{const packet=buffer.packet,bounds=buffer.bounds();if(!bounds){event.preventDefault();recordingMenu.open();return;}el('record-details').replaceChildren();for(const [label,value] of [['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],['Nesne',String(packet.objects)],['Kaynak',packet.recording||'Kayıt dizini']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;el('record-details').append(dt,dd);}};
+const decimal=value=>Number.isFinite(value)?value.toLocaleString('tr-TR',{maximumFractionDigits:6}):null;
+const rate=value=>Number.isFinite(value)?value.toLocaleString('tr-TR',{maximumFractionDigits:1}):null;
+function sessionRows(packet,bounds){
+  const rows=[['Kayıt',packet.recording_name],['Süre',formatTime(bounds.last-bounds.first)],
+    ['Nesne',String(packet.objects)],['Olay',String((packet.events||[]).length)],
+    ['Kaynak',packet.recording||'Kayıt dizini']];
+  const session=packet.manifest;
+  // Manifest yoksa kayıt kendini bildirmiyor: uydurma yerine bunu yazıyoruz.
+  if(!session)return rows.concat([['Oturum bilgisi','manifest.json yok; kaydı yerleşik BVRGym logger’ı yazmış olabilir']]);
+  const snapshots=session.snapshots,span=bounds.last-bounds.first;
+  return rows.concat([
+    ['Senaryo',session.agent_count!=null?session.agent_count+' ajan'+(session.duration_s!=null?' · '+session.duration_s+' s hedef süre':''):null],
+    ['Enlem referansı',session.latitude_reference],
+    ['İrtifa referansı',session.altitude_reference],
+    ['Birim dönüşümü',session.conversions],
+    ['Fizik adımı',session.physics_dt_s?decimal(session.physics_dt_s)+' s · '+rate(1/session.physics_dt_s)+' Hz':null],
+    ['Komut adımı',session.aircraft_sim_time_step!=null&&session.aircraft_control_time_step!=null&&session.physics_dt_s
+      ?'Sim '+session.aircraft_sim_time_step+' × Control '+session.aircraft_control_time_step+' → '
+        +decimal(session.aircraft_sim_time_step*session.aircraft_control_time_step*session.physics_dt_s)+' s':null],
+    ['Snapshot',snapshots!=null?snapshots+' kayıt'+(span>0?' · '+rate(snapshots/span)+' Hz':''):null],
+    ['Oluşturulma',session.created_at],
+    ['Koordinat notu',session.coordinate_note],
+  ]);
+}
+function columnTable(columns){
+  const details=document.createElement('details');details.className='session-columns';
+  const summary=document.createElement('summary');summary.textContent='Sütun kaynakları ('+Object.keys(columns).length+')';
+  const table=document.createElement('table');
+  const thead=document.createElement('thead'),head=document.createElement('tr');
+  for(const label of ['Sütun','Kaynak','Birim']){const th=document.createElement('th');th.textContent=label;head.append(th);}
+  thead.append(head);
+  const tbody=document.createElement('tbody');
+  for(const [column,info] of Object.entries(columns)){
+    const row=document.createElement('tr');
+    for(const value of [column,info.source,info.unit]){const td=document.createElement('td');td.textContent=value??'—';row.append(td);}
+    tbody.append(row);
+  }
+  table.append(thead,tbody);
+  details.append(summary,table);return details;
+}
+el('record-info').onclick=event=>{
+  const packet=buffer.packet,bounds=buffer.bounds();
+  if(!bounds){event.preventDefault();recordingMenu.open();return;}
+  el('record-details').replaceChildren();
+  for(const [label,value] of sessionRows(packet,bounds)){
+    const dt=document.createElement('dt'),dd=document.createElement('dd');
+    dt.textContent=label;dd.textContent=value??'—';dd.classList.toggle('absent',value==null);
+    el('record-details').append(dt,dd);
+  }
+  el('session-columns')?.remove();
+  if(packet.manifest?.columns){const table=columnTable(packet.manifest.columns);table.id='session-columns';el('record-details').after(table);}
+};
 el('close-info').onclick=()=>el('record-info-options').open=false;
 
 function render(timestamp){

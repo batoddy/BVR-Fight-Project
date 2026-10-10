@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "type": "aircraft_state",
+  "session_id": "run-001",
+  "aircraft_id": "blue",
+  "packet_no": 42,
+  "tick": 42,
+  "sim_time_s": 3.5,
+  "aircraft": {
+    "id": "blue",
+    "name": "KE",
+    "team": "Blue",
+    "lat_deg": 59.0,
+    "lon_deg": 18.0,
+    "alt_msl_m": 8000,
+    "yaw_deg": 0,
+    "pitch_deg": 2,
+    "roll_deg": 0,
+    "tas_mps": 300,
+    "velocity_ned_mps": [
+      299.8,
+      0,
+      -10
+    ],
+    "mach": 0.97,
+    "health": 1
+  },
+  "missiles": [
+    {
+      "id": "blue/missile/0",
+      "owner_id": "blue",
+      "target_id": null,
+      "state": "ready",
+      "reserved": false,
+      "outcome": null,
+      "flight_time_s": null,
+      "kinematics": null
+    },
+    {
+      "id": "blue/missile/1",
+      "owner_id": "blue",
+      "target_id": null,
+      "state": "ready",
+      "reserved": false,
+      "outcome": null,
+      "flight_time_s": null,
+      "kinematics": null
+    }
+  ]
+}

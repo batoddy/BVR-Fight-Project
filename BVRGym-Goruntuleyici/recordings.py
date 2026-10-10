@@ -1,6 +1,12 @@
-"""Read BVRGym's native Tacview CSV exports without changing their files."""
+"""Read Tacview-named CSV recordings without changing their files.
+
+Two producers are supported: our own recorder (Workspace/src/recorder.py), which
+carries the agent key in the filename and ships a manifest.json, and BVRGym's
+built-in TacviewLogger, which does neither.
+"""
 import csv
 import hashlib
+import json
 import math
 from pathlib import Path
 import re
@@ -14,9 +20,14 @@ class EmptyRecording(ValueError):
     """The logger has not saved any measurements yet."""
 
 
+SIDECARS = ('events.jsonl', 'manifest.json')
+EVENT_LIMIT = 5000
+
+
 def fingerprint(directory):
+    paths = list(directory.glob('*.csv')) + [directory / name for name in SIDECARS]
     return tuple((p.name, p.stat().st_size, p.stat().st_mtime_ns)
-                 for p in sorted(directory.glob('*.csv')) if p.is_file())
+                 for p in sorted(paths) if p.is_file())
 
 
 def metadata(path):
@@ -31,8 +42,16 @@ def metadata(path):
     missile = re.match(r'^(AIM|AAM|AMRAAM|R[- ]?\d|PL[- ]?\d|SD[- ]?\d|METEOR|MICA|IRIS|PYTHON|DERBY|ASPIDE)', upper)
     kind = 'missile' if missile else 'aircraft'
     visual_model = 'f16' if re.match(r'^F[- ]?16(?:\b|[A-Z])', upper) else 'aim120' if upper.startswith(('AIM-120', 'AMRAAM')) else 'generic'
-    return dict(id=path.name, name=callsign or model, model=model, color=color,
-                team=team, kind=kind, visual_model=visual_model, file=path.name)
+    # Our recorder writes "KE--blue" for aircraft and "KE--blue--0" for munitions,
+    # so the launcher is stated rather than guessed. Built-in logs have one part.
+    parts = (callsign or model).split('--')
+    agent_key = parts[1] if kind == 'aircraft' and len(parts) > 1 else None
+    carrier_key = parts[1] if kind == 'missile' and len(parts) > 2 else None
+    ammo_id = parts[2] if kind == 'missile' and len(parts) > 2 else None
+    name = f'{parts[0]}-{ammo_id}' if ammo_id is not None else parts[0]
+    return dict(id=path.name, name=name, model=model, color=color,
+                team=team, kind=kind, visual_model=visual_model, file=path.name,
+                agent_key=agent_key, carrier_key=carrier_key, ammo_id=ammo_id)
 
 
 def ecef(lat_gc_deg, lon_deg, height_m):
@@ -53,6 +72,12 @@ def geodetic_latitude(lat_gc_deg, height_m):
         n = 6378137.0 / math.sqrt(1 - e2 * math.sin(phi) ** 2)
         phi = math.atan2(z + e2 * n * math.sin(phi), x)
     return math.degrees(phi)
+
+
+# Recorded measurements that only need a unit change to display, never a value
+# derived from other columns. The plain TAS/Mach columns above take precedence.
+SOURCE_FIELDS = {'velocities/vt-fps': ('true_airspeed_mps', 0.3048),
+                 'velocities/mach': ('mach', 1.0)}
 
 
 def read_csv(path, handle):
@@ -82,6 +107,7 @@ def read_csv(path, handle):
             if None in row:
                 raise ValueError('sütun sayısı uyuşmuyor')
             values = dict(previous)
+            measured = set()
             for column, key in fields.items():
                 raw = row.get(column)
                 if raw is not None and raw.strip():
@@ -89,6 +115,15 @@ def read_csv(path, handle):
                     if not math.isfinite(value):
                         raise ValueError('sonlu olmayan sayı')
                     values[key] = value
+                    measured.add(key)
+            for column, (key, scale) in SOURCE_FIELDS.items():
+                raw = row.get(column)
+                if key in measured or raw is None or not raw.strip():
+                    continue
+                value = float(raw) * scale
+                if not math.isfinite(value):
+                    raise ValueError('sonlu olmayan sayı')
+                values[key] = value
             if not (row.get('Time') or '').strip():
                 raise ValueError('zaman eksik')
             if not all(key in values for key in ('longitude_deg', 'latitude_deg', 'altitude_m')):
@@ -125,10 +160,114 @@ def read_object(path):
         return read_csv(path, handle)
 
 
+def read_manifest(directory):
+    """Report what the recording states about itself, so a column is never decoded
+    in the wrong reference. Missing manifest means the built-in logger wrote it."""
+    path = Path(directory) / 'manifest.json'
+    if not path.is_file():
+        return None, []
+    try:
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(manifest, dict):
+            raise ValueError('manifest bir nesne değil')
+        coordinates = manifest.get('coordinates') or {}
+    except (ValueError, OSError):
+        return None, ['manifest.json okunamadı; koordinat referansı doğrulanamıyor.']
+    warnings = []
+    if coordinates.get('latitude_reference') not in (None, 'geocentric'):
+        warnings.append(f"Kayıt enlemi '{coordinates['latitude_reference']}' olarak bildiriyor; "
+                        'bu görüntüleyici jeosantrik enlem çözer. Konumlar kayabilir.')
+    if coordinates.get('altitude_reference') not in (None, 'JSBSim radial MSL'):
+        warnings.append(f"Kayıt irtifayı '{coordinates['altitude_reference']}' olarak bildiriyor; "
+                        'bu görüntüleyici JSBSim radyal MSL çözer.')
+    return manifest, warnings
+
+
+def read_events(directory):
+    """Read the recorded event log. Events are facts the recording states; the
+    viewer never infers one from measurements."""
+    path = Path(directory) / 'events.jsonl'
+    if not path.is_file():
+        return [], []
+    events, warnings = [], []
+    for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+            if not isinstance(event, dict):
+                raise ValueError('satır bir nesne değil')
+            time_s, kind = event['sim_time_s'], event['type']
+            if not isinstance(time_s, (int, float)) or not math.isfinite(time_s):
+                raise ValueError('sim_time_s sayı değil')
+            if not isinstance(kind, str) or not kind:
+                raise ValueError('type eksik')
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f'events.jsonl, satır {number}: {exc}') from exc
+        events.append(event)
+    events.sort(key=lambda event: (event['sim_time_s'], event.get('seq', 0)))
+    if len(events) > EVENT_LIMIT:
+        warnings.append(f'Kayıtta {len(events)} olay var; ilk {EVENT_LIMIT} tanesi gösteriliyor.')
+        events = events[:EVENT_LIMIT]
+    return events, warnings
+
+
+def attach_outcomes(entities, events):
+    """Mark each munition with the recorded outcome. Without an event log the
+    munition keeps its measurement-only state; an outcome is never guessed."""
+    outcomes = {}
+    for event in events:
+        if event['type'] in ('missile_hit', 'missile_lost') and event.get('ammo') is not None:
+            outcomes[(event.get('agent'), str(event['ammo']))] = event
+    for entry in entities:
+        for munition in entry.get('inventory', []) + entry.get('unassigned_inventory', []):
+            event = outcomes.get((munition.get('carrier_key'), munition.get('ammo_id')))
+            munition['outcome'] = None if event is None else event['type'].split('_')[1]
+            munition['outcome_time_s'] = None if event is None else event['sim_time_s']
+
+
+def session_info(manifest):
+    """What the recording says about itself, in the shape the session panel shows.
+    Nothing is filled in when the recording stays silent about a field."""
+    if not isinstance(manifest, dict):
+        return None
+    simulation = manifest.get('simulation') or {}
+    coordinates = manifest.get('coordinates') or {}
+    scenario = manifest.get('scenario') or {}
+    world = scenario.get('world') if isinstance(scenario, dict) else None
+    agents = scenario.get('agents') if isinstance(scenario, dict) else None
+    return dict(
+        schema_version=manifest.get('schema_version'),
+        created_at=manifest.get('created_at'),
+        snapshots=manifest.get('snapshots'),
+        events=manifest.get('events'),
+        conversions=manifest.get('conversions'),
+        latitude_reference=coordinates.get('latitude_reference'),
+        altitude_reference=coordinates.get('altitude_reference'),
+        coordinate_note=coordinates.get('note'),
+        physics_dt_s=simulation.get('physics_dt_s'),
+        aircraft_sim_time_step=simulation.get('aircraft_sim_time_step'),
+        aircraft_control_time_step=simulation.get('aircraft_control_time_step'),
+        duration_s=(world or {}).get('duration_s'),
+        sleep_s=(world or {}).get('sleep_s'),
+        agent_count=len(agents) if isinstance(agents, dict) else None,
+        columns=manifest.get('columns') if isinstance(manifest.get('columns'), dict) else None,
+    )
+
+
 def read_recording(directory):
     directory = Path(directory)
     paths = [path for path in sorted(directory.glob('*.csv')) if path.is_file()]
-    return assemble([read_object(path) for path in paths], [metadata(path) for path in paths])
+    samples, entities = assemble([read_object(path) for path in paths],
+                                 [metadata(path) for path in paths])
+    manifest, warnings = read_manifest(directory)
+    events, event_warnings = read_events(directory)
+    attach_outcomes(entities, events)
+    if entities:
+        entities[0]['manifest'] = manifest
+        entities[0]['events'] = events
+        entities[0]['source_warnings'] = warnings + event_warnings
+    return samples, entities
 
 
 def assemble(objects, manifest=()):
@@ -157,11 +296,18 @@ def assemble(objects, manifest=()):
     for info in manifest:
         if info['kind'] != 'missile':
             continue
-        # Native filenames encode team, but no launcher ID. Never guess among teammates.
-        candidates = [entry for entry in aircraft if info['color'] and entry['color'].casefold() == info['color'].casefold()]
-        owner = candidates[0]['id'] if len(candidates) == 1 else None
+        owner, source = None, None
+        if info.get('carrier_key'):
+            stated = [entry for entry in aircraft if entry.get('agent_key') == info['carrier_key']]
+            if len(stated) == 1:
+                owner, source = stated[0]['id'], 'filename'
+        if owner is None:
+            # Built-in filenames encode team, but no launcher ID. Never guess among teammates.
+            candidates = [entry for entry in aircraft if info['color'] and entry['color'].casefold() == info['color'].casefold()]
+            if len(candidates) == 1:
+                owner, source = candidates[0]['id'], 'team'
         track = tracks.get(info['id'])
-        munition = dict(info, owner_id=owner, ownership_source='team' if owner else None,
+        munition = dict(info, owner_id=owner, ownership_source=source,
                         record_start_s=track[0]['record_start_s'] if track else None,
                         record_end_s=track[-1]['record_end_s'] if track else None,
                         has_track=bool(track))
@@ -178,10 +324,9 @@ def assemble(objects, manifest=()):
 
 
 def recording_warnings(entities):
-    warnings = []
-    aircraft = [e for e in entities if e['kind'] == 'aircraft']
-    if any(sum(e['team'] == team for e in aircraft) > 1 for team in ('blue', 'red')):
-        warnings.append('Aynı takımda birden fazla uçak var. BVRGym logger’ı aynı numaralı füze dosyalarını ezebilir; mühimmat sahipliği ve toplamı doğrulanamıyor.')
+    warnings = list(entities[0].get('source_warnings', []) if entities else [])
+    if entities and entities[0].get('unassigned_inventory'):
+        warnings.append('Bazı mühimmat dosyalarının taşıyıcısı kayıtta belirtilmemiş. BVRGym logger’ı aynı numaralı füze dosyalarını ezebilir; sahiplik ve toplam doğrulanamıyor.')
     if any(e.get('visual_model') == 'generic' for e in entities):
         warnings.append('Bazı modellerin geometrisi bulunmuyor; sahnede genel nesne simgesiyle gösteriliyor.')
     if any(e.get('heading_deg_known') is False for e in entities):
@@ -252,24 +397,6 @@ class RecordingStore:
             with self.lock:
                 self.phase, self.error = 'error', str(exc)
 
-    def browse(self, path=None):
-        directory = Path(path).expanduser().resolve() if path else self.catalog_root
-        if path and not directory.is_dir():
-            raise ValueError('Dizin bulunamadı')
-        while not directory.exists() and directory.parent != directory:
-            directory = directory.parent
-        if not directory.is_dir():
-            raise ValueError('Dizin bulunamadı')
-        children = []
-        for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
-            try:
-                if child.is_dir():
-                    children.append(dict(name=child.name, path=str(child)))
-            except OSError:
-                continue
-        return dict(path=str(directory), parent=str(directory.parent) if directory.parent != directory else None,
-                    folders=children)
-
     def change_directory(self, path):
         if not isinstance(path, str) or not path.strip():
             raise ValueError('Dizin yolu gerekli')
@@ -339,5 +466,7 @@ class RecordingStore:
                         objects=len(self.entities),
                         inventory={entry['id']: entry.get('inventory', []) for entry in self.entities if entry['kind'] == 'aircraft'},
                         unassigned_inventory=self.entities[0].get('unassigned_inventory', []) if self.entities else [],
+                        events=self.entities[0].get('events', []) if self.entities else [],
+                        manifest=session_info(self.entities[0].get('manifest')) if self.entities else None,
                         bounds=dict(first=self.samples[0]['sim_time_s'], last=self.samples[-1]['sim_time_s'])
                         if self.samples else None)

@@ -2,7 +2,7 @@
 const el=id=>document.getElementById(id);
 const storageKey='bvrgym-recording-directory';
 export function setupRecordingMenu({open}){
-  let busy=false,browsed=null,browseVersion=0;
+  let busy=false;
   const error=message=>{el('record-error').hidden=!message;el('record-error').textContent=message;};
   async function api(path,payload){
     const response=await fetch(path,payload?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}:{});
@@ -30,38 +30,16 @@ export function setupRecordingMenu({open}){
       filter();
     }catch(exc){error(exc.message);}
   }
-  async function browse(path){
-    const version=++browseVersion;
-    error('');el('directory-browser').hidden=false;el('use-directory').disabled=true;
-    el('directory-path').disabled=el('directory-go').disabled=true;
-    try{
-      const result=await api('/api/directories'+(path?'?path='+encodeURIComponent(path):''));
-      if(version!==browseVersion)return;
-      browsed=result;el('directory-path').value=result.path;el('directory-up').disabled=!result.parent;
-      const list=el('directory-folders');list.replaceChildren();
-      for(const folder of result.folders){
-        const button=document.createElement('button');button.className='directory-item';
-        button.textContent='▸ '+folder.name;button.title=folder.path;button.onclick=()=>browse(folder.path);list.append(button);
-      }
-      if(!result.folders.length)list.textContent='Alt klasör yok.';
-      el('use-directory').disabled=false;
-    }catch(exc){if(version===browseVersion)error(exc.message);}
-    finally{if(version===browseVersion)el('directory-path').disabled=el('directory-go').disabled=false;}
-  }
   function filter(){const query=el('record-search').value.toLocaleLowerCase('tr').trim();for(const item of el('recording-library').querySelectorAll('.library-item'))item.hidden=Boolean(query&&!item.textContent.toLocaleLowerCase('tr').includes(query));}
-  el('change-directory').onclick=()=>browse();
-  el('directory-up').onclick=()=>browsed?.parent&&browse(browsed.parent);
-  el('directory-go').onclick=()=>browse(el('directory-path').value.trim());
-  el('directory-path').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();browse(event.target.value.trim());}};
-  el('directory-cancel').onclick=()=>{++browseVersion;el('directory-browser').hidden=true;error('');};
-  el('use-directory').onclick=async()=>{
-    if(busy||!browsed)return;busy=true;el('use-directory').disabled=true;
+  el('change-directory').onclick=async()=>{
+    if(busy)return;busy=true;const button=el('change-directory');button.disabled=true;error('');
     try{
-      await api('/api/directory',{path:browsed.path});
-      try{localStorage.setItem(storageKey,browsed.path);}catch{}
-      el('record-source').textContent=browsed.path;el('directory-browser').hidden=true;
-      el('record-search').value='';await refresh();
-    }catch(exc){error(exc.message);}finally{busy=false;el('use-directory').disabled=false;}
+      const result=await api('/api/choose-directory',{});
+      if(!result.cancelled){
+        try{localStorage.setItem(storageKey,result.path);}catch{}
+        el('record-source').textContent=result.path;el('record-search').value='';await refresh();
+      }
+    }catch(exc){error(exc.message);}finally{busy=false;button.disabled=false;}
   };
   el('close-record-panel').onclick=()=>el('record-options').open=false;
   el('refresh-library').onclick=refresh;el('record-search').oninput=filter;

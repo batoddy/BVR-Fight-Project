@@ -1,7 +1,7 @@
 # Süre: simülasyon saniyesi; sleep: her dış döngü sonunda gerçek saniye.
 world:
   duration_s: 180
-  sleep_s: 0.08
+  sleep_s: 0.0  # 0 = beklemeden; 0.08 = yaklaşık gerçek zaman.
   sim_time_step: 1  # BVRGym adım tekrar sayısı; fizik dt değeri değil.
 
 # blue/red: Python'da ajanlara erişmek için kullanılan benzersiz anahtarlar.

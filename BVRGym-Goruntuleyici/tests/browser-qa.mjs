@@ -48,11 +48,14 @@ try{
   async function chooseDirectory(directory){
     directory=await fs.realpath(directory);
     if(!await page.locator('#record-panel').isVisible())await page.locator('#open-recording').click();
-    await page.locator('#change-directory').click();await page.waitForFunction(()=>!document.querySelector('#directory-path').disabled);await page.locator('#directory-path').fill(path.resolve(directory));await page.locator('#directory-go').click();
-    await page.waitForFunction(directory=>document.querySelector('#directory-path').value===directory&&!document.querySelector('#use-directory').disabled,path.resolve(directory));
-    await page.locator('#use-directory').click();
-    await page.waitForFunction(directory=>[...document.querySelectorAll('#recording-library .library-item')].some(item=>item.dataset.path===directory),path.resolve(directory));
+    await page.route('**/api/choose-directory',async route=>{
+      await page.request.post('http://127.0.0.1:'+port+'/api/directory',{data:{path:directory}});
+      await route.fulfill({json:{cancelled:false,path:directory}});
+    });
+    await page.locator('#change-directory').click();
+    await page.waitForFunction(directory=>[...document.querySelectorAll('#recording-library .library-item')].some(item=>item.dataset.path===directory),directory);
     await page.locator('#recording-library .library-item').filter({hasText:path.basename(directory)}).first().click();
+    await page.unroute('**/api/choose-directory');
   }
   await chooseDirectory(options.native);
   await page.waitForFunction(async()=>{const {buffer}=await import('/app.js');return buffer.complete&&buffer.packet.objects===5;});
@@ -449,7 +452,8 @@ try{
   await chooseDirectory(recording);
   await page.waitForFunction(()=>Number(document.querySelector('#timeline').max)<2);
   await page.locator('#open-recording').click();
-  assert.equal(await page.locator('#directory-path').inputValue(),await fs.realpath(recording));
+  assert.equal(await page.locator('#directory-browser').count(),0);
+  assert.equal(await page.locator('#change-directory').textContent(),'Kayıt klasörü değiştir');
   assert.equal(await page.locator('#file-input').count(),0);
   assert.equal(await page.locator('#recent-recordings').count(),0);
   await page.locator('#close-record-panel').click();

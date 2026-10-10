@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "type": "aircraft_state",
+  "session_id": "run-001",
+  "aircraft_id": "red",
+  "packet_no": 42,
+  "tick": 42,
+  "sim_time_s": 3.5,
+  "aircraft": {
+    "id": "red",
+    "name": "Bogey",
+    "team": "Red",
+    "lat_deg": 59.25,
+    "lon_deg": 18.0,
+    "alt_msl_m": 3000,
+    "yaw_deg": 180,
+    "pitch_deg": 0,
+    "roll_deg": 0,
+    "tas_mps": 300,
+    "velocity_ned_mps": [
+      -300,
+      0,
+      0
+    ],
+    "mach": 0.91,
+    "health": 1
+  },
+  "missiles": [
+    {
+      "id": "red/missile/0",
+      "owner_id": "red",
+      "target_id": null,
+      "state": "ready",
+      "reserved": false,
+      "outcome": null,
+      "flight_time_s": null,
+      "kinematics": null
+    },
+    {
+      "id": "red/missile/1",
+      "owner_id": "red",
+      "target_id": null,
+      "state": "ready",
+      "reserved": false,
+      "outcome": null,
+      "flight_time_s": null,
+      "kinematics": null
+    }
+  ]
+}

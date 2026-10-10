@@ -170,7 +170,6 @@ class RecordingChecks(unittest.TestCase):
         store.change_directory(str(library))
         self.assertEqual(store.session, session)
         self.assertEqual(len(store.catalog()), 1)
-        self.assertEqual(store.browse(str(library))['folders'][0]['name'], 'flight1')
         with self.assertRaises(ValueError):
             store.change_directory(str(library / 'missing'))
         store.open_catalog(store.catalog()[0]['id'])

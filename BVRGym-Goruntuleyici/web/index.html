@@ -23,12 +23,7 @@
         <summary id="open-recording" class="primary">Kayıt aç</summary>
         <section id="record-panel" class="popover recording-popover" aria-labelledby="record-panel-title">
           <div class="menu-heading"><h2 id="record-panel-title">Uçuş kaydı</h2><button id="close-record-panel" aria-label="Kayıt menüsünü kapat">×</button></div>
-          <div class="file-actions"><button id="change-directory" class="primary">Dizin değiştir</button></div>
-          <div id="directory-browser" hidden>
-            <div class="directory-navigation"><button id="directory-up" aria-label="Üst dizine çık">↑</button><input id="directory-path" aria-label="Dizin yolu" placeholder="Dizin yolu"><button id="directory-go">Git</button></div>
-            <div id="directory-folders" class="directory-folders"></div>
-            <div class="directory-actions"><button id="directory-cancel">Vazgeç</button><button id="use-directory" class="primary">Bu dizini kullan</button></div>
-          </div>
+          <div class="file-actions"><button id="change-directory" class="primary">Kayıt klasörü değiştir</button></div>
           <div class="record-source"><span>Kayıt dizini</span><strong id="record-source">Dizin yükleniyor</strong></div>
           <p class="data-note">Alt klasörler ayrı kayıtlar olarak listelenir. Simülasyon kaydı yazmayı bitirdikten sonra listeden aç.</p>
           <p id="record-error" class="error" role="alert" hidden></p>
@@ -47,6 +42,7 @@
       <label><input id="trail" type="checkbox" checked>Uçuş izi</label>
       <label for="trail-duration">İz süresi<select id="trail-duration"><option value="60">1 dakika</option><option value="300">5 dakika</option><option value="-1">Tüm kayıt</option></select></label>
       <label><input id="show-history" type="checkbox" checked>Kaydı biten füzelerin izini koru</label>
+      <label title="Mühimmat sonucunu ve zaman çubuğundaki olay işaretlerini gösterir; kayıtta olay yoksa etkisi olmaz"><input id="missile-outcomes" type="checkbox">Füze vuruş bilgisi</label>
       <label><input id="grid" type="checkbox" checked>Yer referansı</label>
       <label><input id="altitude-guides" type="checkbox" checked>İrtifa dolgusu ve çizgiler</label>
       <label><input id="heading-guides" type="checkbox" checked>Burun yönü · kesikli 3D çizgi</label>
@@ -102,7 +98,7 @@
             <button id="play-pause" title="Oynat / duraklat · Space" aria-keyshortcuts="Space" aria-label="Duraklat" aria-pressed="false" disabled>Ⅱ</button>
             <button id="record-end" title="Sona git" aria-label="Sona git" disabled>↦</button>
             <label class="sr-only" for="seek-time">Gösterim zamanı; düzenleyerek belirli zamana git</label><input id="seek-time" value="00:00.0" title="Zamana git: saniye veya dakika:saniye" aria-label="Zamana git" disabled>
-            <input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıt zamanı" disabled>
+            <div class="timeline-track"><input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıt zamanı" disabled><div id="timeline-events" class="timeline-events"></div></div>
             <output id="timeline-last">—</output>
           </div>
           <div class="speed-control"><label for="playback-speed">Hız <output id="playback-rate">1×</output></label><input id="playback-speed" type="range" min="0" max="7" step="1" value="2" aria-label="Oynatma hızı" aria-valuetext="1×" title="↑ Hızlandır · ↓ Yavaşlat"><div class="speed-stops"><button data-rate="0.25" aria-pressed="false">0,25×</button><button data-rate="0.5" aria-pressed="false">0,5×</button><button data-rate="1" aria-pressed="true">1×</button><button data-rate="2">2×</button><button data-rate="3">3×</button><button data-rate="4">4×</button><button data-rate="5">5×</button><button data-rate="10">10×</button></div></div>

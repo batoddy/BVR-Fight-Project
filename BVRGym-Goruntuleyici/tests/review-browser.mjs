@@ -25,15 +25,13 @@ try{
   browser=await chromium.launch({headless:true,executablePath:args.browser,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   const page=await browser.newPage({viewport:{width:1500,height:950}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+port);
-  await page.locator('#open-recording').click();await page.locator('#change-directory').click();
-  await page.waitForFunction(()=>!document.querySelector('#directory-path').disabled);
-  await page.locator('#directory-path').fill(await fs.realpath(temporary));await page.locator('#directory-go').click();
-  await page.getByRole('button',{name:'▸ flights',exact:true}).click();
-  await page.getByRole('button',{name:'▸ custom',exact:true}).waitFor();
-  await page.locator('#directory-up').click();await page.getByRole('button',{name:'▸ flights',exact:true}).waitFor();
-  await page.getByRole('button',{name:'▸ flights',exact:true}).click();await page.getByRole('button',{name:'▸ custom',exact:true}).waitFor();
-  if(args.screenshot)await page.screenshot({path:args.screenshot.replace('.png','-directory.png')});
-  await page.locator('#use-directory').click();await page.locator('#recording-library .library-item').filter({hasText:'custom'}).click();
+  await page.locator('#open-recording').click();
+  await page.route('**/api/choose-directory',async route=>{
+    await page.request.post('http://127.0.0.1:'+port+'/api/directory',{data:{path:library}});
+    await route.fulfill({json:{cancelled:false,path:await fs.realpath(library)}});
+  });
+  await page.locator('#change-directory').click();
+  await page.locator('#recording-library .library-item').filter({hasText:'custom'}).click();
   await page.waitForFunction(async()=>{const {buffer}=await import('/app.js');return buffer.complete&&buffer.packet.objects===4;}).catch(async error=>{console.log(await page.evaluate(async()=>{const {buffer}=await import('/app.js');return {packet:buffer.packet,status:document.querySelector('#status').textContent,message:document.querySelector('#scene-message').textContent};}));throw error;});
   await page.waitForFunction(()=>document.querySelector('#timeline').max==='20'&&!document.querySelector('#timeline').disabled);
   await page.locator('#seek-time').fill('10');await page.locator('#seek-time').press('Enter');
@@ -56,7 +54,7 @@ try{
   assert.equal(await page.locator('#heading').textContent(),'—');
   if(args.screenshot)await page.screenshot({path:args.screenshot});
   await page.locator('#view-2d').click();await page.waitForTimeout(150);assert.equal(await page.locator('#scene2d').isVisible(),true);
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,folderNavigation:true,staleAircraft:true,neutralTeam:true,genericModel:true,missingAttitude:true,errors}));
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,directorySelection:true,staleAircraft:true,neutralTeam:true,genericModel:true,missingAttitude:true,errors}));
 }finally{
   await browser?.close();child.kill();await new Promise(resolve=>child.exitCode!==null?resolve():child.once('exit',resolve));
   const resolved=path.resolve(temporary);if(!resolved.startsWith(path.resolve(os.tmpdir())+path.sep)||!path.basename(resolved).startsWith('bvrgym-review-'))throw new Error('Unsafe cleanup');

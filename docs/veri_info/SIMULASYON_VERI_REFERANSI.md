@@ -54,7 +54,7 @@ Tabloda kısaltılmış propertyler aynı satırın başındaki klasör önekini
 
 ## 4. Python'da doğrudan okuma
 
-Mevcut `agent_ucus.py` içindeki `blue` ve `red` nesneleri için örnek:
+Mevcut `src/bvrgym_sim.py` içindeki `blue` ve `red` nesneleri için örnek:
 
 ```python
 def read_aircraft(agent):
@@ -170,7 +170,7 @@ Aynı programda `apply_action([heading_deg, altitude_m, throttle])`, `set_target
 
 ## 8. Mevcut kayıt ve model sınırları
 
-Şimdiki `src/agent_ucus.py` şablonunda `data_output_xml=None`; native ağ çıktısı kapalıdır. `TacviewLogger` sütunları: `Time, Longitude, Latitude, Altitude, Roll (deg), Pitch (deg), Yaw (deg)`. Zaman s, konum derece, irtifa m, açılar derecedir. Dosya adı ajan configinden türetilir: `uçak_adı (ajan_adı) [takım].csv`; füze kayıtlarında `AIM-120 AMRAAM (AIM{anahtar}) [takım].csv` kalıbı kullanılır. Dosya etiketini gerçek XML model adıyla karıştırma.
+Şimdiki `src/bvrgym_sim.py` akışında `data_output_xml=None`; native ağ çıktısı kapalıdır. Aşağıdaki sütunlar BVRGym'in yerleşik logger'ına aittir; bizim `src/recorder.py` kaydımız bunlara BVR alanları, uygulanan komut, `events.jsonl` ve `manifest.json` ekler. `TacviewLogger` sütunları: `Time, Longitude, Latitude, Altitude, Roll (deg), Pitch (deg), Yaw (deg)`. Zaman s, konum derece, irtifa m, açılar derecedir. Dosya adı ajan configinden türetilir: `uçak_adı (ajan_adı) [takım].csv`; füze kayıtlarında `AIM-120 AMRAAM (AIM{anahtar}) [takım].csv` kalıbı kullanılır. Dosya etiketini gerçek XML model adıyla karıştırma.
 
 Logger kayıtları `save_logs()` çağrıldığında yazar; mevcut şablonda uçuş sonunda veya Ctrl+C sonrasında. Bu sebeple mevcut CSV viewer, canlı dış karar programının telemetri kanalı yerine geçmez. Viewer'ın `/api/state` JSON'u görselleştiriciye aittir; tam fizik katalog çıktısı değildir. Logger seçilen kayıt klasörünü temizleyerek yeniden yazdığı için sürekli ara kayıtta davranışı ayrıca düzenlemek gerekir. Aynı takımda aynı füze anahtarlarının dosya adları çakışabilir.
 
@@ -185,7 +185,7 @@ Mevcut kaynağa özgü ayrıntılar:
 
 ## 9. Kaynaklar
 
-Yerel kaynaklar: `Workspace/BVRGym/jsb_gym/simObjects/FDMObject.py`, `aircraft.py`, `missiles.py`, `jsb_gym/agents/agents.py`, `jsb_gym/utils/geospatial.py`, `jsb_gym/utils/loggers.py`; mevcut uçuş: `Workspace/src/agent_ucus.py`; viewer: proje kökündeki `BVRGym-Goruntuleyici`.
+Yerel kaynaklar: `Workspace/BVRGym/jsb_gym/simObjects/FDMObject.py`, `aircraft.py`, `missiles.py`, `jsb_gym/agents/agents.py`, `jsb_gym/utils/geospatial.py`, `jsb_gym/utils/loggers.py`; mevcut uçuş: `Workspace/src/bvrgym_sim.py` ve `Workspace/src/recorder.py`; viewer: proje kökündeki `BVRGym-Goruntuleyici`.
 
 Resmî belgeler ve uygulama kaynakları:
 

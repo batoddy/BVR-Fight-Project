@@ -155,7 +155,7 @@ Kendi canlı yayınımız Tacview canlı protokolü değildir. Tacview’de canl
 
 ## 9. Mevcut durum ve uygulamada çözülecek sınırlar
 
-Bugün `src/bvrgym_sim_template_yaml_config.py` scenario.yaml dosyasından uçak oluşturup yerel Python komutlarıyla uçuruyor; dış komut alıcısı yok. Mevcut görüntüleyici CSV replay yapıyor; canlı köprü henüz yok. Bu belgedeki yeni paketler, XML senaryo yükleyicisi ve protokoller henüz uygulanmadı. Ayrıntılı kaynak/alan listesi [simülasyon veri referansında](../veri_info/SIMULASYON_VERI_REFERANSI.md).
+Bugün `src/bvrgym_sim.py` scenario.yaml dosyasından uçak oluşturup yerel Python komutlarıyla uçuruyor; dış komut alıcısı yok. `src/recorder.py` BVR alanlarını, uygulanan komutu, olayları ve bir manifesti kaydediyor. Mevcut görüntüleyici CSV replay yapıyor; canlı köprü henüz yok. Bu belgedeki yeni paketler, XML senaryo yükleyicisi ve protokoller henüz uygulanmadı. Ayrıntılı kaynak/alan listesi [simülasyon veri referansında](../veri_info/SIMULASYON_VERI_REFERANSI.md).
 
 Mevcut BVRGym davranışları: heading/irtifa PID ile takip edilir, gaz komuttan gelir; hedef hız kontrolü hazır değildir. Füze güdümü içeride çalışır. `BaseBVRAgent` aynı füze profilinden mühimmat üretir ve kendi aktif füzesi varken yeni atışı engeller. Bunlar XML’e alan ekleyerek değişmez.
 

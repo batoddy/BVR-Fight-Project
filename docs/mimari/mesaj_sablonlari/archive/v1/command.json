@@ -1,0 +1,23 @@
+{
+  "command_id": 103,
+  "actions": {
+    "blue": {
+      "heading_deg": 90,
+      "altitude_m": 8000,
+      "throttle": 0.49
+    },
+    "red": {
+      "heading_deg": 270,
+      "altitude_m": 7000,
+      "throttle": 0.49
+    }
+  },
+  "events": [
+    {
+      "event_id": 7,
+      "type": "fire",
+      "shooter_id": "blue",
+      "target_id": "red"
+    }
+  ]
+}

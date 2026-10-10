@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import csv
 from pathlib import Path
+from native_picker import choose_directory
 from urllib.parse import urlsplit, parse_qs
 
 WEB = Path(__file__).parent / "web"
@@ -21,7 +22,7 @@ FILES['/units.js'] = ('units.js', 'text/javascript; charset=utf-8')
 FILES['/inventory.js'] = ('inventory.js', 'text/javascript; charset=utf-8')
 
 
-def make_server(store, port=8765):
+def make_server(store, port=8765, directory_picker=choose_directory):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass
@@ -39,13 +40,6 @@ def make_server(store, port=8765):
             request = urlsplit(self.path)
             if request.path == '/api/recordings':
                 self.send_data(200, json.dumps(store.catalog(), ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
-            elif request.path == '/api/directories':
-                try:
-                    path = parse_qs(request.query).get('path', [None])[0]
-                    result = store.browse(path)
-                    self.send_data(200, json.dumps(result, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
-                except (OSError, ValueError) as exc:
-                    self.send_data(400, json.dumps({'error': str(exc)}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
             elif request.path == "/api/state":
                 try:
                     after = int(parse_qs(request.query).get("after", ["0"])[0])
@@ -66,7 +60,7 @@ def make_server(store, port=8765):
 
         def do_POST(self):
             request = urlsplit(self.path)
-            if request.path not in ('/api/directory', '/api/open'):
+            if request.path not in ('/api/directory', '/api/choose-directory', '/api/open'):
                 self.send_error(405, 'No flight-control endpoints')
                 return
             origin = self.headers.get('Origin')
@@ -84,7 +78,13 @@ def make_server(store, port=8765):
                 payload = json.loads(self.rfile.read(length).decode('utf-8'))
                 if not isinstance(payload, dict):
                     raise ValueError('Geçersiz istek')
-                if request.path == '/api/directory':
+                if request.path == '/api/choose-directory':
+                    selected = directory_picker(store.catalog_root)
+                    if selected:
+                        store.change_directory(selected)
+                    self.send_data(200, json.dumps({'cancelled': not bool(selected), 'path': str(store.catalog_root)}, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
+                    return
+                elif request.path == '/api/directory':
                     store.change_directory(payload.get('path'))
                 else:
                     store.open_catalog(payload.get('id'))
