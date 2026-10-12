@@ -1,3 +1,7 @@
+> **12 Ekim C++ bağlantısı uygulandı:** `src/otopilot` içinde Winsock TCP istemcisi ve ayrı controller bulunur; MinGW ile derlenir. `src/sim` Python sunucusudur, `src/msgs` JSON şablonlarıdır. İlk sürüm YAML hedeflerini korur. Aşağıdaki eski planların uygulanmamış geniş çekirdek/pybind11 bölümleri mevcut istemciyi tarif etmez. Güncel kaynak/kullanım: [otopilot README](../../src/otopilot/README.md).
+
+> **12 Ekim 2026 prototip notu:** Mevcut Python tarafında YAML senaryo, `Simulation` sınıfı, tek bağlantıda JSON/TCP ölçüm–komut çevrimi ve ayrı recorder uygulandı. `sim_main.py` parçaları birleştirir; C++ komutu gelmeden fizik ilerlemez. C++ istemci, aşağıdaki geniş çekirdek paketleri, senaryo XML yükleyicisi ve canlı viewer adaptörü henüz uygulanmadı. Güncel kullanım ve sınırlar: [src/README.md](../../src/sim/README.md). Aşağıdaki plan gelecekteki çekirdeğin hedeflerini anlatır.
+
 # Angajman sistemi: mimari ve uygulama planı
 
 **9 Ekim 2026 · v2 · Uygulama öncesi son plan**

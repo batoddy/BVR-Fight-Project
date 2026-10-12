@@ -1,12 +1,12 @@
 """BVR için gereken ham JSBSim/BVRGym verilerini hesap yapmadan kaydet.
 
 Üç dosya üretilir:
-  <nesne>.csv    Tacview sütun adları + Tacview karşılığı olmayan ham BVR alanları.
+  <nesne>.csv    Konum/yönelim + Tacview karşılığı olmayan ham BVR alanları.
   events.jsonl   Hedef ataması, fırlatma, isabet, kayıp, sağlık değişimi.
   manifest.json  Senaryo, birimler, koordinat referansı, sütun kaynakları, sürümler.
 
 Birim dönüşümü, türetme ve hesaplama yapılmaz. Alan modelde yoksa sütun açılmaz;
-sıfır değer uydurulmaz.
+sıfır değer uydurulmaz. Sütun adları boşluk içermez, birimi adında taşır.
 """
 import csv
 import json
@@ -14,45 +14,52 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
-# Tacview'in tanıdığı sütun adları. Değerler ham propertyden gelir; dönüşüm yok.
-# Latitude jeosantriktir: BVRGym spawn'ı ic/lat-gc-deg'e yazar ve JSBSim'in
-# radyal h-sl-meters irtifası bu referansla tutarlıdır. Jeodezik enlem ayrı sütunda.
-TACVIEW_COLUMNS = (
-    ("Time", "simulation/sim-time-sec", "s"),
-    ("Longitude", "position/long-gc-deg", "deg"),
-    ("Latitude", "position/lat-gc-deg", "deg"),
-    ("Altitude", "position/h-sl-meters", "m"),
-    ("Roll (deg)", "attitude/phi-deg", "deg"),
-    ("Pitch (deg)", "attitude/theta-deg", "deg"),
-    ("Yaw (deg)", "attitude/psi-deg", "deg"),
-    ("Mach", "velocities/mach", "-"),
+# Zaman sütunu modelden okunmaz; record() çağrısına verilen taşıyıcı saatidir.
+TIME_COLUMN = ("time_s", "s")
+
+# Her nesnede bulunan konum ve yönelim. Enlem WGS84 jeodeziktir: JSBSim'in
+# position/lat-geod-deg'i, position/h-sl-meters ise elipsoid yüksekliğidir
+# (geod-alt ile farkı ölçüldü: 1,3 cm'den küçük). Boylamda jeosantrik ile
+# jeodezik aynı değerdir, dönüşüm gerekmez.
+POSE_COLUMNS = (
+    ("lat_deg", "position/lat-geod-deg", "deg"),
+    ("lon_deg", "position/long-gc-deg", "deg"),
+    ("alt_m", "position/h-sl-meters", "m"),
+    ("roll_deg", "attitude/phi-deg", "deg"),
+    ("pitch_deg", "attitude/theta-deg", "deg"),
+    ("yaw_deg", "attitude/psi-deg", "deg"),
+    ("mach", "velocities/mach", "-"),
 )
 
-# BVR kararı ve değerlendirmesi için gereken, Tacview karşılığı olmayan ham alanlar.
+# BVR kararı ve değerlendirmesi için gereken ek ham alanlar. Modelde okunabilir
+# olmayan atlanır. lat_gc_deg BVRGym'in iç referansıdır: spawn ic/lat-gc-deg'e
+# yazıldığı için scenario.yaml'daki enlemle eşleşen sütun budur, lat_deg değil.
 # Kuvvet/moment toplamları, atalet, atmosfer, rüzgâr, yer teması, kontrol yüzeyi
 # konumları, gövde hızları, açısal hızlar ve alpha/beta bilinçli olarak dışarıda:
 # ne sahnede çizilir ne BVR kararına girer. Gerekirse buraya eklenir.
-BVR_FIELDS = (
-    ("position/lat-geod-deg", "deg"),
-    ("velocities/vt-fps", "ft/s"),
-    ("velocities/v-north-fps", "ft/s"),
-    ("velocities/v-east-fps", "ft/s"),
-    ("velocities/v-down-fps", "ft/s"),
-    ("forces/load-factor", "-"),
-    ("propulsion/total-fuel-lbs", "lb"),
-    ("fcs/throttle-cmd-norm", "-"),
+EXTRA_COLUMNS = (
+    ("lat_gc_deg", "position/lat-gc-deg", "deg"),
+    ("tas_fps", "velocities/vt-fps", "ft/s"),
+    ("vel_north_fps", "velocities/v-north-fps", "ft/s"),
+    ("vel_east_fps", "velocities/v-east-fps", "ft/s"),
+    ("vel_down_fps", "velocities/v-down-fps", "ft/s"),
+    ("load_factor_g", "forces/load-factor", "-"),
+    ("fuel_lb", "propulsion/total-fuel-lbs", "lb"),
 )
 
-# Füzenin kendi saati. Time sütunu taşıyıcının saatidir; bu füzenin kendisidir.
-MISSILE_FIELDS = (("simulation/sim-time-sec", "s"),)
+# Füzenin kendi saati. time_s taşıyıcının saatidir; bu füzenin kendisidir.
+MISSILE_COLUMNS = (("missile_time_s", "simulation/sim-time-sec", "s"),)
 
-# Dışarıdan verilen uçuş hedefi. Ölçüm değil, bizim komutumuz; olgu olarak yazılır.
+# Dışarıdan verilen uçuş hedefi. Ölçüm değil, bizim komutumuz; olgu olarak
+# yazılır. JSBSim'in fcs/throttle-cmd-norm'u ayrı sütun değildir: uçakta
+# set_throttle() doğrudan cmd_throttle_norm'u yazar, füzede autopilot sabit
+# 0,7 yazar — iki durumda da bilgi taşımaz.
 COMMAND_COLUMNS = (
-    ("command/heading-deg", "deg"),
-    ("command/altitude-m", "m"),
-    ("command/throttle-norm", "-"),
+    ("cmd_heading_deg", "deg"),
+    ("cmd_alt_m", "m"),
+    ("cmd_throttle_norm", "-"),
 )
 
 MISSILE_MODEL = "AIM-120 AMRAAM"
@@ -102,26 +109,34 @@ class Recorder:
             file.flush()
         return self.writers[filename]
 
-    def _readable(self, prefix, model, fields):
-        """Modelde gerçekten okunabilen alanları bir kez belirle."""
+    def _readable(self, prefix, model, extra):
+        """Modelde gerçekten okunabilen (sütun, property) çiftlerini bir kez belirle."""
         if prefix not in self.properties:
             readable = set()
             for entry in model.fdm.get_property_catalog():
                 name, permission = entry.rsplit(" (", 1)
                 if "R" in permission:
                     readable.add(name)
-            self.properties[prefix] = [name for name, _ in fields if name in readable]
+            self.properties[prefix] = [(column, name) for column, name, _ in extra
+                                       if name in readable]
         return self.properties[prefix]
 
-    def _row(self, prefix, model, fields, time_s, command=None):
-        values = {}
-        for column, name, _ in TACVIEW_COLUMNS:
-            values[column] = time_s if column == "Time" else model.fdm[name]
-        for name in self._readable(prefix, model, fields):
-            values[name] = model.fdm[name]
+    def _columns(self, prefix, model, extra, command=False):
+        columns = [TIME_COLUMN[0]]
+        columns += [column for column, _, _ in POSE_COLUMNS]
+        columns += [column for column, _ in self._readable(prefix, model, extra)]
+        if command:
+            columns += [column for column, _ in COMMAND_COLUMNS]
+        return columns
+
+    def _row(self, prefix, model, extra, time_s, command=None):
+        values = {TIME_COLUMN[0]: time_s}
+        for column, name, _ in POSE_COLUMNS:
+            values[column] = model.fdm[name]
+        for column, name in self._readable(prefix, model, extra):
+            values[column] = model.fdm[name]
         if command is not None:
-            for column, _ in COMMAND_COLUMNS:
-                values[column] = command[column]
+            values.update(command)
         return values
 
     # --------------------------------------------------------------- olaylar
@@ -178,27 +193,23 @@ class Recorder:
 
             command = None
             if commands is not None and key in commands:
-                heading, altitude, throttle = commands[key]
-                command = {"command/heading-deg": heading,
-                           "command/altitude-m": altitude,
-                           "command/throttle-norm": throttle}
+                command = dict(zip((column for column, _ in COMMAND_COLUMNS),
+                                   commands[key]))
             prefix = f"{key}__aircraft"
             filename = f"{AIRCRAFT_MODEL} ({name}--{key}) [{team}].csv"
-            columns = ([column for column, _, _ in TACVIEW_COLUMNS]
-                       + self._readable(prefix, agent.simObj, BVR_FIELDS)
-                       + [column for column, _ in COMMAND_COLUMNS])
+            columns = self._columns(prefix, agent.simObj, EXTRA_COLUMNS, command=True)
             self.objects.setdefault(filename, dict(
                 file=filename, kind="aircraft", key=key, name=name, team=team,
                 model=AIRCRAFT_MODEL, ammo=len(agent.ammo), columns=columns))
-            row = self._row(prefix, agent.simObj, BVR_FIELDS, time_s, command)
+            row = self._row(prefix, agent.simObj, EXTRA_COLUMNS, time_s, command)
             self._writer(filename, columns).writerow(row)
             self.files[filename].flush()
 
             for ammo_id, missile in agent.ammo.items():
                 prefix = f"{key}__missile__{ammo_id}"
                 filename = f"{MISSILE_MODEL} ({name}--{key}--{ammo_id}) [{team}].csv"
-                columns = ([column for column, _, _ in TACVIEW_COLUMNS]
-                           + self._readable(prefix, missile, BVR_FIELDS + MISSILE_FIELDS))
+                extra = EXTRA_COLUMNS + MISSILE_COLUMNS
+                columns = self._columns(prefix, missile, extra)
                 self.objects.setdefault(filename, dict(
                     file=filename, kind="missile", key=key, carrier=key, ammo_id=ammo_id,
                     name=name, team=team, model=MISSILE_MODEL, columns=columns))
@@ -207,7 +218,7 @@ class Recorder:
                     continue
                 if not (missile.active or missile.target_hit or missile.target_lost):
                     continue  # Henüz atılmadı: fizik durumu uçan füze ölçümü değil.
-                row = self._row(prefix, missile, BVR_FIELDS + MISSILE_FIELDS, time_s)
+                row = self._row(prefix, missile, extra, time_s)
                 self.writers[filename].writerow(row)
                 self.files[filename].flush()
                 if not missile.active or not missile.alive or missile.target_hit or missile.target_lost:
@@ -228,11 +239,14 @@ class Recorder:
         )
 
     def _write_manifest(self):
-        columns = {column: dict(source=name, unit=unit) for column, name, unit in TACVIEW_COLUMNS}
-        columns["Time"]["note"] = "Füze dosyalarında taşıyıcı uçağın saati"
-        for name, unit in BVR_FIELDS + MISSILE_FIELDS:
-            columns[name] = dict(source=name, unit=unit)
-        columns["simulation/sim-time-sec"]["note"] = "Füzenin kendi saati; atışta sıfırlanır"
+        columns = {TIME_COLUMN[0]: dict(
+            source="record() çağrısındaki taşıyıcı saati", unit=TIME_COLUMN[1],
+            note="Füze dosyalarında da taşıyıcı uçağın saatidir")}
+        for column, name, unit in POSE_COLUMNS + EXTRA_COLUMNS + MISSILE_COLUMNS:
+            columns[column] = dict(source=name, unit=unit)
+        columns["lat_gc_deg"]["note"] = ("BVRGym'in iç referansı; scenario.yaml'daki "
+                                         "spawn enlemi bu sütunla eşleşir")
+        columns["missile_time_s"]["note"] = "Füzenin kendi saati; atışta sıfırlanır"
         for column, unit in COMMAND_COLUMNS:
             columns[column] = dict(source="dış uçuş komutu", unit=unit)
         manifest = dict(
@@ -242,11 +256,15 @@ class Recorder:
             snapshots=self.snapshots,
             events=self.event_count,
             coordinates=dict(
-                latitude_reference="geocentric",
-                longitude_reference="geocentric",
-                altitude_reference="JSBSim radial MSL",
-                note="Latitude sütunu position/lat-gc-deg'dir. Jeodezik enlem ayrı "
-                     "position/lat-geod-deg sütununda; WGS84 dönüşümü kayıtta yapılmaz.",
+                latitude_reference="WGS84 geodetic",
+                longitude_reference="WGS84",
+                altitude_reference="WGS84 ellipsoid height",
+                note="lat_deg jeodezik enlemdir (position/lat-geod-deg), alt_m "
+                     "elipsoid yüksekliğidir (position/h-sl-meters; geod-alt ile "
+                     "farkı 1,3 cm'den küçük ölçüldü). BVRGym içeride jeosantrik "
+                     "çalışır: spawn ic/lat-gc-deg'e yazılır, o değer lat_gc_deg "
+                     "sütunundadır. Kayıtta dönüşüm yapılmaz, iki referans da "
+                     "JSBSim'den ham okunur.",
             ),
             conversions="yok; bütün değerler kaynak property biriminde",
             columns=columns,
@@ -262,17 +280,19 @@ class Recorder:
 # ============================================================================
 # UÇAK → F-16 (<isim>--<ajan>) [<takım>].csv
 # ============================================================================
-# Tacview sütunları (Time, Longitude, Latitude, Altitude, Roll/Pitch/Yaw, Mach)
-# ham property değerleridir; yalnızca adları Tacview'e uygundur. Latitude
-# jeosantriktir. Yanında BVR_FIELDS alanları ve dışarıdan verilen uçuş komutu
-# (command/*) bulunur. Komut sütunları ölçüm değildir; o snapshot'ta uygulanan
-# hedef heading/irtifa/gazdır ve gerçekleşen uçuşla karşılaştırmak içindir.
+# time_s, lat_deg, lon_deg, alt_m, roll_deg, pitch_deg, yaw_deg, mach ve
+# ardından BVR alanları: lat_gc_deg, tas_fps, vel_north/east/down_fps,
+# load_factor_g, fuel_lb. Değerler ham property değerleridir; sütun adı birimi
+# söyler, dönüşüm yapılmaz. En sonda dışarıdan verilen uçuş komutu
+# (cmd_heading_deg, cmd_alt_m, cmd_throttle_norm) bulunur. Komut sütunları
+# ölçüm değildir; o snapshot'ta uygulanan hedeftir ve gerçekleşen uçuşla
+# karşılaştırmak içindir.
 #
 # ============================================================================
 # FÜZE → AIM-120 AMRAAM (<isim>--<ajan>--<mühimmat>) [<takım>].csv
 # ============================================================================
 # Dosya başlangıçta başlıkla açılır; veri satırları yalnızca atıştan sonra yazılır.
-# Time taşıyıcının saatidir, simulation/sim-time-sec füzenin kendi saatidir.
+# time_s taşıyıcının saatidir, missile_time_s füzenin kendi saatidir.
 # Bitiş durumu bir kez yazılır, ardından bu füzenin kaydı durur.
 #
 # ============================================================================

@@ -1,0 +1,55 @@
+# Core mimari — Angajman Proje
+
+Son güncelleme: **2026-10-12**. Bu dosya sohbetler arasında ortak mimari hafızadır.
+
+## Temel kararlar
+
+- **C++ çekirdek:** aynı uygulamada paketler/kütüphaneler; aralarında tipli yapılar ve fonksiyon çağrıları. Ayrı node, ROS, shared memory veya mesaj aracısı zorunlu değil.
+- **Python yalnızca BVRGym tarafında:** ince köprü nesneleri oluşturur, dış komutları uygular, fiziği ilerletir, durum/olay verir. Taktik karar vermez; mevcut PID ve füze güdümü şimdilik içeride kalır.
+- **Platform bağımsızlığı:** ilk adaptör JSBSim/BVRGym. Yeni platformlar aynı `StateSource` / `CommandSink` sözleşmelerine bağlanır; JSBSim formatını taklit etmez.
+- **Başlatma:** kendi senaryo XML’imiz → isim, sabit ID, takım, model profili, spawn, mühimmat, ilk komut. JSBSim fizik/model XML’leri ayrı. Senaryo yükleyicisini biz yazacağız.
+- **Veri:** SI birimleri; çekirdekte açılar radyan. Konum jeodezik WGS84, irtifa referansı açık; geometri ortak NED referansında. Zaman, reset dönemi ve geçerlilik korunur; eksik veri sıfır sayılmaz.
+- **Komutlar:** `FlightSetpoint` = ID + heading/irtifa/gaz + geçerlilik. `LaunchMissile` = emir ID + atan/hedef ID. Tek etkin kontrol kaynağı; ateşleme tekrarları engellenir, kabul ve uygulanma ayrı bildirilir.
+- **Mevcut prototip iletişimi:** ayrı Python/C++ süreçleri arasında tek TCP bağlantısında UTF-8 satır başına JSON (`kind`, `tick`, `data`). Python bütün uçak/füze ölçümünü gönderir, aynı tick için bütün uçakların heading/irtifa/gaz komutunu bekler, sonra ilerler. Python köprüsü ve Windows Winsock C++ istemcisi uygulandı; kaynaklar src/sim ve src/otopilot içindedir. Gömülü Python/pybind11 yerine bu yöntem seçildi. Canlı viewer yayını ve çekirdeğin ortak wire formatı sonraki aşamalardır.
+- **Hesaplar:** hafif geometri ve ağır zarf ayrı. WEZ/MAR/DOR vb. model/profil gerektirir. Otonomi içeriği şimdilik kapsam dışı.
+- **Görüntüleme/kayıt:** uçuş kodu UI bilmez. LiveSource ve ReplaySource aynı 2D/3D modeli besler; veri kesilince uçak süresiz ilerletilmez. ACMI + ortak state kaydı + hesap/plan/olay sidecarları. Tacview canlı çıkışı ayrı adaptör.
+
+## Paketler ve akış
+
+Hedef: `Workspace/cpp/packages/{common, platform_io, calculations, autonomy, planning, flight_control, recording, visualization_bridge}`.
+
+```text
+Senaryo XML → Python BVRGym köprüsü ↔ C++ platform_io
+                                      ↓ durum     ↑ komut
+                              hesaplar → plan/kontrol
+                                      ↓
+                               kayıt + canlı arayüz
+```
+
+## Uygulama durumu
+
+**C++ çekirdeği plan aşamasında; Python TCP köprüsü uygulandı.** `Workspace/src/sim/simulation.py` config kopyalama, ajan oluşturma, ölçüm ve ilerletme sınıfıdır. `connector.py` yalnızca JSON mesaj gönderir/alır. `sim_main.py` YAML, simülasyon, TCP ve recorder'ı birleştirir. `sim_local.py` aynı sınıfla C++ olmadan yerel uçuş yapar. Eski bvrgym_sim dosyası kullanıcının ayrı çalışmasıdır. Config'ler bağımsızdır; modül import'u uçuş veya sunucu başlatmaz. Yanlış/eksik komut fizik ilerlemeden reddedilir; kopmada kayıtlar kapanır. Viewer CSV replay yapar. YAML mevcut prototip, XML ilerideki hedef formatıdır. Geniş C++ çekirdeği ve XML yükleyicisi ve canlı viewer adaptörü henüz uygulanmadı. Açılar bu prototip mesajında derece; çekirdekte radyan kararı gelecekteki adaptöre aittir.
+
+`Workspace/src/sim/recorder.py` bu değişiklikte korunmuştur: uçak ve füze başına ham CSV, hedef/fırlatma/isabet/kayıp/sağlık olaylarını `events.jsonl`, senaryo ve sütun kaynaklarını `manifest.json` içinde kaydeder. Atılmamış füzelerin dosyası yalnızca başlıktır; uçuş verisi atıştan sonra yazılır. Mevcut kaynak/birim ve koordinat bilgisi recorder'dadır. TCP durumunda jeodezik enlem, JSBSim `h-sl-meters` irtifası, derece yönelim ve m/s hız okunur; geoid dönüşümü yapılmaz. `Simulation.fire()` açık Python atış çağrısıdır; TCP komutunda füze ateşleme henüz bağlanmadı. Ayrıntılı kullanım: [Workspace/src/sim/README.md](Workspace/src/sim/README.md). TCP şablonları: [Workspace/docs/mimari/mesaj_sablonlari/tcp](Workspace/docs/mimari/mesaj_sablonlari/tcp/README.md).
+
+Sıra: **tipler + XML → C++ komut çevrimi → canlı/kayıt → geometri → açık füze emri → rota/genişleme**.
+
+## Güncelleme kuralı
+
+Mimari karar veya uygulama durumu değişince bu dosyayı aynı iş kapsamında güncelle. Öneriyi uygulanmış gibi yazma; geçersiz kararları kaldır, tarihi yenile. Büyük değişiklikte [detaylı planı](Workspace/docs/mimari/BVR_SISTEM_MIMARISI.md) da uyumlu tut. Veri alanları: [simülasyon referansı](Workspace/docs/veri_info/SIMULASYON_VERI_REFERANSI.md).
+
+
+
+12 Ekim dosya yerleşimi: Python kodları `Workspace/src/sim/`, aktif senaryo `Workspace/src/sim/scenario.yaml`, mesaj JSON şablonları `Workspace/src/msgs/`. Yerel giriş `python src/sim/sim_local.py`, TCP girişi `python src/sim/sim_main.py`. Doğrudan dosya ve `python -m src.sim...` import'ları desteklenir. TCP bekleme davranışı kullanıcının isteğiyle değiştirilmedi.
+
+
+12 Ekim C++ bağlantısı: `Workspace/src/otopilot/main.cpp` ana döngü, `controller.cpp` hesap/komut yeri, `tcp_connection.cpp` Windows TCP, `messages.hpp` ortak JSON zarfıdır. MinGW M: derleyicisi ve nlohmann/json 3.12.0 kullanıldı; Asio eklenmedi. Python ilk ölçümde `flight_commands` alanıyla YAML uçuş hedeflerini verir. Varsayılan controller bu hedefleri korur. Füze durumları okunabilir; TCP ateşleme sonraki aşamadır. Derleme/kullanım: `Workspace/src/otopilot/README.md`.
+
+
+C++ giriş dosyası sadeleştirildi: main yalnızca `Connection::receive` → `Controller::calculate` → `Connection::send` döngüsünü içerir. Public arayüz `src/otopilot/connection.hpp`; adres/port, Winsock, mesaj/adım doğrulaması, end ve kapanış `tcp_connection.cpp` içindeki Impl'dedir. Eski tcp_connection.hpp kaldırılıp yedeklendi. Başlangıç CLI ve JSON sözleşmesi aynı kaldı.
+
+
+Araç tipi: YAML ajanlarına `type` eklendi; `state.data.aircraft[*].type` ile C++'a taşınır. Serbest, boş olmayan profil etiketi; eksikse F16. Mevcut iki ajan F16 etiketlidir. Bu değişiklik fizik modeli/WEZ hesabı eklemez; uçuş hâlâ yerleşik F-16 modelindedir. Özel model seçimi ileride ayrı adaptasyon gerektirir. JSON şablonu ve kullanım notları güncellendi.
+
+Kullanıcı netleştirmesi: tip bilgisi olarak Python yalnızca tip adını aktarır. Uçak özellikleri/performans profilleri ve lookup table C++ içinde tutulacak; Python'dan profil sayıları gönderilmez. Uçuş ölçümleri mevcut mesajda kalır. Lookup table ve WEZ hesabı henüz uygulanmadı.
+

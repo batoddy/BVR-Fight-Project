@@ -1,0 +1,40 @@
+# Süre: simülasyon saniyesi; sleep: her dış döngü sonunda gerçek saniye.
+world:
+  duration_s: 180
+  sleep_s: 0.0  # 0 = beklemeden; 0.08 = yaklaşık gerçek zaman.
+  sim_time_step: 1  # BVRGym adım tekrar sayısı; fizik dt değeri değil.
+
+# Python TCP sunucusu; C++ bu adrese istemci olarak bağlanır.
+connection:
+  host: 127.0.0.1
+  port: 6000
+
+# blue/red: Python'da ajanlara erişmek için kullanılan benzersiz anahtarlar.
+# name: görünen isim. type: C++ hesaplarında kullanılacak profil etiketi.
+# F16, Su57 veya kendi tip adın yazılabilir; fizik modeli şimdilik F-16.
+agents:
+  blue:
+    name: KE
+    type: F16
+    team: Blue
+    ammo: 2
+    throttle: 0.49  # Başlangıç gaz komutu.
+    spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
+      lat: 59.0
+      long: 18.0
+      alt: 8000
+      vel: 300
+      heading: 0
+
+  red:
+    name: Bogey
+    type: F16
+    team: Red
+    ammo: 2
+    throttle: 0.49
+    spawn:
+      lat: 59.60
+      long: 18.0
+      alt: 3000
+      vel: 300
+      heading: 180

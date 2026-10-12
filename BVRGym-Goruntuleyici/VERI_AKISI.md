@@ -18,23 +18,27 @@ Arayüzde **Kayıt aç → Kayıt klasörü değiştir** ile Windows’un yerle�
 
 Dosya adı: bizim recorder'ımızda `F-16 (KE--blue) [Blue].csv` ve `AIM-120 AMRAAM (KE--blue--0) [Blue].csv`; yerleşik logger'da `F-16 (Blue) [Blue].csv` ve `AIM-120 AMRAAM (AIM0) [Red].csv`. Model, çağrı adı ve takım buradan okunur. Çağrı adındaki `--` ayrımı ajan anahtarını ve mühimmat numarasını verir; gösterilen ad ilk parçadır. Füze sınıflaması bilinen model ön eklerine dayanır; yalnız F-16/AIM-120 geometrileri vardır, diğer modeller genel simgeyle gösterilir. Bilinmeyen takım nötrdür.
 
-| Sütun | Anlam / birim |
-|---|---|
-| Time | Ortak simülasyon saati, saniye |
-| Longitude | Boylam, derece |
-| Latitude | **Jeosantrik** enlem (`position/lat-gc-deg`), derece |
-| Altitude | JSBSim radyal MSL irtifa, metre |
-| Roll (deg), Pitch (deg), Yaw (deg) | Ölçülen yönelim, derece |
-| Mach | Ölçülen Mach (`velocities/mach`) |
-| TAS | İsteğe bağlı, m/s; yoksa `velocities/vt-fps` okunur |
-| `position/lat-geod-deg` | Jeodezik enlem; görüntüleyici kullanmaz, ACMI ihracatı için saklanır |
-| `velocities/v-*-fps` | NED hız bileşenleri, ft/s |
-| `forces/load-factor`, `propulsion/total-fuel-lbs`, `fcs/throttle-cmd-norm` | Yük katsayısı, yakıt (lb), uygulanan gaz |
-| `command/heading-deg`, `command/altitude-m`, `command/throttle-norm` | O snapshot'ta uygulanan dış uçuş komutu |
+Sütun adları iki üreticiye göre değişir. Bizim recorder'ımız (`schema_version` 2) boşluksuz, birimi adında taşıyan kendi adlarını yazar; BVRGym'in yerleşik `TacviewLogger`'ı Tacview adlarını korur. Hangi referansın çözüleceğini sütun adı söyler, tahmin edilmez.
+
+| Bizim sütunumuz | Yerleşik karşılığı | Anlam / birim |
+|---|---|---|
+| time_s | Time | Ortak simülasyon saati, saniye |
+| lat_deg | — | **WGS84 jeodezik** enlem (`position/lat-geod-deg`), derece |
+| — | Latitude | **Jeosantrik** enlem (`position/lat-gc-deg`); okunurken jeodeziğe çevrilir |
+| lon_deg | Longitude | Boylam, derece (jeosantrik ile jeodezik aynı) |
+| alt_m | Altitude | WGS84 elipsoid yüksekliği (`position/h-sl-meters`), metre |
+| roll_deg, pitch_deg, yaw_deg | Roll (deg), Pitch (deg), Yaw (deg) | Ölçülen yönelim, derece |
+| mach | Mach | Ölçülen Mach (`velocities/mach`) |
+| tas_fps | TAS (m/s) | Gerçek hava hızı; `tas_fps` ft/s'dir, ×0,3048 ile okunur |
+| lat_gc_deg | — | BVRGym'in iç jeosantrik enlemi; `scenario.yaml` spawn enlemiyle eşleşen sütun budur |
+| vel_north_fps, vel_east_fps, vel_down_fps | — | NED hız bileşenleri, ft/s |
+| load_factor_g, fuel_lb | — | Dikey g yükü, kalan yakıt (lb) |
+| cmd_heading_deg, cmd_alt_m, cmd_throttle_norm | — | O snapshot'ta uygulanan dış uçuş komutu |
+| missile_time_s | — | Füze dosyalarında füzenin kendi saati (atışta sıfırlanır) |
 
 Zaman ve başlangıç konumu zorunludur; sütun sırası bağımsızdır. Seyrek boş konumlar son değeri kullanır. Eksik yönelim ölçüm gibi sunulmaz. Sayı/koordinat/zaman/negatif hız doğrulanır; aynı zamandaki son satır tutulur.
 
-ECEF, jeosantrik enlem ve JSBSim radyal irtifasından hesaplanır; yerel düzlem için ayrıca jeodezik enlem bulunur. Ham CSV değerleri değişmez. Ölçülen hız `TAS` sütunundan, o yoksa `velocities/vt-fps`'ten ×0,3048 ile okunur — bu bir birim çevrimidir, türetme değildir. Ölçüm hiç yoksa son bir saniyedeki ECEF konum değişiminden `position_speed_mps` hesaplanır; bu TAS değildir. `estimated_mach` ISA tahminidir. Ölçülen TAS/Mach önceliklidir. Gösterim birimleri yalnız tarayıcıda değişir (varsayılan m/s, ft, NM).
+ECEF tek bir referanstan hesaplanır: WGS84 jeodezik enlem + elipsoid yüksekliği. `lat_deg` doğrudan kullanılır; yerleşik logger'ın `Latitude` sütunu okuma anında ham değerinden jeodeziğe çevrilir (dönüşüm her satırda ham sütundan yapılır, önceki sonuçtan değil). Ham CSV değerleri değişmez. Ölçülen hız `TAS` sütunundan, o yoksa `tas_fps` / `velocities/vt-fps`'ten ×0,3048 ile okunur — bu bir birim çevrimidir, türetme değildir. Ölçüm hiç yoksa son bir saniyedeki ECEF konum değişiminden `position_speed_mps` hesaplanır; bu TAS değildir. `estimated_mach` ISA tahminidir. Ölçülen TAS/Mach önceliklidir. Gösterim birimleri yalnız tarayıcıda değişir (varsayılan m/s, ft, NM).
 
 Boş mühimmat CSV'si envantere alınır ama sahnede nesne oluşturmaz. Taşıyıcı sahipliği önce dosya adındaki ajan anahtarından çözülür (`ownership_source='filename'`); ad bunu taşımıyorsa takım kuralına düşülür (`'team'`) ve aynı takımda birden fazla uçak varsa sahiplik belirsiz kalır. Yerleşik logger aynı takımda aynı füze numarasını aynı dosyaya yazıp önceki veriyi ezebilir; arayüz yalnızca sahiplik gerçekten çözülemediğinde uyarır ve kaybolan ölçümleri üretemez.
 

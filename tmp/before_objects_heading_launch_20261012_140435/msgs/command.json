@@ -1,0 +1,10 @@
+{
+  "kind": "command",
+  "tick": 0,
+  "data": {
+    "aircraft": [
+      {"id": "blue", "heading_deg": 90, "altitude_m": 5000, "throttle": 0.49},
+      {"id": "red", "heading_deg": 270, "altitude_m": 5000, "throttle": 0.49}
+    ]
+  }
+}

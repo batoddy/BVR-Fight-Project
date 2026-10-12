@@ -1,3 +1,7 @@
+> **12 Ekim C++ bağlantısı uygulandı:** `src/otopilot` içinde Winsock TCP istemcisi ve ayrı controller bulunur; MinGW ile derlenir. `src/sim` Python sunucusudur, `src/msgs` JSON şablonlarıdır. İlk sürüm YAML hedeflerini korur. Aşağıdaki eski planların uygulanmamış geniş çekirdek/pybind11 bölümleri mevcut istemciyi tarif etmez. Güncel kaynak/kullanım: [otopilot README](../../src/otopilot/README.md).
+
+> **12 Ekim 2026 — güncel uygulama:** Kullanıcı daha sonra ayrı C++/Python süreçleri arasında TCP seçti. Python tarafında `simulation.py`, `connector.py`, `sim_main.py` uygulandı. `bvrgym_sim.py` TCP olmadan yerel uçuş girişidir; recorder aynı formatta kaldı. Kullanım: [src/README.md](../../src/sim/README.md). C++ istemcisi ve derleme kurulumu henüz yok. Aşağıdaki gömülü Python/pybind11 bölümleri 10 Ekim sohbetinin geçmiş tasarım ve kod örnekleridir; mevcut uygulamanın yöntemi değildir.
+
 # C++ / Python kontrol mimarisi
 
 10 Ekim 2026 — Başka sohbette devam etmek için karar notu.
@@ -537,3 +541,7 @@ Bir sonraki aşamada füze ölçümleri `StateMessage` içine, ateşleme istekle
 Recorder bu kararları vermez; oluşan durumu kaydeder. Arayüz de uçuş kararı vermez ve simülasyonu ayrıca ilerletmez; gelen veriyi gösterir. Başlangıç/spawn ayarlarını değiştirmek için YAML'a, uçuş kararlarını değiştirmek için `Controller.cpp` dosyasına bakacaksın.
 
 Başka sohbette devam etmek için: ‘Bu dosyadaki doğrudan Python çağrısı ve dosyalara ayrılmış C++ mimarisiyle devam edelim; örnekler henüz uygulanmadı’ demen yeterlidir.
+
+## Uygulama notu — 12 Ekim 2026
+
+TCP komut mesajına `launch` listesi eklendi: `{"id": "blue", "target_id": "red"}`. Python `sim_main.py` her emri `simulation.fire()` ile uçuş komutlarından önce uygular. Atışın uygulanıp uygulanmadığı ayrı bir cevapla dönmez; bir sonraki ölçümde füzenin `state` alanından ve `events.jsonl`'dan görülür. C++ tarafında ölçüm `src/otopilot/objects.hpp` nesnelerine doldurulur; yönler C++ içinde ±180, telde 0..360'tır.

@@ -7,12 +7,15 @@ from recordings import ecef, geodetic_latitude, metadata, RecordingStore
 HEADER='Time,Longitude,Latitude,Altitude,Roll (deg),Pitch (deg),Yaw (deg)\n'
 
 class ReviewFixes(unittest.TestCase):
-    def test_native_geocentric_coordinate_matches_jsbsim_radius(self):
+    def test_geodetic_coordinate_matches_jsbsim_radius(self):
         # Independent values sampled from local JSBSim 1.3.1 at lat-gc=59°, h-sl=5000 m.
-        xyz=ecef(59,18,5000)
-        self.assertAlmostEqual(math.degrees(math.atan2(xyz[2],math.hypot(*xyz[:2]))),59,places=9)
-        self.assertAlmostEqual(math.dist(xyz,(0,0,0)),20890432.865796573*.3048,places=3)
+        # ecef() now takes geodetic latitude, so the geocentric value has to be
+        # converted first; the point must land back on the same radius and angle.
         self.assertAlmostEqual(geodetic_latitude(59,5000),59.16949951946566,places=7)
+        xyz=ecef(geodetic_latitude(59,5000),18,5000)
+        self.assertAlmostEqual(math.degrees(math.atan2(xyz[2],math.hypot(*xyz[:2]))),59,places=7)
+        # h-sl is the ellipsoid height to within 1.3 cm, which is the residual here.
+        self.assertAlmostEqual(math.dist(xyz,(0,0,0)),20890432.865796573*.3048,delta=.05)
 
     def test_poles_equator_and_radial_climb(self):
         for lat in (-90,-59,0,59,90):

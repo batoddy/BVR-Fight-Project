@@ -489,6 +489,7 @@
       <div class="body">
         <p>Şekil 3'teki zincir. <strong>18 837 m</strong> mutlak konum hatası, 28,2 km'lik ayrımda <strong>−157 m</strong> bağıl hata. Veri kaybı yok: hem <span class="mono">position/lat-gc-deg</span> hem <span class="mono">position/lat-geod-deg</span> kayıtta duruyor, yalnızca takma ad yanlış sütunu gösteriyor.</p>
         <p class="fixnote">Düzeltildi: <span class="mono">Latitude</span> artık <span class="mono">position/lat-gc-deg</span>. Jeodezik enlem ayrı sütunda kalıyor; WGS84 dönüşümü ACMI ihracatına bırakıldı. <span class="mono">manifest.json</span> referansı açıkça bildiriyor.</p>
+        <p class="fixnote">12 Ekim 2026'da bu çözüm aşıldı: kayıt Tacview takma adlarını bırakıp kendi sütun adlarını yazıyor ve enlemi doğrudan WGS84 jeodezik olarak veriyor (<span class="mono">lat_deg</span>), jeosantrik enlem <span class="mono">lat_gc_deg</span> sütununda duruyor. Görüntüleyici ECEF'i tek referanstan kuruyor. Geçerli sözleşme: <span class="mono">BVRGym-Goruntuleyici/VERI_AKISI.md</span>.</p>
         <p class="ref">src/recorder.py · TACVIEW_COLUMNS</p>
       </div>
     </div>

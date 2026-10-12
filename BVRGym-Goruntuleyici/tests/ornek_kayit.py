@@ -62,7 +62,7 @@ def main():
     scenario = copy.deepcopy(SCENARIO)
     scenario["world"]["duration_s"] = options.duration
     sys.path.insert(0, str(WORKSPACE / "src"))
-    from recorder import Recorder
+    from sim.recorder import Recorder
 
     sys.path.insert(0, str(WORKSPACE / "BVRGym"))
     os.chdir(WORKSPACE / "BVRGym")  # BVRGym'in göreli XML/model yolları için.

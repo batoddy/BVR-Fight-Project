@@ -14,6 +14,8 @@ from recordings import RecordingStore, read_recording
 from server import make_server
 
 HEADER = ['Time', 'Longitude', 'Latitude', 'Altitude', 'Roll (deg)', 'Pitch (deg)', 'Yaw (deg)']
+# Our own recorder (schema 2): no spaces, unit in the name, geodetic latitude.
+OWN_HEADER = ['time_s', 'lon_deg', 'lat_deg', 'alt_m', 'roll_deg', 'pitch_deg', 'yaw_deg']
 
 
 class RecordingChecks(unittest.TestCase):
@@ -51,6 +53,25 @@ class RecordingChecks(unittest.TestCase):
         self.assertIsNone(missile['true_airspeed_mps'])
         self.assertEqual(missile['team'], 'blue')
         self.assertEqual([row['sim_time_s'] for row in samples], [0, 0, 10, 15, 20, 20])
+
+    def test_own_column_names_are_read_as_geodetic(self):
+        """`lat_deg` is already WGS84, so it is used as written; the older
+        `Latitude` column is geocentric and gets converted. Both must place the
+        same JSBSim state at the same point."""
+        self.write(rows=[[0, 18, 59.418960, 3000, 0, 0, 180]], header=OWN_HEADER)
+        own = read_recording(self.directory)[0][0]
+        self.assertAlmostEqual(own['latitude_deg'], 59.418960, places=9)
+        self.temp.cleanup()
+        self.temp = tempfile.TemporaryDirectory()
+        self.directory = Path(self.temp.name)
+        self.write(rows=[[0, 18, 59.250206, 3000, 0, 0, 180]])
+        legacy = read_recording(self.directory)[0][0]
+        self.assertAlmostEqual(legacy['latitude_deg'], own['latitude_deg'], places=5)
+
+    def test_own_recording_missing_a_required_column_is_reported(self):
+        self.write(rows=[[0, 18, 3000]], header=['time_s', 'lon_deg', 'alt_m'])
+        with self.assertRaisesRegex(ValueError, 'time_s'):
+            read_recording(self.directory)
 
     def test_reading_does_not_modify_csv_or_import_simulator(self):
         path = self.write()

@@ -7,7 +7,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import yaml
-from recorder import CSVRecorder
+from sim.recorder import CSVRecorder
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 BVRGYM = WORKSPACE / "BVRGym"

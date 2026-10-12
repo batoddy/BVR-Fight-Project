@@ -1,0 +1,91 @@
+# Python simülasyon dosyaları
+
+Güncelleme: 12 Ekim 2026. C++ ve Python ayrı programlar olarak çalışır.
+Python ölçümü gönderir, C++ komutunu bekler ve ardından bir adım ilerler.
+
+## Hangi dosya ne yapar?
+
+| Dosya | Görevi |
+|---|---|
+| `sim_main.py` | YAML'ı okur; simülasyon, TCP ve recorder'ı sırayla çağırır. |
+| `simulation.py` | Config kopyalar, ajan oluşturur, ölçüm okur ve komut uygular. |
+| `connector.py` | `Message` ve `TCPConnection`: yalnızca JSON mesajı gönder/al. |
+| `recorder.py` | Mevcut CSV, events.jsonl ve manifest.json kaydını alır. |
+| `sim_local.py` | C++ olmadan, YAML'daki ilk hedeflerle yerel uçuş yapar. |
+
+`Simulation` oluşturulunca YAML'daki bütün uçaklar ve mühimmatları oluşturulur.
+`read_state()` sadece okur. `step(aircraft_commands)` bütün uçakları ilerletir;
+TCP, kayıt ve uyuma bu sınıfta bulunmaz. Böylece kendi döngünde de kullanabilirsin.
+Import yapmak simülasyonu veya sunucuyu başlatmaz; giriş dosyası `main()` çağırır.
+
+## Çalıştırma
+
+Workspace içinde mevcut venv'i kullan:
+
+```powershell
+# Python sunucusunu aç; ardından C++ istemcini çalıştır.
+python .\src\sim_main.py
+
+# C++ kullanmadan yerel uçuşu çalıştırmak için:
+python .\src\sim_local.py
+```
+
+`scenario.yaml` içindeki `connection.host` ve `connection.port` TCP adresidir.
+Varsayılan `127.0.0.1:6000`. `world.duration_s`, `sim_time_step`, `sleep_s`
+ayarları aynı YAML'dan alınır. `sleep_s` yalnızca dış döngünün sonunda uygulanır.
+C++ hesabı ve iletişim süresi de gerçek sürenin parçasıdır.
+
+## Ölçüm → komut → ilerletme
+
+1. `sim_main` ölçümü `Simulation.read_state()` ile okur ve gönderir.
+2. `connection.receive()` C++ komutunun tamamlanmasını bekler. Uçaklar bu sırada ilerlemez.
+3. Komutun `kind` alanı `command`, `tick` alanı mevcut adımla aynı olmalı.
+4. `Simulation.step()` her uçak için bir yön/irtifa/gaz komutu ister. Eksik,
+   tekrarlanan, bilinmeyen veya geçersiz komut varsa hiçbir uçak ilerlemez.
+5. Recorder yeni durumu kaydeder. Süre dolunca `end` mesajı gönderilir.
+
+Bir bağlantı tekrar tekrar kullanılır. Her mesaj UTF-8, tek satır JSON ve `\n`
+ile biter. TCP mesajı parçalasa veya iki mesaj birlikte gelse de satırlar ayrı okunur.
+En büyük mesaj satır sonu dahil 1 MiB. Bağlantı kapanırsa döngü durur ve kayıtlar kapanır;
+yeniden bağlanma otomatik yapılmaz. İstemci komut göndermiyorsa beklemeye devam edilir.
+
+## Mesajın üç alanı
+
+| Alan | Anlamı |
+|---|---|
+| `kind` | `state`, `command` veya `end`. |
+| `tick` | Fizik saniyesi değil, dış ilerletme adımının sayacı. |
+| `data` | Ölçümde bütün uçak/füzeler; komutta uçak hedeflerinin listesi. |
+
+Ölçümde `data.sim_time_s` gerçek JSBSim saatidir; başlangıç resetinden dolayı
+ilk ölçüm sıfırdan biraz büyük olabilir. `data.aircraft` uçakları, `data.missiles`
+mühimmat durumunu içerir. Atılmamış füzenin `kinematics` ve `flight_time_s`
+alanları `null`; hazır/havada/sona erdi durumları `ready/in_flight/ended` olarak gelir.
+Uçakların açısı derece, hızı m/s, irtifası `position/h-sl-meters` kaynağından metredir.
+Jeodezik enlem `position/lat-geod-deg` üzerinden okunur; BVRGym spawn enlemini
+jeosantrik olarak kullanır. Recorder'ın kendi ham sütun ve referansları değiştirilmedi.
+
+Komut örneği (tek satır gönderilir):
+
+```json
+{"kind":"command","tick":0,"data":{"aircraft":[{"id":"blue","heading_deg":90,"altitude_m":5000,"throttle":0.49},{"id":"red","heading_deg":270,"altitude_m":5000,"throttle":0.49}]}}
+```
+
+JSON şablonları: `../docs/mimari/mesaj_sablonlari/tcp/`.
+Dosyalar aktarımda okunmaz/yazılmaz; mesajlar TCP'de bellekte aktarılır.
+
+## Uçuş kodunu değiştirmek
+
+`simulation.agents["blue"]` BVRGym'in `BaseBVRAgent` nesnesidir.
+Yerel uçuşta `sim_local.py` içindeki komut listesini değiştirebilirsin.
+TCP kullanımında C++ her döngüde bütün uçakların hedeflerini doldurur.
+Otomatik hedef seçimi, manevra veya atış eklenmedi.
+
+`simulation.fire("blue", "red")` açık Python atış çağrısıdır; atış uygulanırsa
+`True`, aynı uçak/hedef, mühimmat yokluğu veya aktif füze kısıtında `False` döner.
+Şimdiki TCP komut mesajı yalnızca uçuş hedeflerini uygular. Füze atış isteğini
+mesaja eklemek sonraki genişleme; envanter ve uçan füze ölçümleri şimdiden yayınlanır.
+
+C++ istemci kaynak/derleme kurulumu bu değişikliğe dahil değil. Bağlantı sözleşmesi
+Asio veya Winsock kullanan istemciyle aynıdır. Python tarafına yeni paket gerekmez.
+

@@ -1,0 +1,100 @@
+{
+  "kind": "state",
+  "tick": 0,
+  "data": {
+    "tick": 0,
+    "sim_time_s": 0.00833333,
+    "aircraft": [
+      {
+        "id": "blue",
+        "name": "KE",
+        "team": "Blue",
+        "health": 1,
+        "lat_deg": 59.17,
+        "lon_deg": 18.0,
+        "alt_msl_m": 8000,
+        "yaw_deg": 0,
+        "pitch_deg": 0,
+        "roll_deg": 0,
+        "tas_mps": 300,
+        "mach": 0.97,
+        "velocity_ned_mps": [
+          300,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "red",
+        "name": "Bogey",
+        "team": "Red",
+        "health": 1,
+        "lat_deg": 59.42,
+        "lon_deg": 18.0,
+        "alt_msl_m": 3000,
+        "yaw_deg": 180,
+        "pitch_deg": 0,
+        "roll_deg": 0,
+        "tas_mps": 300,
+        "mach": 0.91,
+        "velocity_ned_mps": [
+          -300,
+          0,
+          0
+        ]
+      }
+    ],
+    "missiles": [
+      {
+        "id": "blue/missile/0",
+        "owner_id": "blue",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "blue/missile/1",
+        "owner_id": "blue",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "red/missile/0",
+        "owner_id": "red",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "red/missile/1",
+        "owner_id": "red",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      }
+    ],
+    "flight_commands": [
+      {
+        "id": "blue",
+        "heading_deg": 0,
+        "altitude_m": 8000,
+        "throttle": 0.49
+      },
+      {
+        "id": "red",
+        "heading_deg": 180,
+        "altitude_m": 3000,
+        "throttle": 0.49
+      }
+    ]
+  }
+}

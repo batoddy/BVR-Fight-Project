@@ -54,40 +54,59 @@ def metadata(path):
                 agent_key=agent_key, carrier_key=carrier_key, ammo_id=ammo_id)
 
 
-def ecef(lat_gc_deg, lon_deg, height_m):
-    """BVRGym native geocentric latitude and JSBSim radial ASL -> ECEF."""
-    lat, lon = math.radians(lat_gc_deg), math.radians(lon_deg)
-    a, b = 6378137.0, 6356752.314245
-    sea_radius = 1 / math.sqrt((math.cos(lat) / a) ** 2 + (math.sin(lat) / b) ** 2)
-    radius = sea_radius + height_m
-    return (radius * math.cos(lat) * math.cos(lon),
-            radius * math.cos(lat) * math.sin(lon), radius * math.sin(lat))
+def ecef(lat_deg, lon_deg, height_m):
+    """WGS84 geodetic latitude and ellipsoid height -> ECEF."""
+    lat, lon = math.radians(lat_deg), math.radians(lon_deg)
+    a, e2 = 6378137.0, 6.69437999014e-3
+    n = a / math.sqrt(1 - e2 * math.sin(lat) ** 2)
+    return ((n + height_m) * math.cos(lat) * math.cos(lon),
+            (n + height_m) * math.cos(lat) * math.sin(lon),
+            (n * (1 - e2) + height_m) * math.sin(lat))
 
 
 def geodetic_latitude(lat_gc_deg, height_m):
-    x, _, z = ecef(lat_gc_deg, 0, height_m)
+    """BVRGym native geocentric latitude and JSBSim radial ASL -> WGS84 geodetic.
+    Only recordings that still name the column `Latitude` need this; our own
+    recorder writes position/lat-geod-deg straight into `lat_deg`."""
+    lat = math.radians(lat_gc_deg)
+    a, b = 6378137.0, 6356752.314245
+    sea_radius = 1 / math.sqrt((math.cos(lat) / a) ** 2 + (math.sin(lat) / b) ** 2)
+    radius = sea_radius + height_m
+    x, z = radius * math.cos(lat), radius * math.sin(lat)
     e2 = 6.69437999014e-3
     phi = math.atan2(z, (1 - e2) * x)
     for _ in range(8):
-        n = 6378137.0 / math.sqrt(1 - e2 * math.sin(phi) ** 2)
+        n = a / math.sqrt(1 - e2 * math.sin(phi) ** 2)
         phi = math.atan2(z + e2 * n * math.sin(phi), x)
     return math.degrees(phi)
 
 
 # Recorded measurements that only need a unit change to display, never a value
 # derived from other columns. The plain TAS/Mach columns above take precedence.
-SOURCE_FIELDS = {'velocities/vt-fps': ('true_airspeed_mps', 0.3048),
+SOURCE_FIELDS = {'tas_fps': ('true_airspeed_mps', 0.3048),
+                 'velocities/vt-fps': ('true_airspeed_mps', 0.3048),
                  'velocities/mach': ('mach', 1.0)}
+
+# Our recorder (schema 2) names its own columns and states WGS84 geodetic
+# latitude; BVRGym's built-in TacviewLogger keeps Tacview names and geocentric
+# latitude. The column name tells which, so the reference is never guessed.
+OWN_FIELDS = {'time_s': 'sim_time_s', 'lon_deg': 'longitude_deg',
+              'lat_deg': 'latitude_deg', 'alt_m': 'altitude_m',
+              'roll_deg': 'roll_deg', 'pitch_deg': 'pitch_deg',
+              'yaw_deg': 'heading_deg', 'mach': 'mach'}
+TACVIEW_FIELDS = {'Time': 'sim_time_s', 'Longitude': 'longitude_deg',
+                  'Latitude': 'latitude_gc_deg', 'Altitude': 'altitude_m',
+                  'Roll (deg)': 'roll_deg', 'Pitch (deg)': 'pitch_deg',
+                  'Yaw (deg)': 'heading_deg', 'TAS': 'true_airspeed_mps',
+                  'Mach': 'mach'}
+OWN_REQUIRED = ('time_s', 'lon_deg', 'lat_deg', 'alt_m')
+TACVIEW_REQUIRED = ('Time', 'Longitude', 'Latitude', 'Altitude')
 
 
 def read_csv(path, handle):
     info = metadata(path)
     rows = []
     previous = {}
-    fields = {'Time': 'sim_time_s', 'Longitude': 'longitude_deg',
-              'Latitude': 'latitude_deg', 'Altitude': 'altitude_m',
-              'Roll (deg)': 'roll_deg', 'Pitch (deg)': 'pitch_deg',
-              'Yaw (deg)': 'heading_deg', 'TAS': 'true_airspeed_mps', 'Mach': 'mach'}
     reader = csv.DictReader(handle)
     # Native pandas exports unused ammunition as an empty file / blank line.
     if not reader.fieldnames:
@@ -95,11 +114,22 @@ def read_csv(path, handle):
     reader.fieldnames = [key.strip() for key in reader.fieldnames]
     if len(set(reader.fieldnames)) != len(reader.fieldnames):
         raise ValueError(f'{path.name}: yinelenen sütun adı')
-    if not {'Time', 'Longitude', 'Latitude', 'Altitude'} <= set(reader.fieldnames):
-        raise ValueError(f'{path.name}: Time, Longitude, Latitude, Altitude sütunları gerekli')
-    for key in ('Roll', 'Pitch', 'Yaw'):
-        if key in reader.fieldnames and key + ' (deg)' not in reader.fieldnames:
-            fields[key] = fields.pop(key + ' (deg)')
+    names = set(reader.fieldnames)
+    own = set(OWN_REQUIRED) <= names
+    if own:
+        fields = dict(OWN_FIELDS)
+    elif set(TACVIEW_REQUIRED) <= names:
+        fields = dict(TACVIEW_FIELDS)
+    else:
+        raise ValueError(f'{path.name}: {", ".join(OWN_REQUIRED)} ya da '
+                         f'{", ".join(TACVIEW_REQUIRED)} sütunları gerekli')
+    time_column = 'time_s' if own else 'Time'
+    # `Latitude` is geocentric; `lat_deg` already is the geodetic value.
+    geocentric = not own
+    if not own:
+        for key in ('Roll', 'Pitch', 'Yaw'):
+            if key in names and key + ' (deg)' not in names:
+                fields[key] = fields.pop(key + ' (deg)')
     for row in reader:
         if not any(value for value in row.values()):
             continue
@@ -124,7 +154,14 @@ def read_csv(path, handle):
                 if not math.isfinite(value):
                     raise ValueError('sonlu olmayan sayı')
                 values[key] = value
-            if not (row.get('Time') or '').strip():
+            if geocentric and 'latitude_gc_deg' in values and 'altitude_m' in values:
+                # Derived from the raw column every row, never from the previous
+                # result, so carrying a value forward cannot convert it twice.
+                if not -90 <= values['latitude_gc_deg'] <= 90:
+                    raise ValueError('koordinat aralık dışında')
+                values['latitude_deg'] = geodetic_latitude(values['latitude_gc_deg'],
+                                                           values['altitude_m'])
+            if not (row.get(time_column) or '').strip():
                 raise ValueError('zaman eksik')
             if not all(key in values for key in ('longitude_deg', 'latitude_deg', 'altitude_m')):
                 raise ValueError('başlangıç konumu eksik')
@@ -174,12 +211,15 @@ def read_manifest(directory):
     except (ValueError, OSError):
         return None, ['manifest.json okunamadı; koordinat referansı doğrulanamıyor.']
     warnings = []
-    if coordinates.get('latitude_reference') not in (None, 'geocentric'):
+    # Both references are decoded: `lat_deg` is read as geodetic, the older
+    # `Latitude` column as geocentric. A third reference would not be.
+    if coordinates.get('latitude_reference') not in (None, 'geocentric', 'WGS84 geodetic'):
         warnings.append(f"Kayıt enlemi '{coordinates['latitude_reference']}' olarak bildiriyor; "
-                        'bu görüntüleyici jeosantrik enlem çözer. Konumlar kayabilir.')
-    if coordinates.get('altitude_reference') not in (None, 'JSBSim radial MSL'):
+                        'bu görüntüleyici jeodezik ve jeosantrik enlem çözer. Konumlar kayabilir.')
+    if coordinates.get('altitude_reference') not in (None, 'JSBSim radial MSL',
+                                                     'WGS84 ellipsoid height'):
         warnings.append(f"Kayıt irtifayı '{coordinates['altitude_reference']}' olarak bildiriyor; "
-                        'bu görüntüleyici JSBSim radyal MSL çözer.')
+                        'bu görüntüleyici WGS84 elipsoid yüksekliği çözer.')
     return manifest, warnings
 
 
@@ -278,7 +318,7 @@ def assemble(objects, manifest=()):
         estimate_motion(rows, ecef)
     samples = sorted((row for rows in objects for row in rows), key=lambda row: row['sim_time_s'])
     first = next((row for row in samples if row['kind'] == 'aircraft'), samples[0])
-    lat0 = math.radians(geodetic_latitude(first['latitude_deg'], first['altitude_m']))
+    lat0 = math.radians(first['latitude_deg'])  # read_csv normalised it to geodetic
     lon0 = math.radians(first['longitude_deg'])
     origin = ecef(first['latitude_deg'], first['longitude_deg'], first['altitude_m'])
     for index, row in enumerate(samples, 1):

@@ -18,7 +18,11 @@ class TelemetryTests(unittest.TestCase):
     def test_speed_uses_true_elapsed_time_and_initial_sample_is_not_false_zero(self):
         samples,_=read_exports([file(AIR,['0,18,59,5000,0,0,90','0.2,18,59,5002,0,0,90','1.7,18,59,5017,0,0,90'])])
         for row in samples:
-            self.assertAlmostEqual(row['position_speed_mps'],10,places=6)
+            # A climb at constant geocentric latitude is not quite along the
+            # ellipsoid normal, so converting this legacy column to geodetic
+            # leaves a sub-mm/s horizontal residual. Our own recorder records
+            # geodetic latitude directly and has none.
+            self.assertAlmostEqual(row['position_speed_mps'],10,delta=1e-4)
             self.assertIsNone(row['true_airspeed_mps'])
             self.assertIsNone(row['mach'])
             self.assertGreater(row['estimated_mach'],0)

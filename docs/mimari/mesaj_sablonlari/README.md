@@ -1,3 +1,5 @@
+> **12 Ekim 2026 güncellemesi:** Çalışan Python TCP köprüsü bütün uçakları tek ölçüm/komut içinde taşır. Güncel şablonlar [tcp/](tcp/README.md), kullanım [src/README.md](../../../src/sim/README.md). Aşağıdaki sürüm 2, uçak başına mesaj önerisinin eski tasarım notudur; mevcut bağlantının şeması değildir. C++ istemci henüz projeye eklenmedi.
+
 # Simülasyon mesaj şablonları — sürüm 2
 
 **Her durum ve komut mesajı tek bir uçağa aittir.** Mavi ve kırmızı aynı şemayı kullanır; kimlikleri ve verileri farklıdır. Böylece her uçağı ayrı C++ sınıfı, fonksiyonu veya kod bloğu kontrol edebilir.
