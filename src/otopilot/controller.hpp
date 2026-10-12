@@ -3,7 +3,8 @@
 #include "messages.hpp"
 #include "objects.hpp"
 
-class Controller {
+class Controller
+{
 public:
     Message calculate(const Message& state);
 

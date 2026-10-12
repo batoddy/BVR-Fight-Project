@@ -1,35 +1,6 @@
-#pragma once
-
-// İki uçak arasındaki geometri: WGS84 -> ECEF dönüşümü, range ve LOS.
-//
-// Enlem/boylam WGS84 jeodezik (state içindeki lat_deg zaten jeodezik gelir),
-// irtifa metre. Sonuçlar metre.
-
+#include "geometry.hpp"
 #include <cmath>
 #include "angles.hpp"
-#include "objects.hpp"
-
-// Dünya merkezli koordinat (ECEF), metre.
-//   x: Dünya merkezinden ekvator ile 0° boylamın kesiştiği noktaya
-//   y: Dünya merkezinden ekvator ile 90° doğu boylamının kesiştiği noktaya
-//   z: Dünya merkezinden kuzey kutbuna
-struct Ecef
-{
-    double x = 0;
-    double y = 0;
-    double z = 0;
-};
-
-// Bizim bulunduğumuz noktaya göre yerel eksenler, metre.
-//   north: kuzeye doğru
-//   east:  doğuya doğru
-//   down:  yere doğru (hedef bizden alçaktaysa pozitif)
-struct Ned
-{
-    double north = 0;
-    double east = 0;
-    double down = 0;
-};
 
 // WGS84 enlem/boylam/irtifa -> ECEF.
 //
@@ -43,7 +14,7 @@ struct Ned
 //   x = (N + h) · cos φ · cos λ
 //   y = (N + h) · cos φ · sin λ
 //   z = (N · (1 − e²) + h) · sin φ
-inline Ecef to_ecef(const Kinematics& k)
+Ecef to_ecef(const Kinematics& k)
 {
     const double a = 6378137.0;           // WGS84 ekvator yarıçapı, m
     const double e2 = 6.69437999014e-3;   // WGS84 basıklık sabiti (eksantrikliğin karesi)
@@ -75,7 +46,7 @@ inline Ecef to_ecef(const Kinematics& k)
 //   Δz = z_hedef − z_biz
 //
 //   R = √(Δx² + Δy² + Δz²)
-inline double range_m(const Kinematics& own, const Kinematics& target)
+double range_m(const Kinematics& own, const Kinematics& target)
 {
     Ecef p = to_ecef(own);
     Ecef q = to_ecef(target);
@@ -89,7 +60,6 @@ inline double range_m(const Kinematics& own, const Kinematics& target)
 }
 
 // LOS (line of sight): hedef bizden ne kadar kuzeyde, doğuda, aşağıda.
-// Bearing ve ATA gibi açıların temeli bu vektördür.
 //
 // Formül: ECEF farkını bizim noktamızdaki yerel eksenlere döndürmek.
 //   φ, λ = bizim enlem ve boylamımız (radyan)
@@ -98,7 +68,7 @@ inline double range_m(const Kinematics& own, const Kinematics& target)
 //   North = −sin φ · cos λ · Δx  −  sin φ · sin λ · Δy  +  cos φ · Δz
 //   East  = −sin λ · Δx          +  cos λ · Δy
 //   Down  = −cos φ · cos λ · Δx  −  cos φ · sin λ · Δy  −  sin φ · Δz
-inline Ned line_of_sight(const Kinematics& own, const Kinematics& target)
+Ned line_of_sight(const Kinematics& own, const Kinematics& target)
 {
     Ecef p = to_ecef(own);
     Ecef q = to_ecef(target);
@@ -126,10 +96,19 @@ inline Ned line_of_sight(const Kinematics& own, const Kinematics& target)
 //
 // Formül (Pisagor, yalnızca kuzey ve doğu bileşenleri):
 //   R_yatay = √(North² + East²)
-inline double horizontal_range_m(const Kinematics& own, const Kinematics& target)
+double horizontal_range_m(const Kinematics& own, const Kinematics& target)
 {
     Ned los = line_of_sight(own, target);
 
     double distance_squared = los.north * los.north + los.east * los.east;
     return std::sqrt(distance_squared);
+}
+
+double bearing_deg(const Kinematics& own, const Kinematics& target)
+{
+    Ned los = line_of_sight(own,target);
+
+    double bearing_rad = std::atan2(los.east, los.north);
+
+    return bearing_rad * RAD_TO_DEG;
 }

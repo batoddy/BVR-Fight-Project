@@ -14,7 +14,8 @@
 // ---------------------------------------------------------------- ölçüm
 
 // Konum ve hareket. Uçakta da füzede de aynı alanlar var.
-struct Kinematics {
+struct Kinematics
+{
     double lat_deg = 0;     // jeodezik enlem (WGS84), derece
     double lon_deg = 0;     // boylam, derece
     double alt_msl_m = 0;   // deniz seviyesine göre irtifa, m
@@ -29,7 +30,8 @@ struct Kinematics {
 };
 
 // Uçak: simülasyondan gelen ölçüm + lookup table'dan gelen tip özellikleri.
-struct Aircraft {
+struct Aircraft
+{
     std::string id;           // "blue" / "red"
     std::string name;         // "KE"
     std::string type;         // "F16" -> profil bu adla bulunur
@@ -40,7 +42,8 @@ struct Aircraft {
     static Aircraft from_json(const Json& j);
 };
 
-struct Missile {
+struct Missile
+{
     std::string id;           // "blue/missile/0"
     std::string owner_id;     // "blue"
     std::string target_id;    // atılmadıysa boş
@@ -53,7 +56,8 @@ struct Missile {
 };
 
 // Bir turdaki bütün dünya. blue her zaman fighter, red her zaman bogey.
-struct World {
+struct World
+{
     double sim_time_s = 0;
     Aircraft fighter;
     Aircraft bogey;
@@ -68,15 +72,19 @@ struct World {
 // Uçuşa ve atışa dair komut. heading_deg ±180 yazılır; gönderirken 0..360'a çevrilir.
 // Yön/irtifa/gaz kalıcıdır: değiştirene kadar her tur aynısı gider.
 // Atış tek seferliktir: gönderildikten sonra controller fire_target_id'yi temizler.
-struct FlightCommand {
-    std::string id;           // "blue" / "red"
-    double heading_deg = 0;   // ±180: + sağ, - sol
+struct FlightCommand
+{
+    std::string id;               // "blue" / "red"
+    double heading_deg = 0;       // ±180: + sağ, - sol
     double altitude_m = 0;
-    double throttle = 0;      // 0..1
+    double throttle = 0;          // 0..1
     std::string fire_target_id;   // boşsa bu tur atış yok
 
     // Bu tur hedefe ateş et. Mümkün değilse (havada kendi füzesi var / füze bitti) Python atmaz.
-    void fire(const Aircraft& target) { fire_target_id = target.id; }
+    void fire(const Aircraft& target)
+    {
+        fire_target_id = target.id;
+    }
 
     static FlightCommand from_json(const Json& j);
     Json to_json() const;

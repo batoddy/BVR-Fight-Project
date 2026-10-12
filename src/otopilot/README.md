@@ -12,6 +12,7 @@ Gelen ölçüm nesnelere doldurulur; kendi karar kodun `controller.cpp` içine g
 | `objects.hpp/.cpp` | `World`, `Aircraft`, `Missile`, `Kinematics` (ölçüm) ve `FlightCommand` (uçuş ve atış komutu). JSON ↔ nesne çevirisi burada. |
 | `aircraft_profiles.hpp` | Type adı → uçak özellikleri lookup table. |
 | `angles.hpp` | `PI`, derece/radyan, 0..360 ↔ ±180 yön çevirisi. |
+| `geometry.hpp/.cpp` | WGS84 → ECEF, range, LOS (kuzey/doğu/aşağı), yatay mesafe. Formüller `.cpp` içinde yorum olarak. |
 | `connection.hpp` | Uygulamaya sunulan sade `Connection` al/ver arayüzü. |
 | `tcp_connection.cpp` | Adres/port, Winsock, JSON aktarımı, adım sırası ve bitiş/kapanış. |
 | `messages.hpp` | Python ile aynı `kind`, `tick`, `data` alanları. |
@@ -22,11 +23,14 @@ Gelen ölçüm nesnelere doldurulur; kendi karar kodun `controller.cpp` içine g
 Workspace içinde PowerShell'den, kurulu MinGW ile:
 
 ```powershell
-& "M:\bin\g++.exe" -no-canonical-prefixes -std=c++17 -Wall -Wextra -O2 -static ".\src\otopilot\main.cpp" ".\src\otopilot\controller.cpp" ".\src\otopilot\tcp_connection.cpp" ".\src\otopilot\objects.cpp" -o ".\src\otopilot\main.exe" -lws2_32
+& "M:\bin\g++.exe" -no-canonical-prefixes -std=c++17 -Wall -Wextra -O2 -static ".\src\otopilot\*.cpp" -o ".\src\otopilot\main.exe" -lws2_32
 ```
 
-Dört `.cpp` birlikte derlenir; `.hpp` dosyaları include ile alınır. Yeni bir
-`.cpp` eklersen bu komuta da ekle. `-lws2_32` Windows TCP kütüphanesini bağlar.
+`*.cpp` klasördeki bütün `.cpp` dosyalarını birlikte derler (MinGW joker
+karakteri kendisi açar); yeni bir `.cpp` eklediğinde komut değişmez. `.hpp`
+dosyaları include ile alınır. Düzen: `.hpp` = tipler ve bildirimler, `.cpp` =
+hesap kodu; sabitler (`angles.hpp`) ve veri tablosu (`aircraft_profiles.hpp`)
+başlıkta kalır. `-lws2_32` Windows TCP kütüphanesini bağlar.
 `-static` MinGW çalışma zamanını exe içine alır.
 
 1. Python terminalinde venv açıkken sunucuyu başlat: `python .\src\sim\sim_main.py`

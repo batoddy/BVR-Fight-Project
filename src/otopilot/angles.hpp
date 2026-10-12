@@ -19,31 +19,40 @@ inline constexpr double DEG_TO_RAD = PI / 180.0;
 inline constexpr double RAD_TO_DEG = 180.0 / PI;
 
 // 0..360 -> ±180.   270 -> -90,   190 -> -170,   180 -> 180
-inline double to_signed_heading(double heading_deg) 
+//
+// Formül:
+//   h = açı mod 360
+//   h > 180 ise    h = h − 360
+//   h ≤ −180 ise   h = h + 360
+inline double to_signed_heading(double heading_deg)
 {
     double h = std::fmod(heading_deg, 360.0);
 
-    if (h > 180.0) 
+    if (h > 180.0)
     {
-      h -= 360.0;
+        h -= 360.0;
     }
 
     if (h <= -180.0)
     {
-      h += 360.0;  
+        h += 360.0;
     }
 
     return h;
 }
 
 // ±180 -> 0..360 (Python'un beklediği).   -90 -> 270,   -170 -> 190
+//
+// Formül:
+//   h = açı mod 360
+//   h < 0 ise   h = h + 360
 inline double to_compass_heading(double heading_deg)
- {
+{
     double h = std::fmod(heading_deg, 360.0);
-    
+
     if (h < 0.0)
     {
-      h += 360.0;  
+        h += 360.0;
     }
 
     return h;

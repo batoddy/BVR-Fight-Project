@@ -7,7 +7,8 @@
 // Uçak tipinin sabit özellikleri. Simülasyondan gelmez; burada elle doldurulur.
 // Yeni özellik eklerken alanı buraya, değerini aşağıdaki tabloya aynı sırada yaz.
 // 0 = henüz girilmedi.
-struct AircraftProfile {
+struct AircraftProfile
+{
     std::string name;
 
     // Performans
@@ -45,7 +46,8 @@ struct AircraftProfile {
 // bunlar senin hesabında kullanacağın referans değerlerdir.
 
 // Anahtar: Python'dan gelen type adı. Değerler struct'taki sırayla yazılır.
-inline const std::map<std::string, AircraftProfile>& aircraft_profiles() {
+inline const std::map<std::string, AircraftProfile>& aircraft_profiles()
+{
     static const std::map<std::string, AircraftProfile> table = {
         //                   name               max_mach  max_g  wez_max_m  wez_min_m  radar_m  gimbal_deg  turn_m
         {"F16",            {"F-16",              2.05,    9.0,     31000,     2000,    80000,       60,    40000}},
@@ -56,10 +58,15 @@ inline const std::map<std::string, AircraftProfile>& aircraft_profiles() {
 }
 
 // Tipin profilini döndür. Tablo bu tipi bilmiyorsa ilk ölçümde anlaşılır hatayla durur.
-inline const AircraftProfile& aircraft_profile(const std::string& type) {
+inline const AircraftProfile& aircraft_profile(const std::string& type)
+{
     const auto& table = aircraft_profiles();
+
     auto found = table.find(type);
     if (found == table.end())
+    {
         throw std::runtime_error("Bilinmeyen ucak tipi: " + type + " (aircraft_profiles.hpp'ye ekle)");
+    }
+
     return found->second;
 }
