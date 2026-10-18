@@ -12,12 +12,12 @@ static void print_aircraft(const Aircraft& a)
     std::cout << a.id
               << "  lat " << std::setprecision(4) << k.lat_deg
               << "  lon " << k.lon_deg
-              << "  alt " << std::setprecision(0) << k.alt_msl_m << " m"
+              << "  alt " << std::setprecision(0) << k.altitude_m << " m"
               << "  hdg " << std::setprecision(1) << k.heading_deg_180
               << "  tas " << std::setprecision(0) << k.tas_mps << " m/s"
-              << "  rng " << std::setprecision(1) << a.enemy.range_m / 1000.0 << " km"
-              << "  brg " << a.enemy.bearing_deg_180
-              << "  msl " << a.own.ready_missiles << (a.own.missile_in_flight ? " +havada" : "");
+              << "  rng " << std::setprecision(1) << a.enemy.range_3d_m / 1000.0 << " km"
+              << "  brg " << a.enemy.bearing_deg
+              << "  msl " << a.own.ready_missiles << " hazir " << a.own.missile_in_flight << " havada";
 
 }
 
@@ -49,15 +49,28 @@ Message Autopilot::step(const Message& state)
         std::cout << '\n';
     }
 
+
+
+    
     // 3. Manevra: elle seçilir. Denemek istediğini aç, diğerini kapat.
-    fighter_command_ = maneuvers_.hold.compute(world_.fighter, fighter_command_);
-    // fighter_command_ = maneuvers_.crank.compute(world_.fighter, fighter_command_);
+    if(world_.sim_time_s < 20)
+    {
+        fighter_command_ = maneuvers_.hold.compute(world_.fighter, fighter_command_);
+    }
+
+    else
+    {
+        fighter_command_ = maneuvers_.crank.compute(world_.fighter, fighter_command_);
+    }
 
     // 4. Atış: elle. Tek seferlik; her step yeniden karar verilir.
     bool fighter_fire = false;
     // bool fighter_fire = world_.sim_time_s > 10.0 && world_.sim_time_s < 11.0;   // test: 10. saniyede bir atış
 
+
+
+
+
     // 5. Komut.
     return CommandWriter::write(state.tick, fighter_command_, bogey_command_, fighter_fire);
-
 }

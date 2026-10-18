@@ -8,7 +8,7 @@ saptadığımız düşman `bogey`. Yalnız fighter sürülür; bogey'e her adım
 başlangıç komutu aynen geri gönderilir (hold).
 
 Büyük resim, diyagramlar ve alınan kararlar: [docs/mimari/OTOPILOT_MIMARISI.md](../../docs/mimari/OTOPILOT_MIMARISI.md).
-Bu dosya kodun kendisini, dosya dosya anlatır.
+Bu dosya kodun kendisini, dosya dosya anlatır. Örneklerle "nasıl yaparım": [KULLANIM.md](KULLANIM.md).
 
 ---
 
@@ -67,11 +67,11 @@ Python tarafı `Bitti. N snapshot, M olay.` yazar ve kaydı `recordings/` altın
 **Terminal çıktısı:** saniyede bir satır, iki uçak yan yana:
 
 ```
-t  12 s | blue  lat 59.1990  lon 18.4290  alt 5004 m  hdg 26.1  tas 305 m/s  rng 88.4 km  brg -19.3  msl 4 | red ...
+t  12 s | blue  lat 59.1990  lon 18.4290  alt 5004 m  hdg 26.1  tas 305 m/s  rng 88.4 km  brg -19.3  msl 4 hazir 0 havada | red ...
 ```
 
 `rng` ve `brg` fighter için bogey'e göre, bogey için fighter'a göredir.
-`msl` hazır füze sayısı; havada füze varsa `+havada` eklenir.
+`msl` hazır ve havadaki kendi füzelerinin sayısı.
 
 ---
 
@@ -126,7 +126,7 @@ Diyagram: [04_otopilot_katmanlar.svg](../../docs/mimari/assets/04_otopilot_katma
 | `orders.hpp` | emir | `FlightCommand`: yön, irtifa, gaz. |
 | `command_writer.hpp/.cpp` | yazma | Emir → command JSON, sınır kontrolü. |
 | `roles.hpp` | ortak | `FIGHTER_ID = "blue"`, `BOGEY_ID = "red"`. |
-| `angles.hpp` | ortak | `PI`, derece/radyan, `wrap_180`, `wrap_360`. |
+| `util_functions.hpp` | ortak | `PI`, derece/radyan, `wrap_180`, `wrap_360`, `lla_to_ecef`, `ecef_to_lla`. |
 | `connection.hpp`, `tcp_connection.cpp`, `messages.hpp` | TCP | Dokunulmaz: bağlantı ve mesaj çerçevesi. |
 | `third_party/nlohmann` | dış | JSON kütüphanesi 3.12.0 (MIT). |
 | `CMakeLists.txt` | derleme | Klasördeki bütün `.cpp`'ler → `main.exe`. |
@@ -212,8 +212,8 @@ read_world
 - Füze listesi her step `clear()` edilip baştan yazılır. Füze sayısı uçuş boyunca sabit
   olduğu için pratikte aynı füzeler aynı sırayla yeniden dolar.
 - Atılmamış füzede `target_id`, `outcome`, `flight_time_s`, `kinematics` JSON'da `null` gelir.
-  `null` string'e ya da sayıya çevrilemez; önce `is_null()` ile bakılır. Sayı ve konum
-  `std::optional` içinde boş bırakılır, metinler boş string olur.
+  `null` string'e ya da sayıya çevrilemez; önce `is_null()` ile bakılır. Füze `Ready` iken
+  sayı ve konum 0 kalır, metinler boş string olur.
 - Yön burada çevrilir: JSON'daki 0..360 `yaw_deg` / `heading_deg` → `wrap_180` → ±180.
 - `fighter` ya da `bogey` JSON'da yoksa, ya da `flight_commands`'ta aranan id yoksa
   **hata verip durur**. Sessizce 0 bırakmak, otonominin 0,0 koordinatına göre karar
@@ -243,7 +243,7 @@ void World::update()
   Nesne step'ler arasında yaşadığı için sayaçlar **önce sıfırlanır**; yoksa her step
   bir öncekinin üstüne eklenirdi.
 - `fill_enemy_info`: önce `Geometry` (range, bearing), sonra `Weapons` (in_wez, MAR, DOR).
-  Sıra bilinçlidir: `Weapons`, az önce dolan `own.enemy.range_m`'yi okuyabilir.
+  Sıra bilinçlidir: `Weapons`, az önce dolan `own.enemy.range_3d_m`'yi okuyabilir.
 - Aynı fonksiyon iki uçak için roller yer değiştirerek çağrılır. fighter ve bogey'in aynı
   sınıftan olmasının faydası budur.
 
@@ -264,8 +264,10 @@ JSON bilmez. Beş `struct` vardır; ayrıntılı alan tabloları [4. bölümde](
 Her alanın yorumu üç sütundur: `birim | JSON anahtarı | Python / JSBSim kaynağı`.
 Bir değerin nereden geldiğini merak ettiğinde bu dosyaya bakman yeter.
 
-`std::optional<T>`: "değer var ya da yok". Atılmamış füzenin konumu yoktur; 0 yazsaydık
-0,0 koordinatı sanılırdı. Kullanımı: `if (m.kinematics) { m.kinematics->lat_deg; }`.
+`MissileState`: `Ready = 0` (atılmadı), `InFlight = 1` (havada), `Ended = 2` (işi bitti). JSON'daki
+metin okurken `read_missile_state` ile çevrilir. Atılmamış füzenin konumu yoktur; alanlar 0 kalır ve
+0,0 koordinatı sanılmasın diye önce duruma bakılır:
+`if (m.state != MissileState::Ready) { m.kinematics.lat_deg; }`.
 
 ### `aircraft_profiles.hpp`: uçak tipi tablosu
 
@@ -289,12 +291,13 @@ Crank'ta tekrar ikiye bölme.
 
 | Fonksiyon | Döndürür |
 |---|---|
-| `range_m(own, target)` | m, 3B düz çizgi mesafe |
+| `range_2d_m(own, target)` | m, yatay mesafe (irtifa farkı yok) |
+| `range_3d_m(own, target)` | m, 3B düz çizgi mesafe (irtifa farkı dahil) |
 | `bearing_deg_180(own, target)` | derece ±180, own'dan target'a bakış yönü; 0 kuzey, + doğu |
 
 `own` bakan taraftır, hesap onun yerinden yapılır. Neden `Aircraft` değil `Kinematics`?
 Mesafe için yalnız konum gerekir; aynı fonksiyon ileride füze–uçak arasında da çalışır
-(`Geometry::range_m(own.kinematics, *missile.kinematics)`).
+(`Geometry::range_3d_m(own.kinematics, missile.kinematics)`).
 
 ECEF, LOS gibi ara yapılar gerekirse bu dosyalara, dışarıya kapalı olacaksa `private static` olarak eklenir.
 
@@ -309,7 +312,7 @@ profiline de (füze menzili, radar) bakar. Bu yüzden `Aircraft` alır.
 | `mar_m(own, enemy)` | m, Minimum Abort Range |
 | `dor_m(own, enemy)` | m, Desired Out Range |
 
-Çağrıldığında `own.enemy.range_m` gibi `Geometry` sonuçları zaten doludur.
+Çağrıldığında `own.enemy.range_3d_m` gibi `Geometry` sonuçları zaten doludur.
 
 ### `maneuver.hpp/.cpp`: manevralar
 
@@ -380,12 +383,19 @@ inline constexpr const char* BOGEY_ID = "red";
 
 "blue = fighter, red = bogey" eşlemesi yalnız burada. YAML'da anahtar değişirse yalnız burası değişir.
 
-### `angles.hpp`
+### `util_functions.hpp`
+
+Genel dönüşümler. Uçak ya da `Kinematics` bilmez, yalnız sayıları çevirir; iki nesne arası
+hesap `Geometry`'dedir.
 
 - `PI`, `DEG_TO_RAD`, `RAD_TO_DEG` (MinGW c++17'de `M_PI` yok).
 - `wrap_180(deg)`: herhangi bir açı → (-180, 180]. Okunan yönde de, hesaptaki açı farklarında
   da (ör. `bearing - heading`) bunu kullan. **±180'e çeviren tek fonksiyon budur.**
 - `wrap_360(deg)`: herhangi bir açı → [0, 360). Yalnız Python'a yön gönderirken.
+- `lla_to_ecef(lat_deg, lon_deg, altitude_m)` → `Ecef {x_m, y_m, z_m}` ve
+  `ecef_to_lla(Ecef)` → `Lla {lat_deg, lon_deg, altitude_m}`: WGS84. LLA enlem/boylam/irtifa,
+  ECEF Dünya merkezli x/y/z metre. `altitude_m` MSL'dir, formül elipsoid yüksekliği bekler;
+  yakın iki uçakta fark birbirini götürür.
 
 Fonksiyonlar `inline`'dır: başlıkta gövdesi olan ve birden çok `.cpp`'nin include ettiği
 fonksiyon `inline` olmazsa linker "multiple definition" verir.
@@ -424,7 +434,7 @@ Zincir: JSBSim property → Python `src/sim/simulation.py` → state JSON → `S
 |---|---|---|---|---|
 | `lat_deg` | derece, WGS84 jeodezik | `lat_deg` | `position/lat-geod-deg` | yok |
 | `lon_deg` | derece | `lon_deg` | `position/long-gc-deg` | yok |
-| `alt_msl_m` | m, deniz seviyesinden | `alt_msl_m` | `position/h-sl-meters` | yok |
+| `altitude_m` | m, deniz seviyesinden (MSL) | `alt_msl_m` | `position/h-sl-meters` | yok |
 | `heading_deg_180` | derece ±180; 0 kuzey, + doğu | `yaw_deg` (0..360) | `attitude/psi-deg` | `wrap_180` |
 | `pitch_deg` | derece; + burun yukarı | `pitch_deg` | `attitude/theta-deg` | yok |
 | `roll_deg` | derece; + sağ kanat aşağı | `roll_deg` | `attitude/phi-deg` | yok |
@@ -441,10 +451,10 @@ YAML'da `lat: 59.0` yazan uçak C++'ta yaklaşık `59.17` görünür. Hata deği
 |---|---|---|---|
 | `id` | metin, `"blue/missile/0"` | `id` | |
 | `target_id` | metin; atılmadıysa boş | `target_id` (null olabilir) | |
-| `state` | `"ready"` / `"in_flight"` / `"ended"` | `state` | BVRGym `is_ready_to_launch()`, `is_active()` |
+| `state` | `MissileState`: `Ready` 0 / `InFlight` 1 / `Ended` 2 | `state` (`"ready"` / `"in_flight"` / `"ended"`) | BVRGym `is_ready_to_launch()`, `is_active()` |
 | `outcome` | `"hit"` / `"lost"`; yoksa boş | `outcome` (null olabilir) | |
-| `flight_time_s` | s, atıştan beri; `optional` | `flight_time_s` (null olabilir) | |
-| `kinematics` | `Kinematics`; `optional` | `kinematics` (null olabilir) | atılınca uçakla aynı alanlar |
+| `flight_time_s` | s, atıştan beri; `Ready` iken 0 | `flight_time_s` (null olabilir) | |
+| `kinematics` | `Kinematics`; `Ready` iken 0 | `kinematics` (null olabilir) | atılınca uçakla aynı alanlar |
 
 ### `AircraftProfile`, JSON'dan değil, `type` ile tablodan
 
@@ -461,8 +471,8 @@ YAML'da `lat: 59.0` yazan uçak C++'ta yaklaşık `59.17` görünür. Hata deği
 
 | Alan | Birim | Nasıl |
 |---|---|---|
-| `ready_missiles` | adet | `missiles` içinde `state == "ready"` olanlar |
-| `missile_in_flight` | adet, havadaki kendi füzem | `state == "in_flight"` olanlar. Python aynı anda en çok bir füzeye izin verir. |
+| `ready_missiles` | adet | `missiles` içinde `state == MissileState::Ready` olanlar |
+| `missile_in_flight` | adet, havadaki kendi füzelerim | `state == MissileState::InFlight` olanlar. Şimdilik Python aynı anda en çok bir füzeye izin veriyor; C++ sayıyı kısıtlamaz. |
 
 İhtiyaç oldukça alan eklenir (ör. irtifa/hıza bağlı dinamik WEZ).
 
@@ -473,7 +483,8 @@ YAML'da `lat: 59.0` yazan uçak C++'ta yaklaşık `59.17` görünür. Hata deği
 
 | Alan | Birim | Fonksiyon |
 |---|---|---|
-| `range_m` | m, 3B mesafe | `Geometry::range_m` |
+| `range_2d_m` | m, yatay mesafe | `Geometry::range_2d_m` |
+| `range_3d_m` | m, 3B mesafe | `Geometry::range_3d_m` |
 | `bearing_deg_180` | derece ±180, kuzeye göre karşı uçağın yönü | `Geometry::bearing_deg_180` |
 | `in_wez` | evet/hayır | `Weapons::in_wez` |
 | `mar_m` | m, Minimum Abort Range | `Weapons::mar_m` |
@@ -548,7 +559,7 @@ bool fighter_fire = world_.sim_time_s > 10.0 && world_.sim_time_s < 11.0;
 ```
 
 O bir saniyede emir 12 kez gitse de Python havada kendi füzesi varken yenisini atmaz.
-Sonucu terminalde `msl 3 +havada`, kayıtta `events.jsonl` ve görüntüleyicide **Füze vuruş bilgisi** gösterir.
+Sonucu terminalde `msl 3 hazir 1 havada`, kayıtta `events.jsonl` ve görüntüleyicide **Füze vuruş bilgisi** gösterir.
 
 ### Hesaplanan yeni bilgi ekle (ör. ATA)
 
@@ -580,7 +591,7 @@ kaynak yorumuyla), `state_reader.cpp`'de ilgili `read_` fonksiyonuna bir satır.
 ## 7. Henüz boş olanlar ve sınırlar
 
 **İçi boş (TODO), iskelet hazır:**
-- `Geometry::range_m`, `Geometry::bearing_deg_180`: şimdilik 0 döndürür.
+- `Geometry::bearing_deg_180`: şimdilik 0 döndürür. (`range_2d_m` / `range_3d_m` hazır: düz dünya yaklaşımı, ~%0,3 hata.)
 - `Weapons::in_wez`, `mar_m`, `dor_m`: şimdilik `false` / 0.
 - `Crank::compute`: şimdilik komutu değiştirmez.
 

@@ -3,6 +3,10 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+
+// JSON'dan gizli dönüşümü kapat: değer okurken türü her zaman açık yaz, j.at("x").get<double>().
+// Unutulursa derleyici hata verir. json.hpp'den önce gelmeli.
+#define JSON_USE_IMPLICIT_CONVERSIONS 0
 #include "third_party/nlohmann/json.hpp"
 
 using Json = nlohmann::json;

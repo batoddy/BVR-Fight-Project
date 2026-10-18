@@ -6,9 +6,8 @@
 // Yorum düzeni:   birim | JSON anahtarı | Python / JSBSim kaynağı
 
 #include <array>
-#include <optional>   // yeni
 #include <string>
-#include <vector>     // yeni
+#include <vector>
 #include "aircraft_profiles.hpp"
 
 
@@ -17,7 +16,7 @@ struct Kinematics
 {
     double lat_deg = 0;           // derece, WGS84 jeodezik enlem | lat_deg   | position/lat-geod-deg
     double lon_deg = 0;           // derece, boylam               | lon_deg   | position/long-gc-deg
-    double alt_msl_m = 0;         // m, deniz seviyesinden        | alt_msl_m | position/h-sl-meters
+    double altitude_m = 0;        // m, deniz seviyesinden (MSL)  | alt_msl_m | position/h-sl-meters
     double heading_deg_180 = 0;   // derece ±180, 0 kuzey, + doğu | yaw_deg (0..360, okurken çevrilir) | attitude/psi-deg
     double pitch_deg = 0;         // derece, + burun yukarı       | pitch_deg | attitude/theta-deg
     double roll_deg = 0;          // derece, + sağ kanat aşağı    | roll_deg  | attitude/phi-deg
@@ -29,16 +28,26 @@ struct Kinematics
 };
 
 
+// Füzenin durumu. Sayı değerleri sabit: 0 atılmadı, 1 havada, 2 işi bitti.
+enum class MissileState
+{
+    Ready = 0,      // atılmadı, rampada    | "ready"     | BVRGym is_ready_to_launch()
+    InFlight = 1,   // havada               | "in_flight" | BVRGym is_active()
+    Ended = 2,      // vurdu ya da kaybetti | "ended"     | sonuç outcome'da
+};
+
+
 // Uçağın füzelerinden biri. Sahibi, füzeyi missiles listesinde tutan Aircraft'tır.
 struct Missile
 {
     std::string id;          // "blue/missile/0"                 | id
     std::string target_id;   // hedef uçak id; atılmadıysa boş   | target_id (null olabilir)
-    std::string state;       // "ready" / "in_flight" / "ended"  | state | BVRGym is_ready_to_launch(), is_active()
+    MissileState state = MissileState::Ready;   //               | state (metin, okurken çevrilir)
     std::string outcome;     // "hit" / "lost"; sonuç yoksa boş  | outcome (null olabilir)
 
-    std::optional<double> flight_time_s;   // s, atıştan beri; atılmadıysa yok | flight_time_s
-    std::optional<Kinematics> kinematics;  // atılmadıysa yok: if (m.kinematics) ... | kinematics
+    // Ready iken aşağıdaki iki alan anlamsız (0 kalır); okumadan önce state'e bak.
+    double flight_time_s = 0;   // s, atıştan beri | flight_time_s
+    Kinematics kinematics;      // füzenin konumu  | kinematics
 };
 
 
@@ -56,8 +65,10 @@ struct OwnInfo
 struct EnemyInfo
 {
     // Geometry: saf geometri
-    double range_m = 0;           // m, 3B düz çizgi mesafe                       | Geometry::range_m
-    double bearing_deg_180 = 0;   // derece ±180, kuzeye göre karşı uçağın yönü   | Geometry::bearing_deg_180
+    double range_2d_m = 0;        // m, yatay mesafe (irtifa farkı yok)          | Geometry::range_2d_m
+    double range_3d_m = 0;        // m, 3B düz çizgi mesafe (irtifa farkı dahil) | Geometry::range_3d_m
+    double bearing_deg = 0;       // derece ±180, kuzeye göre karşı uçağın yönü  | Geometry::bearing_deg
+    double ata_deg = 0;           // derece ±180, burnum ile karşı uçak arası; + sağımda | Geometry::ATA_deg
 
     // Weapons: füze ve taktik (profil + geometri)
     bool in_wez = false;          // karşı uçak benim WEZ'imde mi                 | Weapons::in_wez

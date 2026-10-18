@@ -21,10 +21,10 @@ agents:
     throttle: 0.55  # Başlangıç gaz komutu.
     spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
       lat: 59.0
-      long: 18.4
+      long: 18.0
       alt: 5000
       vel: 300
-      heading: 26
+      heading: 0
 
   red:
     name: Bogey
@@ -37,4 +37,4 @@ agents:
       long: 18.0
       alt: 5000
       vel: 300
-      heading: 139
+      heading: 180

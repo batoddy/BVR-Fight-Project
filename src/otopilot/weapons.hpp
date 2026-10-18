@@ -8,7 +8,7 @@
 // Bu yüzden Kinematics değil, Aircraft alır.
 //   own:   bakan taraf
 //   enemy: karşı taraf
-// own.enemy.range_m gibi Geometry sonuçları burada çağrılmadan önce doludur (World::update sırası).
+// own.enemy.range_3d_m gibi Geometry sonuçları burada çağrılmadan önce doludur (World::update sırası).
 class Weapons
 {
 public:

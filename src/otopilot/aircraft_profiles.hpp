@@ -17,7 +17,7 @@ struct AircraftProfile
     double wez_min_range_m = 0;        // m, füzenin etkin menzil iç sınırı
 
     double radar_range_m = 0;          // m, algılama menzili
-    double radar_gimbal_half_deg = 0;  // derece, burundan sağa VE sola tarama açısı (60 = ±60)
+    double radar_gimbal_deg = 0;  // derece, burundan sağa VE sola tarama açısı (60 = ±60)
 };
 
 // Değerlerin kaynağı:
@@ -30,9 +30,9 @@ inline const std::map<std::string, AircraftProfile>& aircraft_profiles()
 {
     static const std::map<std::string, AircraftProfile> table = {
         //                   name               mach   g     wez_max  wez_min  radar   gimbal
-        {"F16",            {"F-16",             2.05,  9.0,  31000,   2000,    80000,  60}},
-        {"Su57",           {"Su-57",            2.0,   9.0,  31000,   2000,   100000,  60}},
-        {"CustomAircraft", {"Ornek ozel ucak",  1.2,   4.0,  20000,   3000,    50000,  45}},
+        {"F16",            {"F-16",             2.05,  9.0,  31000,   2000,    80000,  120}},
+        {"Su57",           {"Su-57",            2.0,   9.0,  31000,   2000,   100000,  120}},
+        {"CustomAircraft", {"Ornek ozel ucak",  1.2,   4.0,  20000,   3000,    50000,  90}},
     };
     return table;
 }

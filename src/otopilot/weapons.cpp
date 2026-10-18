@@ -3,7 +3,7 @@
 bool Weapons::in_wez(const Aircraft& own, const Aircraft& enemy)
 {
     // TODO. Elindekiler:
-    //   own.enemy.range_m, own.profile.wez_min_range_m, own.profile.wez_max_range_m
+    //   own.enemy.range_3d_m, own.profile.wez_min_range_m, own.profile.wez_max_range_m
     (void)own;
     (void)enemy;
     return false;

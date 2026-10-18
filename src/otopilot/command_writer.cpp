@@ -1,7 +1,7 @@
 #include "command_writer.hpp"
 #include <cmath>
 #include <stdexcept>
-#include "angles.hpp"
+#include "util_functions.hpp"
 #include "roles.hpp"
 
 Message CommandWriter::write(std::uint64_t tick, const FlightCommand& fighter, const FlightCommand& bogey, bool fighter_fire)

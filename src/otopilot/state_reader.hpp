@@ -29,4 +29,7 @@ private:
     // Tek füze -> missile
     static void read_missile(const Json& j, Missile& missile);
 
+    // "ready" / "in_flight" / "ended" -> MissileState; bilinmeyen metinde hata
+    static MissileState read_missile_state(const std::string& text);
+
 };
