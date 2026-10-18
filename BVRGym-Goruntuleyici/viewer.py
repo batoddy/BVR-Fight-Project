@@ -22,7 +22,7 @@ def main():
         parser.error('Port 1–65535 arasında olmalı')
     if args.recording.exists() and not args.recording.is_dir():
         parser.error('--recording bir klasör olmalı')
-    store = RecordingStore(args.recording, catalog_roots=[workspace / 'recordings', workspace / 'BVRGym/data_output'])
+    store = RecordingStore(args.recording, catalog_roots=[workspace / 'recordings'])
     try:
         server = make_server(store, args.port)
     except OSError as exc:

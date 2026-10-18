@@ -24,7 +24,7 @@ agents:
       long: 18.4
       alt: 5000
       vel: 300
-      heading: 0
+      heading: 26
 
   red:
     name: Bogey
@@ -34,7 +34,7 @@ agents:
     throttle: 0.55
     spawn:
       lat: 59.8
-      long: 18.8
+      long: 18.0
       alt: 5000
       vel: 300
-      heading: 180
+      heading: 139

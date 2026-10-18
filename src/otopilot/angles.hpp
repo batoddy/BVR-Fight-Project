@@ -2,58 +2,43 @@
 
 // Açı sabitleri ve yön dönüşümleri.
 //
-// Python/JSBSim yönü 0..360 kullanır (0 kuzey, 90 doğu, 180 güney, 270 batı).
-// C++ içinde ±180 kullanıyoruz:
-//      0  kuzey
-//    +90  sağ  (doğu)
-//    -90  sol  (batı)
-//    180  güney
-// Çeviri yalnızca okurken (objects.cpp) ve komut yazarken yapılır;
-// hesap kodunda hep ±180 görürsün.
+// Python/JSBSim yönü 0..360 kullanır: 0 kuzey, 90 doğu, 180 güney, 270 batı.
+// C++ içinde ±180 kullanırız:          0 kuzey, +90 doğu (sağ), -90 batı (sol), 180 güney.
 
 #include <cmath>
 
-// MinGW -std=c++17 ile M_PI tanımlı değil; kendi sabitimiz.
-inline constexpr double PI = 3.14159265358979323846;
+inline constexpr double PI = 3.14159265358979323846;   // MinGW c++17'de M_PI yok
 inline constexpr double DEG_TO_RAD = PI / 180.0;
 inline constexpr double RAD_TO_DEG = 180.0 / PI;
 
-// 0..360 -> ±180.   270 -> -90,   190 -> -170,   180 -> 180
-//
-// Formül:
-//   h = açı mod 360
-//   h > 180 ise    h = h − 360
-//   h ≤ −180 ise   h = h + 360
-inline double to_signed_heading(double heading_deg)
+// Herhangi bir açıyı (-180, 180] aralığına getirir.   270 -> -90,  -200 -> 160,  180 -> 180
+// Okunan yönde de, hesaptaki açı farklarında da (ör. bearing - heading) bunu kullan.
+inline double wrap_180(double deg)
 {
-    double h = std::fmod(heading_deg, 360.0);
+    double a = std::fmod(deg, 360.0);   // sonuç (-360, 360) aralığında
 
-    if (h > 180.0)
+    if (a > 180.0)
     {
-        h -= 360.0;
+        a -= 360.0;
+    }
+    if (a <= -180.0)
+    {
+        a += 360.0;
     }
 
-    if (h <= -180.0)
-    {
-        h += 360.0;
-    }
-
-    return h;
+    return a;
 }
 
-// ±180 -> 0..360 (Python'un beklediği).   -90 -> 270,   -170 -> 190
-//
-// Formül:
-//   h = açı mod 360
-//   h < 0 ise   h = h + 360
-inline double to_compass_heading(double heading_deg)
+// Herhangi bir açıyı [0, 360) aralığına getirir.   -90 -> 270
+// Yalnızca Python'a yön gönderirken kullanılır.
+inline double wrap_360(double deg)
 {
-    double h = std::fmod(heading_deg, 360.0);
+    double a = std::fmod(deg, 360.0);
 
-    if (h < 0.0)
+    if (a < 0.0)
     {
-        h += 360.0;
+        a += 360.0;
     }
 
-    return h;
+    return a;
 }

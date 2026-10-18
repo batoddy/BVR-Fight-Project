@@ -30,6 +30,12 @@ def fingerprint(directory):
                  for p in sorted(paths) if p.is_file())
 
 
+def recording_files(directory):
+    """CSV files and sidecars that make up one folder recording."""
+    paths = [p for p in directory.glob('*.csv') if p.is_file()]
+    return paths + [directory / name for name in SIDECARS if (directory / name).is_file()]
+
+
 def metadata(path):
     # Tacview stores model, optional callsign and optional color in the filename.
     match = re.fullmatch(r'(.+?)(?: \(([^()]*)\))?(?: \[([^\[\]]+)\])?', path.stem)
@@ -459,13 +465,31 @@ class RecordingStore:
         entries = []
         for directory in sorted(directories):
             try:
-                count = len([p for p in directory.glob('*.csv') if p.is_file()])
+                files = recording_files(directory)
+                count = sum(1 for p in files if p.suffix.lower() == '.csv')
                 if count:
                     key = hashlib.sha256(str(directory).encode()).hexdigest()[:24]
-                    entries.append(dict(id=key, name=directory.name, path=str(directory), files=count))
+                    modified = max(p.stat().st_mtime for p in files)
+                    entries.append(dict(id=key, name=directory.name, path=str(directory), files=count,
+                                        modified=modified))
             except OSError:
                 continue
+        # En yeni kayıt en üstte; aynı anda yazılanlar ada göre sabit sırada kalır.
+        entries.sort(key=lambda entry: (-entry['modified'], entry['name']))
         return entries
+
+    def delete_catalog(self, identity):
+        entry = next((entry for entry in self.catalog() if entry['id'] == identity), None)
+        if entry is None:
+            raise ValueError('Kayıt bulunamadı; dizini ve listeyi kontrol et')
+        directory = Path(entry['path'])
+        # Yalnızca kayıt dosyaları silinir; klasör başka dosya içermiyorsa o da kaldırılır.
+        for path in recording_files(directory):
+            path.unlink()
+        with self.lock:
+            root = self.catalog_root
+        if directory != root and not any(directory.iterdir()):
+            directory.rmdir()
 
     def open_catalog(self, identity):
         entry = next((entry for entry in self.catalog() if entry['id'] == identity), None)

@@ -60,7 +60,7 @@ def make_server(store, port=8765, directory_picker=choose_directory):
 
         def do_POST(self):
             request = urlsplit(self.path)
-            if request.path not in ('/api/directory', '/api/choose-directory', '/api/open'):
+            if request.path not in ('/api/directory', '/api/choose-directory', '/api/open', '/api/delete'):
                 self.send_error(405, 'No flight-control endpoints')
                 return
             origin = self.headers.get('Origin')
@@ -86,6 +86,8 @@ def make_server(store, port=8765, directory_picker=choose_directory):
                     return
                 elif request.path == '/api/directory':
                     store.change_directory(payload.get('path'))
+                elif request.path == '/api/delete':
+                    store.delete_catalog(payload.get('id'))
                 else:
                     store.open_catalog(payload.get('id'))
             except (ValueError, OSError, csv.Error) as exc:

@@ -201,6 +201,32 @@ class RecordingChecks(unittest.TestCase):
         self.assertEqual(store.active_directory, flight.resolve())
         self.assertEqual(original.read_bytes(), (flight / original.name).read_bytes())
 
+    def test_catalog_lists_newest_first_and_deletes_only_recording_files(self):
+        import os
+        original = self.write()
+        store = self.ready()
+        library = self.directory / 'recordings'
+        for name, stamp in (('old', 1_000_000), ('new', 2_000_000)):
+            flight = library / name
+            flight.mkdir(parents=True)
+            copy = flight / original.name
+            copy.write_bytes(original.read_bytes())
+            (flight / 'events.jsonl').write_text('', encoding='utf-8')
+            for path in flight.iterdir():
+                os.utime(path, (stamp, stamp))
+        (library / 'old' / 'notes.txt').write_text('keep', encoding='utf-8')
+        store.change_directory(str(library))
+        entries = store.catalog()
+        self.assertEqual([entry['name'] for entry in entries], ['new', 'old'])
+        self.assertEqual(entries[0]['modified'], 2_000_000)
+        store.delete_catalog(entries[0]['id'])
+        self.assertFalse((library / 'new').exists())
+        store.delete_catalog(store.catalog()[0]['id'])
+        self.assertEqual([p.name for p in (library / 'old').iterdir()], ['notes.txt'])
+        self.assertEqual(store.catalog(), [])
+        with self.assertRaises(ValueError):
+            store.delete_catalog('missing')
+
     def test_http_directory_and_catalog_never_offer_flight_controls(self):
         self.write()
         store = self.ready()

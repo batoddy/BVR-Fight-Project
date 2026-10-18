@@ -1,7 +1,9 @@
 # Python simülasyon dosyaları
 
-Güncelleme: 12 Ekim 2026. C++ ve Python ayrı programlar olarak çalışır.
+Güncelleme: 17 Ekim 2026. C++ ve Python ayrı programlar olarak çalışır.
 Python ölçümü gönderir, C++ komutunu bekler ve ardından bir adım ilerler.
+C++ tarafı: [`../otopilot/README.md`](../otopilot/README.md). Kurulum ve çalıştırma:
+[`docs/CALISTIRMA_KILAVUZU.md`](../../docs/CALISTIRMA_KILAVUZU.md).
 
 ## Hangi dosya ne yapar?
 
@@ -40,6 +42,7 @@ C++ hesabı ve iletişim süresi de gerçek sürenin parçasıdır.
 1. `sim_main` ölçümü `Simulation.read_state()` ile okur ve gönderir.
 2. `connection.receive()` C++ komutunun tamamlanmasını bekler. Uçaklar bu sırada ilerlemez.
 3. Komutun `kind` alanı `command`, `tick` alanı mevcut adımla aynı olmalı.
+   Önce `launch` listesindeki atış emirleri `Simulation.fire()` ile uygulanır.
 4. `Simulation.step()` her uçak için bir yön/irtifa/gaz komutu ister. Eksik,
    tekrarlanan, bilinmeyen veya geçersiz komut varsa hiçbir uçak ilerlemez.
 5. Recorder yeni durumu kaydeder. Süre dolunca `end` mesajı gönderilir.
@@ -55,7 +58,7 @@ yeniden bağlanma otomatik yapılmaz. İstemci komut göndermiyorsa beklemeye de
 |---|---|
 | `kind` | `state`, `command` veya `end`. |
 | `tick` | Fizik saniyesi değil, dış ilerletme adımının sayacı. |
-| `data` | Ölçümde bütün uçak/füzeler; komutta uçak hedeflerinin listesi. |
+| `data` | Ölçümde bütün uçak/füzeler; komutta uçak hedefleri (`aircraft`) ve atış emirleri (`launch`). |
 
 Ölçümde `data.sim_time_s` gerçek JSBSim saatidir; başlangıç resetinden dolayı
 ilk ölçüm sıfırdan biraz büyük olabilir. `data.aircraft` uçakları, `data.missiles`
@@ -68,8 +71,10 @@ jeosantrik olarak kullanır. Recorder'ın kendi ham sütun ve referansları değ
 Komut örneği (tek satır gönderilir):
 
 ```json
-{"kind":"command","tick":0,"data":{"aircraft":[{"id":"blue","heading_deg":90,"altitude_m":5000,"throttle":0.49},{"id":"red","heading_deg":270,"altitude_m":5000,"throttle":0.49}]}}
+{"kind":"command","tick":0,"data":{"aircraft":[{"id":"blue","heading_deg":90,"altitude_m":5000,"throttle":0.49},{"id":"red","heading_deg":270,"altitude_m":5000,"throttle":0.49}],"launch":[{"id":"blue","target_id":"red"}]}}
 ```
+
+`launch` boş liste olabilir ya da hiç yazılmayabilir.
 
 JSON şablonları: `src/msgs/state.json`, `src/msgs/command.json`, `src/msgs/end.json` (bu dosyadan göreli klasör: `../msgs/`).
 Dosyalar aktarımda okunmaz/yazılmaz; mesajlar TCP'de bellekte aktarılır.
@@ -79,17 +84,23 @@ Dosyalar aktarımda okunmaz/yazılmaz; mesajlar TCP'de bellekte aktarılır.
 `simulation.agents["blue"]` BVRGym'in `BaseBVRAgent` nesnesidir.
 Yerel uçuşta `sim_local.py` içindeki komut listesini değiştirebilirsin.
 TCP kullanımında C++ her döngüde bütün uçakların hedeflerini doldurur.
-Otomatik hedef seçimi, manevra veya atış eklenmedi.
+Python tarafında otomatik hedef seçimi, manevra veya atış kararı yoktur; bunlar C++'tadır.
 
 `simulation.fire("blue", "red")` açık Python atış çağrısıdır; atış uygulanırsa
 `True`, aynı uçak/hedef, mühimmat yokluğu veya aktif füze kısıtında `False` döner.
-Şimdiki TCP komut mesajı yalnızca uçuş hedeflerini uygular. Füze atış isteğini
-mesaja eklemek sonraki genişleme; envanter ve uçan füze ölçümleri şimdiden yayınlanır.
+TCP komut mesajındaki `launch` listesi (`[{"id": "blue", "target_id": "red"}]`)
+`sim_main.py` tarafından uçuş komutlarından **önce** bu çağrıyla uygulanır.
+Reddedilen atış sessizce düşer; C++ sonucu bir sonraki ölçümde füzenin `state`'inden görür.
+Atış ve sonucu `events.jsonl`'a yazılır.
 
-C++ istemci `src/otopilot` içinde uygulanmıştır. Derleme ve iki terminalden kullanım
-için `../otopilot/README.md` dosyasına bak. Python tarafına yeni paket gerekmez.
-Ölçümdeki `data.flight_commands` son uygulanan/saklanan yön, irtifa ve gaz hedefleridir;
-C++ ilk ölçümde buradan YAML başlangıç hedeflerini alır.
+C++ otopilot `src/otopilot` içindedir. Derleme, iki terminalden kullanım ve kodun
+dosya dosya açıklaması: [`../otopilot/README.md`](../otopilot/README.md). Mimari:
+[`docs/mimari/OTOPILOT_MIMARISI.md`](../../docs/mimari/OTOPILOT_MIMARISI.md).
+Python tarafına yeni paket gerekmez.
+
+Ölçümdeki `data.flight_commands` son uygulanan yön, irtifa ve gaz hedefleridir.
+C++ bunu her ölçümde okur: fighter için bir önceki adımda kendi gönderdiği komut
+(ilk adımda YAML başlangıcı), bogey için hiç değiştirmediğinden hep YAML başlangıcıdır.
 
 
 
@@ -131,7 +142,8 @@ Alan serbest bir metindir: `F16`, `Su57`, `CustomAircraft` gibi profil adları
 kullanılabilir. Büyük/küçük harf korunur, baştaki/sondaki boşluklar temizlenir.
 Alan yoksa eski senaryolar için `F16` kullanılır; boş veya metin olmayan değer reddedilir.
 
-Type, ileride WEZ gibi hesaplarda seçilecek profil etiketidir. Bu alan tek başına
+C++ `type`'ı `src/otopilot/aircraft_profiles.hpp` tablosunda arar ve uçağın profilini
+(Mach, g, WEZ, radar) oradan alır; tabloda olmayan tipte durur. Bu alan tek başına
 JSBSim fizik modelini değiştirmez; uçaklar mevcut F-16 modeliyle simüle edilir.
-Yeni fizik modeli için XML/config adaptasyonu ayrı yapılmalıdır. WEZ hesabı eklenmedi.
+Yeni fizik modeli için XML/config adaptasyonu ayrı yapılmalıdır.
 Senaryo type alanı recorder'ın manifest içindeki senaryo kopyasında da saklanır.
