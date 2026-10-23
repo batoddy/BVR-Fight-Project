@@ -1,46 +1,30 @@
-"""BVRGym ajanlarını oluştur, ölçümlerini oku ve verilen komutla ilerlet.
+"""Simülasyon durumunu oku, uçuş komutlarını uygula ve açık atış emirlerini yürüt.
 
 TCP, kayıt, bekleme veya otomatik taktik karar bu sınıfta bulunmaz.
 """
-import copy
 import math
-import os
-import sys
-from pathlib import Path
-from types import ModuleType, SimpleNamespace
+
+# Hem doğrudan dosya hem python -m ile çalışsın (sim_main.py ile aynı düzen).
+if __package__:
+    from .bvrgym_setup import create_agents
+    from .scenario import validate_scenario
+else:
+    from bvrgym_setup import create_agents
+    from scenario import validate_scenario
 
 
 class Simulation:
+    # =========================================================================
+    # BAŞLANGIÇ DURUMU VE SİMÜLASYON SAATİ
+    # =========================================================================
+
     def __init__(self, scenario, bvrgym_path):
+        validate_scenario(scenario)
         self.world = scenario["world"]
         self.tick = 0
-        step = self.world["sim_time_step"]
-        if type(step) is not int or step < 1:
-            raise ValueError("world.sim_time_step pozitif tam sayı olmalı.")
-        for key in ("duration_s", "sleep_s"):
-            value = self.world[key]
-            if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
-                raise ValueError(f"world.{key} sonlu ve negatif olmayan sayı olmalı.")
-        if not scenario["agents"]:
-            raise ValueError("Senaryoda en az bir ajan bulunmalı.")
+        self.agents = create_agents(scenario, bvrgym_path)
 
-        # BVRGym XML/model dosyalarını kendi klasörüne göreli açar.
-        # Oluşturma bittikten sonra çağıranın çalışma dizinini geri getir.
-        bvrgym_path = Path(bvrgym_path).resolve()
-        if not bvrgym_path.is_dir():
-            raise FileNotFoundError(f"BVRGym klasörü bulunamadı: {bvrgym_path}")
-        if str(bvrgym_path) not in sys.path:
-            sys.path.insert(0, str(bvrgym_path))
-        previous_cwd = Path.cwd()
-        try:
-            os.chdir(bvrgym_path)
-            self.agents = {
-                key: self._create_agent(settings)
-                for key, settings in scenario["agents"].items()
-            }
-        finally:
-            os.chdir(previous_cwd)
-
+        # Her uçak için son uygulanan hedefler: [yön (derece), irtifa (m), gaz (0..1)].
         self.commands = {
             key: [settings["spawn"]["heading"], settings["spawn"]["alt"], settings["throttle"]]
             for key, settings in scenario["agents"].items()
@@ -48,46 +32,16 @@ class Simulation:
         self.clock = next(iter(self.agents.values())).simObj
         self.start_time = self.clock.get_sim_time_sec()
 
-    @staticmethod
-    def _copy_config(module):
-        """Her ajanın fizik ve PID ayarlarını bağımsız kopyala."""
-        return SimpleNamespace(**{
-            key: copy.deepcopy(value) for key, value in vars(module).items()
-            if not key.startswith("_") and not isinstance(value, ModuleType)
-        })
-
-    def _create_agent(self, settings):
-        """YAML tanımından bir uçak ve mühimmatını oluştur."""
-        # Hesaplama profili etiketi; fizik modeli seçiminden bağımsız.
-        aircraft_type = settings.get("type", "F16")
-        if not isinstance(aircraft_type, str) or not aircraft_type.strip():
-            raise ValueError("Ajan type alanı boş olmayan bir metin olmalı.")
-        aircraft_type = aircraft_type.strip()
-
-        from data_classes.agent_dataclass import Agent_parameters
-        from jsb_gym.agents.agents import BaseBVRAgent
-        from jsb_gym.simObjects.config import f16_config, AAM_config
-
-        aircraft = self._copy_config(f16_config)
-        missile = self._copy_config(AAM_config)
-        aircraft.aircraft_simulation.Sim_time_step = self.world["sim_time_step"]
-        missile.missile_simulation.Sim_time_step = self.world["sim_time_step"]
-        for config in (aircraft, missile):
-            config.data_output_xml = None
-            config.fg_sleep_time = None  # Beklemeyi yalnızca ana döngü yönetir.
-
-        return BaseBVRAgent(SimpleNamespace(
-            agent_name=settings["name"], team=settings["team"], aircraft_name="F-16",
-            aircraft_type=aircraft_type,
-            agent_parameters=Agent_parameters(ammo=settings["ammo"], **settings["spawn"]),
-            aircraft_simObj_conf=aircraft, missile_simObj_conf=missile,
-        ), None)
-
     def finished(self):
+        """İlk ölçümden bu yana geçen fizik süresi senaryo süresine ulaştı mı?"""
         return self.clock.get_sim_time_sec() - self.start_time >= self.world["duration_s"]
 
-    def initial_commands(self):
-        """Saklanan yön/irtifa/gaz hedeflerini mesajdaki liste biçimine çevir."""
+    # =========================================================================
+    # ÖLÇÜM OKUMA — bu bölüm simülasyonu ilerletmez
+    # =========================================================================
+
+    def read_flight_commands(self):
+        """Güncel hedefleri mesajdaki liste biçimine çevir; ilk ölçümde YAML hedefleridir."""
         return [
             dict(id=key, heading_deg=values[0], altitude_m=values[1], throttle=values[2])
             for key, values in self.commands.items()
@@ -127,12 +81,27 @@ class Simulation:
                 ))
         return dict(tick=self.tick, sim_time_s=self.clock.get_sim_time_sec(),
                     aircraft=aircraft, missiles=missiles,
-                    flight_commands=self.initial_commands())
+                    flight_commands=self.read_flight_commands())
+
+    # =========================================================================
+    # UÇUŞ KOMUTUNU DOĞRULAMA VE BİR ADIM İLERLETME
+    # =========================================================================
 
     def step(self, aircraft_commands):
         """Bütün uçakların komutlarını doğrula; sonra hepsini bir adım ilerlet."""
         if self.finished():
             raise ValueError("Simülasyon süresi doldu.")
+        commands = self._validate_flight_commands(aircraft_commands)
+
+        # Bütün komutlar doğrulanmadan hiçbir uçağı ilerletme.
+        for key, agent in self.agents.items():
+            agent.apply_action(commands[key])
+
+        self.commands = commands
+        self.tick += 1
+
+    def _validate_flight_commands(self, aircraft_commands):
+        """Her uçak için tek, eksiksiz komut iste; henüz fizik durumunu değiştirme."""
         if not isinstance(aircraft_commands, list):
             raise ValueError("aircraft komutları liste olmalı.")
 
@@ -152,19 +121,30 @@ class Simulation:
         if set(commands) != set(self.agents):
             raise ValueError("Her uçak için tam bir komut gerekli.")
 
-        # Doğrulama bitmeden hiçbir uçak ilerlemez.
-        for key, agent in self.agents.items():
-            agent.apply_action(commands[key])
-        self.commands = commands
-        self.tick += 1
+        return commands
+
+    # =========================================================================
+    # AÇIK FÜZE ATIŞ EMRİ
+    # =========================================================================
 
     def fire(self, shooter_id, target_id):
-        """Açık atış emri; taktik koşul veya otomatik hedef seçimi yok."""
+        """Hazır ilk füzeyi belirtilen hedefe at; uygulanırsa True, atılamazsa False."""
         shooter, target = self.agents[shooter_id], self.agents[target_id]
-        if shooter is target or shooter.is_own_missile_active():
+        if shooter is target:
             return False
-        if not any(missile.is_ready_to_launch() for missile in shooter.ammo.values()):
+        missile = next((m for m in shooter.ammo.values() if m.is_ready_to_launch()), None)
+        if missile is None:
             return False
+
+        # C++ açık atış emri verdiği için havadaki başka bir füze yeni atışı engellemez.
+        # BVRGym'in launch_missile() koruması yerine hazır slotu doğrudan kullanırız.
         shooter.set_target(target)
-        shooter.launch_missile()
+        missile.set_target(target)
+        missile.launch(shooter)
+
+        # BVRGym launch() Mach veriyor, reset() m/s bekliyor. Aynı konum ve yönde
+        # gerçek hava hızıyla yeniden başlatıp mevcut birim hatasını düzeltiriz.
+        aircraft = shooter.simObj
+        missile.reset(aircraft.get_lat_gc_deg(), aircraft.get_long_gc_deg(), aircraft.get_altitude(),
+                      aircraft.get_true_airspeed(), aircraft.get_psi())
         return True

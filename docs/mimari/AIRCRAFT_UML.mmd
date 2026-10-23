@@ -1,0 +1,157 @@
+classDiagram
+    direction TB
+
+    class World {
+        +double sim_time_s
+        +Aircraft fighter
+        +Aircraft hostile
+        +update()
+    }
+    class Aircraft {
+        +string id
+        +string name
+        +string team
+        +string type
+        +double health
+        +AircraftProfile profile
+        +Kinematics kinematics
+        +vector~Missile~ missiles
+        +bool launch_order
+        +Phase phase
+        +EnemyInfo enemy
+        +get_out_distance()
+        +fire_missile()
+        +missiles_left()
+        +has_active_missile_against()
+        +last_fired()
+    }
+    class Kinematics {
+        +double lat_deg
+        +double lon_deg
+        +double altitude_m
+        +double heading_deg_180
+        +double pitch_deg
+        +double roll_deg
+        +double tas_mps
+        +double mach
+        +Ned velocity_ned_mps
+    }
+    class Ned {
+        +double north
+        +double east
+        +double down
+    }
+    class AircraftProfile {
+        +string name
+        +vector~MissileProfile~ loadout
+        +double max_mach
+        +double max_g
+        +double radar_range_m
+        +double radar_gimbal_deg
+        +double out_g
+        +vector~AltitudeFactor~ out_distance_factor
+    }
+    class AltitudeFactor {
+        +double altitude_m
+        +double factor
+    }
+    class EnemyInfo {
+        +double range_2d_m
+        +double range_3d_m
+        +double bearing_deg
+        +double ata_deg
+        +double aspect_deg
+        +Ned los_m
+        +Ned los_unit
+        +double closure_mps
+        +double enemy_closing_mps
+        +Wez my_wez
+        +bool enemy_in_my_wez
+        +bool me_in_enemy_wez
+        +double mar_m
+        +double dor_m
+    }
+    class Wez {
+        +double min_m
+        +double max_m
+    }
+    class Missile {
+        +int slot
+        +MissileProfile profile
+        +bool fired
+        +int fire_order
+        +string python_id
+        +string target_id
+        +bool has_kinematics
+        +MissileState state
+        +MissileOutcome outcome
+        +Kinematics kinematics
+        +MissileTargetInfo target
+        +in_flight()
+        +hit()
+        +lost()
+    }
+    class MissileProfile {
+        +string name
+        +MissileType type
+        +double max_range_m
+        +double min_range_m
+        +double speed_mps
+        +double pitbull_range_m
+    }
+    class MissileTargetInfo {
+        +double range_m
+        +double closure_mps
+        +double time_to_go_s
+        +bool pitbull
+    }
+    class Geometry {
+        <<stateless>>
+        +range_2d_m()
+        +range_3d_m()
+        +bearing_deg()
+        +ata_deg()
+        +aspect_angle_deg()
+        +los_m()
+        +los_unit()
+        +closure_mps()
+        +enemy_closing_mps()
+    }
+    class Engagement {
+        <<stateless>>
+        +wez()
+        +in_wez()
+        +mar_m()
+        +dor_m()
+    }
+    class MissileGeometry {
+        <<stateless>>
+        +range_m()
+        +closure_mps()
+        +time_to_go_s()
+        +pitbull()
+        +los_m()
+    }
+
+    World "1" *-- "2" Aircraft : fighter / hostile
+    Aircraft *-- Kinematics : kinematics
+    Aircraft *-- AircraftProfile : profile
+    Aircraft *-- EnemyInfo : enemy
+    Aircraft "1" *-- "0..*" Missile : missiles
+    Kinematics *-- Ned : velocity_ned_mps
+    AircraftProfile "1" *-- "0..*" AltitudeFactor : out_distance_factor
+    AircraftProfile "1" *-- "0..*" MissileProfile : loadout
+    EnemyInfo *-- Ned : los_m / los_unit
+    EnemyInfo *-- Wez : my_wez
+    Missile *-- MissileProfile : profile
+    Missile *-- Kinematics : kinematics
+    Missile *-- MissileTargetInfo : target
+    Missile --> Aircraft : target_id ile hedef
+    World ..> Geometry : uçak geometrisini hesaplatır
+    World ..> Engagement : WEZ / MAR / DOR hesaplatır
+    World ..> MissileGeometry : füze-hedef hesabını yaptırır
+    Geometry ..> Kinematics : iki nesnenin hareketini okur
+    Engagement ..> Aircraft : profil ve düşman bilgisini okur
+    MissileGeometry ..> Missile : füze bilgisini okur
+    MissileGeometry ..> Aircraft : hedefi okur
+    MissileGeometry ..> Geometry : geometri hesabını kullanır

@@ -1,0 +1,23 @@
+#pragma once
+
+#include "control/otopilot_hostile.hpp"
+#include "io/console_log.hpp"
+#include "control/otopilot_fighter.hpp"
+#include "io/messages.hpp"
+#include "model/world.hpp"
+
+// Ölçümü okur, ortak hesapları günceller,
+// iki otopilotu çalıştırır ve komut mesajını oluşturur.
+class Sim
+{
+public:
+    Message step(const Message& state);
+
+private:
+    World world_;
+
+    OtopilotFighter otopilot_fighter_;
+    OtopilotHostile otopilot_hostile_;
+
+    ConsoleLog log_;
+};

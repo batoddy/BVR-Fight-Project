@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {interpolate,SampleBuffer,ReplayClock} from '../web/stream.js';
 
+test('Velocity components interpolate through stops and reversals without inventing missing data',()=>{
+  const first={sim_time_s:0,heading_deg:0,roll_deg:0,velocity_east_mps:300,velocity_north_mps:100,velocity_up_mps:20};
+  const last={...first,sim_time_s:2,velocity_east_mps:-300,velocity_north_mps:300,velocity_up_mps:-20};
+  const middle=interpolate(first,last,1);
+  assert.equal(middle.velocity_east_mps,0);assert.equal(middle.velocity_north_mps,200);assert.equal(middle.velocity_up_mps,0);
+  assert.equal(interpolate(first,{...last,velocity_up_mps:null},1).velocity_up_mps,null);
+});
+
 const item=(sequence,time,heading=0,id='blue',kind='aircraft')=>({sequence,id,kind,sim_time_s:time,
   record_start_s:0,record_end_s:200,east_m:time*100,north_m:0,altitude_m:5000,
   true_airspeed_mps:null,mach:null,heading_deg:heading,roll_deg:0,pitch_deg:0,latitude_deg:59,longitude_deg:18});

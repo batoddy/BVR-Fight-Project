@@ -20,6 +20,7 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
 FILES['/recording-menu.js'] = ('recording-menu.js', 'text/javascript; charset=utf-8')
 FILES['/units.js'] = ('units.js', 'text/javascript; charset=utf-8')
 FILES['/inventory.js'] = ('inventory.js', 'text/javascript; charset=utf-8')
+FILES['/basemap.js'] = ('basemap.js', 'text/javascript; charset=utf-8')
 
 
 def make_server(store, port=8765, directory_picker=choose_directory):

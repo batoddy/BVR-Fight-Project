@@ -1,22 +1,14 @@
 {
-  "jsbsim_version": "1.3.1",
+  "generated_on": "2026-10-20",
+  "jsbsim_version": "1.3.2",
   "python": "3.11.9",
+  "source": "src/sim/bvrgym_setup.py ile oluşturulmuş modeller",
   "f16": {
-    "total": 804,
-    "readable": 782,
+    "total": 820,
+    "readable": 798,
     "write_only": 22,
     "failed": [],
-    "first": [
-      "inertial/sea-level-radius_ft (R)",
-      "simulation/gravity-model (RW)",
-      "simulation/integrator/rate/rotational (RW)",
-      "simulation/integrator/rate/translational (RW)",
-      "simulation/integrator/position/rotational (RW)",
-      "simulation/integrator/position/translational (RW)",
-      "simulation/write-state-file (W)",
-      "simulation/channel-dt (R)"
-    ],
-    "model": "f16",
+    "model": "F-16",
     "dt": 0.00833333,
     "categories": [
       "",
@@ -46,21 +38,11 @@
     ]
   },
   "missile": {
-    "total": 468,
-    "readable": 450,
+    "total": 490,
+    "readable": 472,
     "write_only": 18,
     "failed": [],
-    "first": [
-      "inertial/sea-level-radius_ft (R)",
-      "simulation/gravity-model (RW)",
-      "simulation/integrator/rate/rotational (RW)",
-      "simulation/integrator/rate/translational (RW)",
-      "simulation/integrator/position/rotational (RW)",
-      "simulation/integrator/position/translational (RW)",
-      "simulation/write-state-file (W)",
-      "simulation/channel-dt (R)"
-    ],
-    "model": "AIM",
+    "model": "AIM-120 altyapısı",
     "dt": 0.008333333333333333,
     "categories": [
       "accelerations",

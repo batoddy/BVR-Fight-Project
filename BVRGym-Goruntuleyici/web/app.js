@@ -2,15 +2,17 @@ import {SampleBuffer,ReplayClock} from './stream.js';
 import {Scene} from './scene.js';
 import {Scene as Scene2D} from './scene2d.js';
 import {setupRecordingMenu} from './recording-menu.js';
-import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,altitudeValue,speedValue,distanceLabel,munitionState} from './units.js';
+import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,altitudeValue,altitudeReferenceInfo,speedValue,distanceLabel,munitionState,angleLabel,sideAngleLabel} from './units.js';
 import {inventoryPanel} from './inventory.js';
 
 const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
-  altitudeGuides:true,headingGuides:true,objectScale:50,trail:true,trailDuration:300,history:true,grid:true,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm'};
+  altitudeGuides:true,velocityGuides:true,objectScale:1,trail:true,trailDuration:300,history:true,grid:true,basemap:false,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm',
+  overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
+  if(typeof saved.velocityGuides!=='boolean'&&typeof saved.headingGuides==='boolean')saved.velocityGuides=saved.headingGuides;
   for(const key of Object.keys(defaults))if(typeof saved[key]===typeof defaults[key])preferences[key]=saved[key];
 }catch{}
 const save=()=>{try{localStorage.setItem('bvrgym-layout-v2',JSON.stringify(preferences));}catch{}};
@@ -18,7 +20,7 @@ const buffer=new SampleBuffer(),replayClock=new ReplayClock();
 const playbackRates=[.25,.5,1,2,3,4,5,10],hiddenObjects=new Set();
 const teamOrder={blue:0,red:1};
 let selected=null,viewTime=null,paused=true,scrubbing=false,lastReceive=0,connectionError=null,
-  lastLabels=0,listSignature='',detailInventorySignature='',filter='all',query='',scene,webglError=null;
+  lastLabels=0,listSignature='',filter='all',query='',scene,webglError=null;
 
 function theme(){el('toggle-theme').setAttribute('aria-checked',String(document.documentElement.dataset.theme==='dark'));}
 theme();el('toggle-theme').onclick=()=>{
@@ -77,9 +79,9 @@ el('dock-resizer').ondblclick=()=>dockHeight(Number(el('dock-resizer').getAttrib
 el('dock-resizer').onkeydown=event=>{if(['ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();const current=Number(el('dock-resizer').getAttribute('aria-valuenow'));dockHeight(event.key==='Home'?0:event.key==='End'?220:current+(event.key==='ArrowUp'?12:-12),true);}};
 
 function updateFollow(){
-  el('follow').setAttribute('aria-pressed',String(scene.follow));
+  el('follow').checked=scene.follow;
   const name=buffer.tracks.get(selected)?.samples[0].name;
-  el('follow').textContent=scene.follow&&name?'Takip · '+name:'Takip';
+  el('follow-caption').textContent=scene.follow&&name?'Takip · '+name:'Seçili nesneyi takip et';
 }
 function selectEntity(id){selected=id;renderList();updateFollow();}
 function focusEntity(id){
@@ -122,22 +124,30 @@ el('follow').onclick=()=>{scene.follow=!scene.follow;preferences.follow=scene.fo
 el('zoom-in').onclick=()=>scene.zoom(1.25);el('zoom-out').onclick=()=>scene.zoom(.8);
 
 function viewSettings(){
-  scene.altitudeGuides=el('altitude-guides').checked;scene.headingGuides=el('heading-guides').checked;scene.objectScale=Number(el('object-scale').value);scene.trail=el('trail').checked;scene.grid=el('grid').checked;scene.trailDuration=Number(el('trail-duration').value);
-  el('toggle-altitude-guides').setAttribute('aria-pressed',String(scene.altitudeGuides));
+  scene.mapEnabled=el('basemap').checked;
+  scene.altitudeGuides=el('altitude-guides').checked;scene.velocityGuides=el('velocity-guides').checked;scene.objectScale=Number(el('object-scale').value);scene.trail=el('trail').checked;scene.grid=el('grid').checked;scene.trailDuration=Number(el('trail-duration').value);
   scene.labelMode=el('label-mode').value;scene.labelNames=el('label-names').checked;scene.labelAltitude=el('label-altitude').checked;scene.labelSpeed=el('label-speed').checked;
-  Object.assign(preferences,{altitudeGuides:scene.altitudeGuides,headingGuides:scene.headingGuides,objectScale:scene.objectScale,trail:scene.trail,grid:scene.grid,trailDuration:scene.trailDuration,history:el('show-history').checked,
+  Object.assign(preferences,{altitudeGuides:scene.altitudeGuides,velocityGuides:scene.velocityGuides,objectScale:scene.objectScale,trail:scene.trail,grid:scene.grid,trailDuration:scene.trailDuration,history:el('show-history').checked,
     labelMode:scene.labelMode,labelNames:scene.labelNames,labelAltitude:scene.labelAltitude,labelSpeed:scene.labelSpeed,
-    missileOutcomes:el('missile-outcomes').checked});save();
+    missileOutcomes:el('missile-outcomes').checked,basemap:scene.mapEnabled});save();
   // Mühimmat durumu ve olay işaretleri bu tercihe bağlı: bir sonraki karede yenilensinler.
-  listSignature='';detailInventorySignature='';
+  listSignature='';
 }
-for(const [id,key] of [['altitude-guides','altitudeGuides'],['heading-guides','headingGuides'],['trail','trail'],['grid','grid'],['show-history','history'],['label-names','labelNames'],['label-altitude','labelAltitude'],['label-speed','labelSpeed'],['missile-outcomes','missileOutcomes']])el(id).checked=preferences[key];
-el('object-scale').value=[1,25,50,100].includes(preferences.objectScale)?preferences.objectScale:50;
+for(const [id,key] of [['basemap','basemap'],['altitude-guides','altitudeGuides'],['velocity-guides','velocityGuides'],['trail','trail'],['grid','grid'],['show-history','history'],['label-names','labelNames'],['label-altitude','labelAltitude'],['label-speed','labelSpeed'],['missile-outcomes','missileOutcomes']])el(id).checked=preferences[key];
+el('object-scale').value=[1,3,25,50,100].includes(preferences.objectScale)?preferences.objectScale:1;
 el('trail-duration').value=[60,300,-1].includes(preferences.trailDuration)?preferences.trailDuration:300;
 el('label-mode').value=['all','selected','none'].includes(preferences.labelMode)?preferences.labelMode:'all';
-for(const id of ['altitude-guides','heading-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','missile-outcomes','trail-duration','label-mode'])el(id).onchange=viewSettings;
+for(const id of ['basemap','altitude-guides','velocity-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','missile-outcomes','trail-duration','label-mode'])el(id).onchange=viewSettings;
 viewSettings();updateFollow();
-el('toggle-altitude-guides').onclick=()=>{el('altitude-guides').checked=!el('altitude-guides').checked;viewSettings();};
+// Sahnede gösterilecek otopilot hesapları: sağ paneldeki seçimler.
+const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar']];
+function overlaySettings(){
+  for(const [id,key] of overlayInputs)preferences[key]=el(id).checked;
+  for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect'])el(id).disabled=!preferences.overlayLine;
+  save();
+}
+for(const [id,key] of overlayInputs){el(id).checked=preferences[key];el(id).onchange=overlaySettings;}
+overlaySettings();
 const toolbarMenus=[...document.querySelectorAll('.toolbar-menu')];
 function closeMenus(except=null){for(const menu of toolbarMenus)if(menu!==except)menu.open=false;}
 function positionMenu(menu){
@@ -184,7 +194,8 @@ function updateTimeline(){
   if(bounds){el('timeline').min=bounds.first;el('timeline').max=bounds.last;if(!scrubbing)el('timeline').value=viewTime??bounds.first;
     el('timeline-last').textContent=formatTime(bounds.last);el('timeline').setAttribute('aria-valuetext',formatTime(viewTime??bounds.first));}
   if(document.activeElement!==el('seek-time'))el('seek-time').value=formatTime(viewTime??0);
-  el('play-pause').textContent=paused?'▶':'Ⅱ';el('play-pause').setAttribute('aria-label',paused?'Oynat':'Duraklat');el('play-pause').setAttribute('aria-pressed',String(paused));
+  el('play-icon').hidden=!paused;el('pause-icon').hidden=paused;
+  el('play-pause').setAttribute('aria-label',paused?'Oynat':'Duraklat');el('play-pause').setAttribute('aria-pressed',String(paused));
   drawEventMarks(bounds);
 }
 // Kayittaki olaylar zaman cubuguna isaretlenir; olay yoksa cubuk eskisi gibi bos kalir.
@@ -251,9 +262,48 @@ document.addEventListener('keydown',event=>{
 function allowed(entity){return !hiddenObjects.has(entity.id)&&!hiddenObjects.has(entity.owner_id)&&(filter==='all'||entity.kind===filter||entity.team===filter);}
 function visibleEntities(){return viewTime===null?[]:buffer.entities(viewTime).filter(allowed);}
 function renderEntities(){
-  const entries=visibleEntities();if(!preferences.history||!preferences.trail||viewTime===null)return entries;
-  for(const [id,track] of buffer.tracks){const last=track.samples.at(-1);if(last.kind==='missile'&&viewTime>last.record_end_s&&allowed(last))entries.push({...last,visible:false});}
+  const entries=visibleEntities();if(!preferences.history||viewTime===null)return entries;
+  // Kaydı biten füze kaybolmaz: son konumunda soluk kalır (uçaklardaki "son ölçüm" gibi).
+  for(const [id,track] of buffer.tracks){const last=track.samples.at(-1);if(last.kind==='missile'&&viewTime>last.record_end_s&&allowed(last))entries.push({...last,measurement_ended:true});}
   return entries;
+}
+// Hesaplar seçili uçağın gözünden; füze seçiliyse taşıyıcısının, seçim yoksa dost uçağın.
+function perspectiveId(){
+  const first=buffer.tracks.get(selected)?.samples[0];
+  if(first?.kind==='aircraft')return first.id;
+  if(first?.owner_id)return first.owner_id;
+  const aircraft=[...buffer.tracks.values()].map(track=>track.samples[0]).filter(entry=>entry.kind==='aircraft');
+  return (aircraft.find(entry=>entry.team==='blue')??aircraft[0])?.id??null;
+}
+function analysis(){
+  if(viewTime===null||!buffer.complete)return null;
+  const entity=buffer.at(perspectiveId(),viewTime);
+  if(!entity||!allowed(entity)||!entity.calc)return null;
+  const target=entity.calc.target_entity_id?buffer.at(entity.calc.target_entity_id,viewTime):null;
+  return {entity,calc:entity.calc,target:target&&allowed(target)?target:null,
+    options:{line:preferences.overlayLine,ata:preferences.overlayAta,bearing:preferences.overlayBearing,
+      range:preferences.overlayRange,aspect:preferences.overlayAspect,radar:preferences.overlayRadar,
+      ownWez:preferences.overlayOwnWez,enemyWez:preferences.overlayEnemyWez}};
+}
+// C++ aircraft.hpp enum class Phase ile aynı sırada.
+const PHASE_NAMES=['HOLD','FIRE','OUT','IN','CRANK','NOTCH'];
+function relativePanel(first,entity){
+  el('relative').hidden=first.kind!=='aircraft';
+  if(first.kind!=='aircraft')return;
+  const calc=entity.calc,distance=value=>Number.isFinite(value)?distanceLabel(value,preferences.distanceUnit,2):'—';
+  const target=calc?.target_entity_id?buffer.tracks.get(calc.target_entity_id)?.samples[0]:null;
+  el('relative-target').textContent=target?'→ '+target.name:calc?.target_id?'→ '+calc.target_id:'';
+  el('relative-empty').hidden=Boolean(calc);
+  el('calc-phase').textContent=Number.isFinite(calc?.phase)?PHASE_NAMES[calc.phase]??'AŞAMA '+calc.phase:'—';
+  el('calc-ata').textContent=sideAngleLabel(calc?.ata_deg);el('calc-bearing').textContent=angleLabel(calc?.bearing_deg);
+  el('calc-aspect').textContent=angleLabel(calc?.aspect_deg);
+  el('calc-range-3d').textContent=distance(calc?.range_3d_m);el('calc-range-2d').textContent=distance(calc?.range_2d_m);
+  const yes=value=>value==null?'—':value?'Evet':'Hayır';
+  el('calc-wez').textContent=Number.isFinite(calc?.wez_max_range_m)&&calc.wez_max_range_m>0
+    ?distance(calc.wez_max_range_m):'—';
+  el('calc-enemy-in-my-wez').textContent=yes(calc?.enemy_in_my_wez??calc?.in_wez);
+  el('calc-me-in-enemy-wez').textContent=yes(calc?.me_in_enemy_wez);
+  el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dor').textContent=distance(calc?.dor_m);
 }
 function renderList(){
   if(!buffer.complete)return;
@@ -311,6 +361,12 @@ async function poll(){
 function labels(){
   updateTimeline();updateFollow();
   const packet=buffer.packet,bounds=buffer.bounds();
+  el('map-attribution').hidden=!preferences.basemap;
+  el('map-status').textContent=scene.basemap.status;
+  const altitudeReference=altitudeReferenceInfo(packet.manifest?.altitude_reference);
+  el('altitude').closest('div').querySelector('dt').textContent=altitudeReference.label;
+  el('altitude').closest('div').title=altitudeReference.note;
+  el('altitude-reference-note').textContent=altitudeReference.note;
   el('record-warning').textContent=(packet.warnings||[]).join(' ');el('record-warning').hidden=!packet.warnings?.length;
   let status='Kayıt bekleniyor',notice='',error=false;
   if(connectionError){status='Bağlantı kesildi';notice=connectionError;error=true;}
@@ -325,7 +381,7 @@ function labels(){
   el('record-source').textContent=packet.catalog_root||'Dizin seçilmedi';el('record-source').title=el('record-source').textContent;
   el('record-duration').textContent=bounds?formatTime(bounds.last-bounds.first)+' · '+packet.objects+' nesne':'Tacview CSV';
   const track=buffer.tracks.get(selected),first=track?.samples[0],last=track?.samples.at(-1);
-  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','east','north','entity-interval'])el(id).textContent='—';el('jump-entity').disabled=true;return;}
+  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','load-factor','throttle','east','north'])el(id).textContent='—';el('relative').hidden=true;return;}
   const current=buffer.at(selected,viewTime),entity=current||(viewTime<first.record_start_s?first:last);
   el('detail-title').textContent=first.kind==='missile'?'Füze bilgisi':'Uçak bilgisi';el('selected-name').textContent=first.name;
   el('model').textContent=first.model+' · '+(first.team==='blue'?'Dost takım':first.team==='red'?'Karşı takım':'Takım belirtilmemiş');
@@ -338,6 +394,8 @@ function labels(){
   const displayedSpeed=speedValue(entity,preferences.speedUnit);
   el('speed').textContent=displayedSpeed==null?'—':number(displayedSpeed,SPEED_UNITS[preferences.speedUnit].digits);
   el('mach').textContent=mach==null?'—':number(mach,2);
+  el('load-factor').textContent=Number.isFinite(entity.load_factor_g)?number(entity.load_factor_g,1):'—';
+  el('throttle').textContent=Number.isFinite(entity.throttle_norm)?number(entity.throttle_norm*100,0):'—';
   el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';
   el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · hesaplanan':'Hava hızı · TAS';
   el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · tahmini':'Mach';
@@ -346,17 +404,8 @@ function labels(){
   el('missing-data').hidden=!el('missing-data').textContent;
   el('speed-measure').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
   el('east').textContent=distanceLabel(entity.east_m,preferences.distanceUnit);el('north').textContent=distanceLabel(entity.north_m,preferences.distanceUnit);
-  const parentId=first.kind==='aircraft'?first.id:entity.owner_id;
-  const owned=buffer.packet.inventory?.[parentId]||[];
-  el('detail-inventory').hidden=first.kind!=='aircraft';
-  const inventorySignature=buffer.session+first.id+owned.map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)+(m.id===selected)).join('|');
-  if(inventorySignature!==detailInventorySignature){
-    detailInventorySignature=inventorySignature;
-    el('detail-inventory-list').replaceChildren(inventoryPanel(owned,viewTime,selected,selectEntity,preferences.missileOutcomes));
-  }
-  el('entity-interval').textContent=formatTime(first.record_start_s)+' – '+formatTime(first.record_end_s);el('jump-entity').disabled=false;
+  relativePanel(first,entity);
 }
-el('jump-entity').onclick=()=>seek(buffer.tracks.get(selected)?.samples[0].record_start_s);
 
 const recordingMenu=setupRecordingMenu({
   open:()=>{closeMenus(el('record-options'));el('record-options').open=true;positionMenu(el('record-options'));}
@@ -424,7 +473,7 @@ function render(timestamp){
   const bounds=buffer.bounds();if(canPlay&&bounds&&viewTime>=bounds.last)paused=true;
   const tracked=buffer.at(selected,viewTime);
   if(selected&&scene.follow&&(!tracked||!allowed(tracked))){scene.follow=false;preferences.follow=false;save();updateFollow();}
-  renderList();scene.draw(buffer.complete?renderEntities():[],buffer,viewTime??0,selected);
+  renderList();scene.analysis=analysis();scene.draw(buffer.complete?renderEntities():[],buffer,viewTime??0,selected);
   if(!webglError&&preferences.mode==='3d'){const north=scene.controls.target.clone().set(0,0,-1).applyQuaternion(scene.camera.quaternion.clone().invert());el('north-arrow').style.transform=`rotate(${Math.atan2(north.x,north.y)*180/Math.PI}deg)`;}
   else el('north-arrow').style.transform='none';
   if(timestamp-lastLabels>150){labels();lastLabels=timestamp;}

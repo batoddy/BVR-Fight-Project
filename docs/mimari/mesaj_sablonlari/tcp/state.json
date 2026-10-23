@@ -1,28 +1,120 @@
 {
   "kind": "state",
-  "tick": 0,
+  "tick": 1,
   "data": {
-    "tick": 0,
-    "sim_time_s": 0.00833333,
+    "tick": 1,
+    "sim_time_s": 0.09166663,
     "aircraft": [
       {
-        "id": "blue", "name": "KE", "team": "Blue", "health": 1,
-        "lat_deg": 59.17, "lon_deg": 18.0, "alt_msl_m": 8000,
-        "yaw_deg": 0, "pitch_deg": 0, "roll_deg": 0,
-        "tas_mps": 300, "mach": 0.97, "velocity_ned_mps": [300, 0, 0]
+        "id": "blue",
+        "name": "KZL",
+        "type": "F16",
+        "team": "Blue",
+        "health": 1.0,
+        "lat_deg": 59.16974620173626,
+        "lon_deg": 18.00000000273037,
+        "alt_msl_m": 4999.999432588005,
+        "yaw_deg": 1.1284470081398285e-05,
+        "pitch_deg": -0.0738104926305269,
+        "roll_deg": 2.487516469904938e-05,
+        "tas_mps": 300.13415672192065,
+        "mach": 0.9363246536756431,
+        "velocity_ned_mps": [
+          300.134156084699,
+          0.003395358785862911,
+          0.01926072842860515
+        ]
       },
       {
-        "id": "red", "name": "Bogey", "team": "Red", "health": 1,
-        "lat_deg": 59.42, "lon_deg": 18.0, "alt_msl_m": 3000,
-        "yaw_deg": 180, "pitch_deg": 0, "roll_deg": 0,
-        "tas_mps": 300, "mach": 0.91, "velocity_ned_mps": [-300, 0, 0]
+        "id": "red",
+        "name": "Hostile",
+        "type": "F16",
+        "team": "Red",
+        "health": 1.0,
+        "lat_deg": 59.96665687824232,
+        "lon_deg": 17.999999997182673,
+        "alt_msl_m": 4999.999446181834,
+        "yaw_deg": 180.00001116850427,
+        "pitch_deg": -0.06596039264657441,
+        "roll_deg": 2.496994013185038e-05,
+        "tas_mps": 299.61220382907146,
+        "mach": 0.934696324136045,
+        "velocity_ned_mps": [
+          -299.6122032348172,
+          -0.0034204014810892366,
+          0.018557816628644842
+        ]
       }
     ],
     "missiles": [
-      {"id": "blue/missile/0", "owner_id": "blue", "target_id": null, "state": "ready", "outcome": null, "flight_time_s": null, "kinematics": null},
-      {"id": "blue/missile/1", "owner_id": "blue", "target_id": null, "state": "ready", "outcome": null, "flight_time_s": null, "kinematics": null},
-      {"id": "red/missile/0", "owner_id": "red", "target_id": null, "state": "ready", "outcome": null, "flight_time_s": null, "kinematics": null},
-      {"id": "red/missile/1", "owner_id": "red", "target_id": null, "state": "ready", "outcome": null, "flight_time_s": null, "kinematics": null}
+      {
+        "id": "blue/missile/0",
+        "owner_id": "blue",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "blue/missile/1",
+        "owner_id": "blue",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "blue/missile/2",
+        "owner_id": "blue",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "blue/missile/3",
+        "owner_id": "blue",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "red/missile/0",
+        "owner_id": "red",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      },
+      {
+        "id": "red/missile/1",
+        "owner_id": "red",
+        "target_id": null,
+        "state": "ready",
+        "outcome": null,
+        "flight_time_s": null,
+        "kinematics": null
+      }
+    ],
+    "flight_commands": [
+      {
+        "id": "blue",
+        "heading_deg": 0.0,
+        "altitude_m": 5000.0,
+        "throttle": 0.8
+      },
+      {
+        "id": "red",
+        "heading_deg": 180.0,
+        "altitude_m": 5000.0,
+        "throttle": 0.45
+      }
     ]
   }
 }

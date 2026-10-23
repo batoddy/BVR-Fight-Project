@@ -46,7 +46,7 @@ try{
     const neutral=[...buffer.tracks.values()].find(t=>t.samples[0].team==='unknown').samples[0];
     const meteor=[...buffer.tracks.values()].find(t=>t.samples[0].model==='Meteor').samples[0];
     if(!scene.models.get(mig.id).label.classList.contains('stale'))throw new Error('Final sample not marked');
-    if(scene.models.get(neutral.id).heading.visible)throw new Error('Unknown heading drawn');
+    if(scene.models.get(neutral.id).velocityArrow.visible)throw new Error('Stationary object has a velocity arrow');
     if(scene.models.get(neutral.id).model.userData.bodyMaterial.color.getHex()!==0xaeb6bf)throw new Error('Unknown team appears friendly');
     if(meteor.kind!=='missile'||meteor.visual_model!=='generic')throw new Error('Missile classification');
   });

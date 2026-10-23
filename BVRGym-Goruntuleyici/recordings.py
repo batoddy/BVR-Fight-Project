@@ -13,27 +13,32 @@ import re
 import threading
 import time
 import uuid
-from telemetry import estimate_motion
+from telemetry import estimate_motion, add_velocity_vectors
 
 
 class EmptyRecording(ValueError):
     """The logger has not saved any measurements yet."""
 
 
-SIDECARS = ('events.jsonl', 'manifest.json')
+SIDECARS = ('events.jsonl', 'manifest.json', 'calculations.csv')
+CALCULATIONS = 'calculations.csv'
 EVENT_LIMIT = 5000
 
 
+def object_files(directory):
+    """One CSV per recorded object; the calculations sidecar is not an object."""
+    return [p for p in directory.glob('*.csv') if p.is_file() and p.name not in SIDECARS]
+
+
 def fingerprint(directory):
-    paths = list(directory.glob('*.csv')) + [directory / name for name in SIDECARS]
+    paths = object_files(directory) + [directory / name for name in SIDECARS]
     return tuple((p.name, p.stat().st_size, p.stat().st_mtime_ns)
                  for p in sorted(paths) if p.is_file())
 
 
 def recording_files(directory):
     """CSV files and sidecars that make up one folder recording."""
-    paths = [p for p in directory.glob('*.csv') if p.is_file()]
-    return paths + [directory / name for name in SIDECARS if (directory / name).is_file()]
+    return object_files(directory) + [directory / name for name in SIDECARS if (directory / name).is_file()]
 
 
 def metadata(path):
@@ -54,7 +59,9 @@ def metadata(path):
     agent_key = parts[1] if kind == 'aircraft' and len(parts) > 1 else None
     carrier_key = parts[1] if kind == 'missile' and len(parts) > 2 else None
     ammo_id = parts[2] if kind == 'missile' and len(parts) > 2 else None
-    name = f'{parts[0]}-{ammo_id}' if ammo_id is not None else parts[0]
+    # Keep legacy recording IDs and files intact; normalize only the enemy callsign.
+    display_callsign = 'Hostile' if team == 'red' and parts[0].casefold() == 'bogey' else parts[0]
+    name = f'{display_callsign}-{ammo_id}' if ammo_id is not None else display_callsign
     return dict(id=path.name, name=name, model=model, color=color,
                 team=team, kind=kind, visual_model=visual_model, file=path.name,
                 agent_key=agent_key, carrier_key=carrier_key, ammo_id=ammo_id)
@@ -89,9 +96,31 @@ def geodetic_latitude(lat_gc_deg, height_m):
 
 # Recorded measurements that only need a unit change to display, never a value
 # derived from other columns. The plain TAS/Mach columns above take precedence.
-SOURCE_FIELDS = {'tas_fps': ('true_airspeed_mps', 0.3048),
+METERS_PER_FOOT = 0.3048
+METERS_PER_NM = 1852.0
+MPS_PER_KNOT = METERS_PER_NM / 3600.0
+
+# Şema 3 ft/kt dosyaları ve eski metre/ft-s dosyaları aynı sahne birimine çevrilir.
+# Görüntüleyicinin geometri ve çizim katmanları metre/m-s kullanmaya devam eder.
+SOURCE_FIELDS = {'alt_ft': ('altitude_m', METERS_PER_FOOT),
+                 'tas_kt': ('true_airspeed_mps', MPS_PER_KNOT),
+                 'vel_north_kt': ('local_velocity_north_mps', MPS_PER_KNOT),
+                 'vel_east_kt': ('local_velocity_east_mps', MPS_PER_KNOT),
+                 'vel_down_kt': ('local_velocity_down_mps', MPS_PER_KNOT),
+                 'tas_fps': ('true_airspeed_mps', 0.3048),
+                 'vel_north_fps': ('local_velocity_north_mps', 0.3048),
+                 'vel_east_fps': ('local_velocity_east_mps', 0.3048),
+                 'vel_down_fps': ('local_velocity_down_mps', 0.3048),
+                 'velocities/v-north-fps': ('local_velocity_north_mps', 0.3048),
+                 'velocities/v-east-fps': ('local_velocity_east_mps', 0.3048),
+                 'velocities/v-down-fps': ('local_velocity_down_mps', 0.3048),
                  'velocities/vt-fps': ('true_airspeed_mps', 0.3048),
-                 'velocities/mach': ('mach', 1.0)}
+                 'velocities/mach': ('mach', 1.0),
+                 # JSBSim forces/load-factor: gövdeye dik yük faktörü; düz uçuşta 1 g.
+                 'load_factor_g': ('load_factor_g', 1.0),
+                 'forces/load-factor': ('load_factor_g', 1.0),
+                 # Bizim kayıtçının gaz komutu (0..1). Komuttur, ölçüm değil; motor buna gecikmeyle uyar.
+                 'cmd_throttle_norm': ('throttle_norm', 1.0)}
 
 # Our recorder (schema 2) names its own columns and states WGS84 geodetic
 # latitude; BVRGym's built-in TacviewLogger keeps Tacview names and geocentric
@@ -106,6 +135,7 @@ TACVIEW_FIELDS = {'Time': 'sim_time_s', 'Longitude': 'longitude_deg',
                   'Yaw (deg)': 'heading_deg', 'TAS': 'true_airspeed_mps',
                   'Mach': 'mach'}
 OWN_REQUIRED = ('time_s', 'lon_deg', 'lat_deg', 'alt_m')
+OWN_IMPERIAL_REQUIRED = ('time_s', 'lon_deg', 'lat_deg', 'alt_ft')
 TACVIEW_REQUIRED = ('Time', 'Longitude', 'Latitude', 'Altitude')
 
 
@@ -121,13 +151,17 @@ def read_csv(path, handle):
     if len(set(reader.fieldnames)) != len(reader.fieldnames):
         raise ValueError(f'{path.name}: yinelenen sütun adı')
     names = set(reader.fieldnames)
-    own = set(OWN_REQUIRED) <= names
+    own = set(OWN_REQUIRED) <= names or set(OWN_IMPERIAL_REQUIRED) <= names
     if own:
         fields = dict(OWN_FIELDS)
+        if 'alt_ft' in names:
+            # alt_ft, SOURCE_FIELDS üzerinden yalnız bir kez metreye çevrilir.
+            fields.pop('alt_m')
     elif set(TACVIEW_REQUIRED) <= names:
         fields = dict(TACVIEW_FIELDS)
     else:
-        raise ValueError(f'{path.name}: {", ".join(OWN_REQUIRED)} ya da '
+        raise ValueError(f'{path.name}: {", ".join(OWN_REQUIRED)}, '
+                         f'{", ".join(OWN_IMPERIAL_REQUIRED)} ya da '
                          f'{", ".join(TACVIEW_REQUIRED)} sütunları gerekli')
     time_column = 'time_s' if own else 'Time'
     # `Latitude` is geocentric; `lat_deg` already is the geodetic value.
@@ -160,6 +194,7 @@ def read_csv(path, handle):
                 if not math.isfinite(value):
                     raise ValueError('sonlu olmayan sayı')
                 values[key] = value
+                measured.add(key)
             if geocentric and 'latitude_gc_deg' in values and 'altitude_m' in values:
                 # Derived from the raw column every row, never from the previous
                 # result, so carrying a value forward cannot convert it twice.
@@ -182,7 +217,7 @@ def read_csv(path, handle):
                 values[key + '_known'] = key in previous
             for key in ('roll_deg', 'pitch_deg', 'heading_deg'):
                 values.setdefault(key, 0.0)
-            for key in ('true_airspeed_mps', 'mach'):
+            for key in ('true_airspeed_mps', 'mach', 'load_factor_g', 'throttle_norm'):
                 values.setdefault(key, None)
             sample = dict(info, **values)
             if rows and rows[-1]['sim_time_s'] == sample['sim_time_s']:
@@ -258,6 +293,75 @@ def read_events(directory):
     return events, warnings
 
 
+def read_calculations(directory):
+    """Read the autopilot's own calculations: {agent: {time_s: values}}. The viewer
+    only converts their units; it never recomputes one from positions."""
+    path = Path(directory) / CALCULATIONS
+    if not path.is_file():
+        return {}
+    result = {}
+    with path.open(encoding='utf-8-sig', newline='') as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            return {}
+        for row in reader:
+            if not any(row.values()):
+                continue
+            try:
+                if None in row:
+                    raise ValueError('sütun sayısı uyuşmuyor')
+                agent, time_s = row.pop('id'), float(row.pop('time_s'))
+                if not agent or not math.isfinite(time_s):
+                    raise ValueError('id veya time_s eksik')
+                values = {}
+                for key, raw in row.items():
+                    raw = (raw or '').strip()
+                    if key.endswith('_id'):
+                        values[key] = raw or None
+                    elif not raw:
+                        values[key] = None
+                    elif key.startswith('in_') or '_in_' in key:
+                        values[key] = raw in ('1', 'True', 'true')
+                    else:
+                        value = float(raw)
+                        if not math.isfinite(value):
+                            raise ValueError(f'{key} sonlu değil')
+                        values[key] = value
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f'{CALCULATIONS}, satır {reader.line_num}: {exc}') from exc
+            # NM/kt/ft sütunlarını koru; çizim için metre/m-s karşılıklarını da ekle.
+            # Eski hesap dosyaları zaten bu adları kullanır ve aynen okunur.
+            for key, value in list(values.items()):
+                if key.endswith('_nm'):
+                    values[key[:-3] + '_m'] = None if value is None else value * METERS_PER_NM
+                elif key.endswith('_kt'):
+                    values[key[:-3] + '_mps'] = None if value is None else value * MPS_PER_KNOT
+                elif key.endswith('_ft'):
+                    values[key[:-3] + '_m'] = None if value is None else value * METERS_PER_FOOT
+            result.setdefault(agent, {})[time_s] = values
+    return result
+
+
+def attach_calculations(samples, calculations):
+    """Put each calculation on the aircraft sample with the same time_s. The recorder
+    stamps both with the same value, so the match is exact, never nearest."""
+    if not calculations:
+        return []
+    by_agent = {row['agent_key']: row['id'] for row in samples
+                if row['kind'] == 'aircraft' and row.get('agent_key')}
+    matched = 0
+    for row in samples:
+        values = calculations.get(row.get('agent_key'), {}).get(row['sim_time_s']) if row['kind'] == 'aircraft' else None
+        if values is None:
+            continue
+        row['calc'] = dict(values, target_entity_id=by_agent.get(values.get('target_id')))
+        matched += 1
+    total = sum(len(rows) for rows in calculations.values())
+    if matched < total:
+        return [f'{total - matched} otopilot hesabı hiçbir uçak ölçümüyle aynı zamanda değil; gösterilmiyor.']
+    return []
+
+
 def attach_outcomes(entities, events):
     """Mark each munition with the recorded outcome. Without an event log the
     munition keeps its measurement-only state; an outcome is never guessed."""
@@ -303,16 +407,17 @@ def session_info(manifest):
 
 def read_recording(directory):
     directory = Path(directory)
-    paths = [path for path in sorted(directory.glob('*.csv')) if path.is_file()]
+    paths = sorted(object_files(directory))
     samples, entities = assemble([read_object(path) for path in paths],
                                  [metadata(path) for path in paths])
+    calculation_warnings = attach_calculations(samples, read_calculations(directory))
     manifest, warnings = read_manifest(directory)
     events, event_warnings = read_events(directory)
     attach_outcomes(entities, events)
     if entities:
         entities[0]['manifest'] = manifest
         entities[0]['events'] = events
-        entities[0]['source_warnings'] = warnings + event_warnings
+        entities[0]['source_warnings'] = warnings + event_warnings + calculation_warnings
     return samples, entities
 
 
@@ -334,6 +439,8 @@ def assemble(objects, manifest=()):
         row['north_m'] = (-math.sin(lat0) * math.cos(lon0) * dx
                           - math.sin(lat0) * math.sin(lon0) * dy + math.cos(lat0) * dz)
         row['sequence'] = index
+    for rows in objects:
+        add_velocity_vectors(rows, first['latitude_deg'], first['longitude_deg'])
     entities = [dict(rows[0]) for rows in objects]
     aircraft = [entry for entry in entities if entry['kind'] == 'aircraft']
     tracks = {rows[0]['id']: rows for rows in objects}
@@ -366,6 +473,7 @@ def assemble(objects, manifest=()):
     # Kept once in entity metadata, rather than duplicated in every flight sample.
     if entities:
         entities[0]['unassigned_inventory'] = unassigned
+        entities[0]['map_origin'] = {key: first[key] for key in ('latitude_deg', 'longitude_deg', 'altitude_m')}
     return samples, entities
 
 
@@ -376,7 +484,7 @@ def recording_warnings(entities):
     if any(e.get('visual_model') == 'generic' for e in entities):
         warnings.append('Bazı modellerin geometrisi bulunmuyor; sahnede genel nesne simgesiyle gösteriliyor.')
     if any(e.get('heading_deg_known') is False for e in entities):
-        warnings.append('Yönelim sütunları eksik olan nesnelerin burun yönü bilinmiyor; yön çizgisi gösterilmez.')
+        warnings.append('Yönelim sütunları eksik olan nesnelerin burun yönü bilinmiyor; hız vektörleri mevcut hareket verisinden gösterilir.')
     return warnings
 
 
@@ -466,7 +574,7 @@ class RecordingStore:
         for directory in sorted(directories):
             try:
                 files = recording_files(directory)
-                count = sum(1 for p in files if p.suffix.lower() == '.csv')
+                count = len(object_files(directory))
                 if count:
                     key = hashlib.sha256(str(directory).encode()).hexdigest()[:24]
                     modified = max(p.stat().st_mtime for p in files)
@@ -528,6 +636,7 @@ class RecordingStore:
                         catalog_root=str(self.catalog_root), warnings=self.warnings,
                         sequence=len(self.samples), cursor=after + len(selected), samples=selected,
                         objects=len(self.entities),
+                        map_origin=self.entities[0].get('map_origin') if self.entities else None,
                         inventory={entry['id']: entry.get('inventory', []) for entry in self.entities if entry['kind'] == 'aircraft'},
                         unassigned_inventory=self.entities[0].get('unassigned_inventory', []) if self.entities else [],
                         events=self.entities[0].get('events', []) if self.entities else [],

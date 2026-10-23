@@ -27,7 +27,7 @@
       },
       {
         "id": "red",
-        "name": "Bogey",
+        "name": "Hostile",
         "team": "Red",
         "health": 1,
         "lat_deg": 59.42,

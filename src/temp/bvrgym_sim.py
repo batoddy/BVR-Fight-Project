@@ -134,3 +134,4 @@ with Recorder(WORKSPACE / RECORDINGS_PATH, scenario=scenario) as recorder:
             time.sleep(world["sleep_s"])
 
 print(f"Bitti. {recorder.snapshots} snapshot, {recorder.event_count} olay.")
+

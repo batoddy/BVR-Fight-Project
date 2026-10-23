@@ -9,6 +9,10 @@ from dataclasses import asdict, dataclass
 MAX_MESSAGE_BYTES = 1024 * 1024  # Satır sonu dahil en fazla 1 MiB.
 
 
+# =============================================================================
+# MESAJ BİÇİMİ — aynı zarfı Python ve C++ kullanır: kind, tick, data
+# =============================================================================
+
 @dataclass
 class Message:
     kind: str
@@ -34,6 +38,10 @@ class Message:
             raise ValueError("Mesaj kind, tick ve data alanlarından oluşmalı.")
         return cls(**value)
 
+
+# =============================================================================
+# BAĞLANTI — Python sunucusu, tek C++ istemcisi
+# =============================================================================
 
 class TCPConnection:
     def __init__(self, host, port):
@@ -64,6 +72,10 @@ class TCPConnection:
             if resource is not None:
                 resource.close()
         self.reader = self.connection = self.server = None
+
+    # =========================================================================
+    # MESAJ GÖNDERME / ALMA — satır sonu, TCP içindeki mesaj sınırıdır
+    # =========================================================================
 
     def send(self, message):
         """Mesajı tek satır JSON olarak tamamen gönder."""

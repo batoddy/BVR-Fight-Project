@@ -1,6 +1,6 @@
 # Süre: simülasyon saniyesi; sleep: her dış döngü sonunda gerçek saniye.
 world:
-  duration_s: 240
+  duration_s: 420
   sleep_s: 0.0  # 0 = beklemeden; 0.08 = yaklaşık gerçek zaman.
   sim_time_step: 1  # BVRGym adım tekrar sayısı; fizik dt değeri değil.
 
@@ -14,26 +14,26 @@ connection:
 # F16, Su57 veya kendi tip adın yazılabilir; fizik modeli şimdilik F-16.
 agents:
   blue:
-    name: KE
+    name: KZL
     type: F16
     team: Blue
     ammo: 4
-    throttle: 0.55  # Başlangıç gaz komutu.
+    throttle: 0.75  # Başlangıç gaz komutu.
     spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
-      lat: 59.0
+      lat: 58.8
       long: 18.0
       alt: 5000
       vel: 300
       heading: 0
 
   red:
-    name: Bogey
+    name: Hostile
     type: F16
     team: Red
     ammo: 2
-    throttle: 0.55
+    throttle: 0.45
     spawn:
-      lat: 59.8
+      lat: 60.0
       long: 18.0
       alt: 5000
       vel: 300

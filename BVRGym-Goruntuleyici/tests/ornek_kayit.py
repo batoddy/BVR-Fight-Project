@@ -29,7 +29,7 @@ SCENARIO = {
     "agents": {
         "blue": {"name": "KE", "team": "Blue", "ammo": 2, "throttle": 0.49,
                  "spawn": {"lat": 59.0, "long": 18.0, "alt": 8000, "vel": 300, "heading": 0}},
-        "red": {"name": "Bogey", "team": "Red", "ammo": 2, "throttle": 0.49,
+        "red": {"name": "Hostile", "team": "Red", "ammo": 2, "throttle": 0.49,
                 "spawn": {"lat": 59.3, "long": 18.0, "alt": 8000, "vel": 300, "heading": 180}},
     },
 }

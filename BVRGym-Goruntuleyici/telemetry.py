@@ -31,6 +31,38 @@ def estimate_motion(rows, to_cartesian):
                                  if row['mach'] is None and reference_speed is not None and temperature else None)
 
 
+def add_velocity_vectors(rows, origin_latitude, origin_longitude):
+    """Scene-space ground velocity: recorded local NED, otherwise position derivative.
+
+    Horizontal positions use the recording's fixed ENU frame; scene height is
+    ellipsoid altitude, so its derivative is the object's local up component.
+    """
+    lat0, lon0 = math.radians(origin_latitude), math.radians(origin_longitude)
+    keys = ('local_velocity_north_mps', 'local_velocity_east_mps', 'local_velocity_down_mps')
+    for index, row in enumerate(rows):
+        vector, source = None, None
+        if all(row.get(key) is not None for key in keys):
+            north, east, down = (row[key] for key in keys)
+            lat, lon = math.radians(row['latitude_deg']), math.radians(row['longitude_deg'])
+            # Local geodetic NED -> ECEF -> the recording's fixed ENU frame.
+            x = -math.sin(lat)*math.cos(lon)*north - math.sin(lon)*east - math.cos(lat)*math.cos(lon)*down
+            y = -math.sin(lat)*math.sin(lon)*north + math.cos(lon)*east - math.cos(lat)*math.sin(lon)*down
+            z = math.cos(lat)*north - math.sin(lat)*down
+            vector = (-math.sin(lon0)*x + math.cos(lon0)*y,
+                      -math.sin(lat0)*math.cos(lon0)*x - math.sin(lat0)*math.sin(lon0)*y + math.cos(lat0)*z,
+                      -down)
+            source = 'recorded'
+        elif len(rows) > 1:
+            before, after = rows[max(0, index-1)], rows[min(len(rows)-1, index+1)]
+            dt = after['sim_time_s'] - before['sim_time_s']
+            if dt > 0:
+                vector = tuple((after[key]-before[key])/dt for key in ('east_m', 'north_m', 'altitude_m'))
+                source = 'position'
+        for component, key in enumerate(('velocity_east_mps', 'velocity_north_mps', 'velocity_up_mps')):
+            row[key] = vector[component] if vector is not None else None
+        row['velocity_source'] = source
+
+
 def standard_temperature(altitude):
     # ISA layers, temperature in kelvin; estimates outside the model stay unknown.
     if not -2000 <= altitude <= 84852:

@@ -1,197 +1,194 @@
-# BVRGym ve JSBSim: anlık veri ve dış komut referansı
+# Simülasyon ve kayıt veri referansı
 
-**İnceleme: 9 Ekim 2026.** Bu belge Workspace'teki BVRGym kaynaklarına ve Python 3.11.9 / JSBSim 1.3.1 ile yüklenen gerçek modellere dayanır. Bir uçuşun anlık verilerini almak için simülasyonu durdurmak gerekmez. Aynı Python programında nesnelerden doğrudan okuyabilirsin; ayrı programlara aktarım için bir çıkış kanalı kurarsın.
+Bu belge Python–C++ mesajlarını, kayıt dosyalarını ve görüntüleyicinin kullandığı temel alanları tanımlar. Alanların sahibi kaynak kodudur: ölçümler `Simulation.read_state()`, komutlar `CommandWriter`, hesaplar `CalculationWriter`, kayıt şeması `Recorder` tarafından üretilir.
 
-## 1. Dosyalar ve kapsam
+## 1. Kimlikler ve zaman
 
-| Dosya | İçerik |
+| Alan / kavram | Anlam |
 |---|---|
-| [BVRGYM_VERI_LISTESI.csv](BVRGYM_VERI_LISTESI.csv) | 84 temel fizik, ajan, mühimmat ve türetilmiş veri; tip, birim, kaynak, okuma ifadesi, güncellenme ve aktarım yolları |
-| [JSBSIM_F16_PROPERTY_KATALOGU.csv](JSBSIM_F16_PROPERTY_KATALOGU.csv) | Yüklü `f16` modelinin 804 propertysi: 782 okunabilir, 22 yalnızca yazılabilir |
-| [JSBSIM_FUZE_PROPERTY_KATALOGU.csv](JSBSIM_FUZE_PROPERTY_KATALOGU.csv) | Yüklü `AIM` füze modelinin 468 propertysi: 450 okunabilir, 18 yalnızca yazılabilir |
-| [catalog_summary.json](catalog_summary.json) | Sürüm, model, fizik zaman adımı ve sayım bilgileri |
+| Uçak `id` | YAML `agents` anahtarı; mevcut C++ rolleri `blue` ve `red` |
+| `name` | Görünen ad; kimlik yerine kullanılmaz |
+| `team` | Takım etiketi; görüntüleyici Blue/Red'i tanır, diğerlerini nötr gösterebilir |
+| `type` | C++ uçak profil anahtarı; fizik modeli seçimi değildir |
+| Füze `id` | Python'da `<owner_id>/missile/<ammo_id>` |
+| Füze `target_id` | Fırlatılmış füzenin hedef uçağı; hazır slotta `null` |
+| `tick` | Sıfırdan başlayan dış adım sayacı |
+| `sim_time_s` | JSBSim'den okunan fizik zamanı; ilk ölçüm tam sıfır olmak zorunda değildir |
+| CSV `time_s` | Ölçümün ortak kayıt zamanı; füze dosyasında taşıyıcı uçağın saati |
+| `missile_time_s` | Füzenin kendi saati; fırlatmada sıfırlanır |
 
-Kataloglarda `R` okunabilir, `RW` okunabilir/yazılabilir, `W` yalnızca yazılabilir anlamındadır. **W satırları çıkış verisi değildir.** Okunabilen propertylerin tümü başlangıç durumunda okunarak doğrulandı; hata oluşmadı. Bu, her propertynin uçuş boyunca anlamlı veya değişken olduğunu göstermez: modele göre sıfır, sabit, ayar veya başlangıç değeri olabilir.
+Uçaklar ve aktif füzeler dış adımda sırayla ilerletilir. TCP mesajı, bütün nesnelerin dış adım sınırında derlenen durumudur; alt fizik adımlarının tek tek yayını değildir.
 
-`snapshot_value` örnek başlangıç değeridir; canlı uçuş kaydı değildir. `unit_hint` tam katalogda property adından çıkarılan ipucudur; açıkça belirtilmiştir. Bilinmeyen birimleri model/XML ve dokümantasyondan doğrula. Yeni uçak/XML veya JSBSim sürümü kullanıldığında katalog değişebilir. Bu liste bu kurulumun tüm kayıtlı propertylerini kapsar; bütün JSBSim modellerinin evrensel listesi değildir.
+## 2. Birimler ve koordinatlar
 
-## 2. Veri hangi katmandan gelir?
+| Veri | Sözleşme |
+|---|---|
+| Enlem / boylam | Derece; TCP `lat_deg` jeodezik, `lon_deg` JSBSim boylamı |
+| Başlangıç enlemi | YAML `spawn.lat`, BVRGym tarafından `ic/lat-gc-deg` alanına yazılır; jeosantriktir |
+| İrtifa | Python `get_altitude()` metre; C++ `altitude_ft` ve yeni CSV `alt_ft` feet kullanır |
+| Kayıt irtifa referansı | Manifest `WGS84 ellipsoid height` bildirir; görüntüleyici bunu MSL'ye dönüştürmez |
+| TCP `alt_msl_m` adı | Mevcut alan adıdır; isimdeki MSL ekinden ayrı bir jeoit dönüşümü yapılmaz |
+| Yön / açı | Derece; `0` kuzey, `90` doğu; TCP heading `0..360`, C++ içi `(-180,180]` |
+| Hız | TCP kinematiğinde m/s; C++ ve yeni CSV'de kt. `tas_kt` gerçek hava hızıdır (KTAS) |
+| NED hız | `[kuzey, doğu, aşağı]`; TCP m/s, C++ ve yeni CSV kt; aşağı pozitif |
+| Mesafe | C++ hesaplarında ve hesap CSV'sinde NM; patlama yarıçapı ft |
+| Gaz | `0..1` aralığında hedef komut; ölçülmüş motor gücü değildir |
+| Yük faktörü | JSBSim `forces/load-factor`; gövdeye dik yük, düz uçuşta yaklaşık 1 g |
 
-| Katman | Verebildiği bilgiler | Nasıl okunur? | Doğal veri biçimi |
-|---|---|---|---|
-| JSBSim fizik motoru | Konum, irtifa, Euler açıları, doğrusal/açısal hızlar, Mach, hücum açısı, ivme/yük katsayısı, kuvvet, moment, motor, yakıt, rüzgâr, atmosfer, kontrol yüzeyleri ve model ayarları | `agent.simObj.fdm['property']` veya `missile.fdm['property']` | Sayısal property API: `float`; bazı bayraklar sayısal 0/1 |
-| BVRGym FDMObject | Sık kullanılan fizik alanları ve SI birimine dönüşümler | `agent.simObj.get_altitude()` gibi getterlar; füze de aynı taban sınıftadır | Genellikle `float` |
-| BVRGym ajan | Ad, takım, sağlık, hedef, füze envanteri | `agent.conf`, `agent.healthPoints`, `agent.target`, `agent.ammo` | `str`, `float`, `dict`, Python nesnesi / `None` |
-| BVRGym füze | Hazır/aktif/alive, hit/lost, hedef ve hesaplanan hedef mesafesi | `missile.is_active()`, `missile.target_hit`, vb. | `bool`, sayı, nesne / `None` |
-| Geometri yardımcıları / senin kodun | İki uçak mesafesi, göreli yön, ENU konumu; yaklaşma hızı, aspect, LOS vb. | İki nesnenin aynı andaki durumundan hesaplama | Sayı, vektör; NumPy değerlerini JSON için dönüştür |
-| Tüm senaryo | Bütün uçaklar ve füzeler; ortak zaman ve kimlikler | Senin tuttuğun ajan listesinden snapshot derleme | Özel `dict` / JSON şeması |
+`StateReader` metre/m-s ölçümlerini C++ birimlerine, `CommandWriter` feet irtifa
+hedefini Python için metreye çevirir. Yeni kaydedici `position/h-sl-ft` ve
+`velocities/vtrue-kts` alanlarını doğrudan okur; NED hızlarını ft/s'den kt'ye
+çevirir. Görüntüleyici yeni ft/kt dosyalarını ve eski metre/ft-s dosyalarını
+aynı metre/m-s sahne birimine çözer. `lat_gc_deg` ile `lat_deg` aynı enlem
+referansı değildir; başlangıç YAML enlemi ilkiyle karşılaştırılır.
 
-JSBSim her FDM nesnesinin fizik durumunu hesaplar. Ajan kimlikleri, takımlar, mühimmat ve taktik olayları otomatik bir ortak dünya paketine birleştirmez. Bu birleşik listeyi BVRGym nesnelerinden sen derlersin. Native property çıktısı tek başına hangi hedefin seçildiğini veya hangi ajan adının kullanıldığını söylemez.
+## 3. TCP zarfı
 
-## 3. En çok kullanacağın ölçümler
-
-| Veri | Doğrudan kaynak | Tip ve birim / getter |
-|---|---|---|
-| Simülasyon zamanı | `simulation/sim-time-sec` | float, s; `get_sim_time_sec()` |
-| Enlem / boylam | `position/lat-geod-deg`, `position/long-gc-deg` | float, derece; harita ve jeodezik hesap için jeodezik enlem |
-| Jeosentrik enlem | `position/lat-gc-deg` | float, derece; `get_lat_gc_deg()` |
-| MSL irtifa | `position/h-sl-meters` | float, m; `get_altitude()` |
-| AGL yükseklik | `position/h-agl-ft` | float, ft; ×0.3048 ile m; yer modeliyle sınırlı |
-| Roll / pitch / yaw | `attitude/phi-deg`, `theta-deg`, `psi-deg` | float, derece; `get_phi()`, `get_theta()`, `get_psi()` |
-| Gerçek hava hızı | `velocities/vt-fps` | float, ft/s; `get_true_airspeed()` m/s verir |
-| Kalibre hava hızı / Mach | `velocities/vc-kts`, `velocities/mach` | float, knot / boyutsuz |
-| Dünya hız vektörü NED | `velocities/v-north-fps`, `v-east-fps`, `v-down-fps` | float, ft/s; getterlar m/s verir; aşağı pozitif |
-| Gövde hız vektörü | `velocities/u-fps`, `v-fps`, `w-fps` | float, ft/s; gövde eksenleri |
-| Gövde açısal hızları | `velocities/p-rad_sec`, `q-rad_sec`, `r-rad_sec` | float, rad/s |
-| Hücum / yana kayma | `aero/alpha-deg`, `aero/beta-deg` | float, derece |
-| Pilot yük katsayıları | `accelerations/n-pilot-x-norm`, `n-pilot-y-norm`, `n-pilot-z-norm` | float, g oranı; eksen ve işaretleri koru |
-| Yakıt | `propulsion/total-fuel-lbs` | float, lb; `get_total_fuel()` kg verir |
-| Motor itkisi | `propulsion/engine/thrust-lbs` | float, lbf; çok motorlu modellerin adları değişebilir |
-| Gaz / kumanda komutları | `fcs/throttle-cmd-norm`, `aileron-cmd-norm`, `elevator-cmd-norm`, `rudder-cmd-norm` | float, normalize; ölçülen yön veya kontrol yüzeyi konumuyla aynı değildir |
-| Rüzgâr | `atmosphere/wind-*-fps`, `total-wind-*-fps` | float, ft/s; kuzey/doğu/aşağı bileşenleri |
-
-Tabloda kısaltılmış propertyler aynı satırın başındaki klasör önekini kullanır. Tam, kopyalanabilir adlar CSV dosyalarındadır. Kuvvet, moment, atmosfer, kütle/atalet, aerodinamik katsayı, yer teması ve kontrol sistemi ayrıntıları tam katalogda ilgili `forces/`, `moments/`, `atmosphere/`, `inertia/`, `aero/`, `gear/`, `fcs/`, `systems/` gruplarındadır. `ic/` değerleri başlangıç koşullarıdır; canlı uçuş ölçümü yerine kullanılmamalıdır.
-
-## 4. Python'da doğrudan okuma
-
-Mevcut `src/bvrgym_sim.py` içindeki `blue` ve `red` nesneleri için örnek:
-
-```python
-def read_aircraft(agent):
-    aircraft = agent.simObj
-    fdm = aircraft.fdm
-    return {
-        "name": agent.conf.agent_name,
-        "team": agent.conf.team,
-        "sim_time_s": aircraft.get_sim_time_sec(),
-        "lat_geod_deg": fdm["position/lat-geod-deg"],
-        "lon_deg": fdm["position/long-gc-deg"],
-        "alt_msl_m": aircraft.get_altitude(),
-        "roll_deg": aircraft.get_phi(),
-        "pitch_deg": aircraft.get_theta(),
-        "yaw_deg": aircraft.get_psi(),
-        "tas_mps": aircraft.get_true_airspeed(),
-        "mach": aircraft.get_mach(),
-        "velocity_ned_mps": [aircraft.get_v_north(),
-                             aircraft.get_v_east(), aircraft.get_v_down()],
-        "fuel_kg": aircraft.get_total_fuel(),
-        "health": agent.healthPoints,
-        "ready_missiles": sum(m.is_ready_to_launch()
-                              for m in agent.ammo.values()),
-    }
-
-# Döngüde iki uçağı ilerlettikten sonra:
-blue.apply_action(blue_command)
-red.apply_action(red_command)
-state = [read_aircraft(blue), read_aircraft(red)]
+```json
+{"kind":"state","tick":0,"data":{}}
 ```
 
-Bu okuma ayrı UDP, dosya veya seri port gerektirmez. `state` doğrudan karar koduna verilebilir. Füzelerde fizik nesnesi doğrudan `missile` olduğundan `missile.fdm[...]` ve `missile.get_mach()` kullanılır. Aktif olmayan füzenin fizik durumu uçan füze ölçümü olarak yayınlanmamalıdır; hazır mühimmat ile uçan füze ayrılmalıdır.
+Bu yalnız zarf gösterimidir; gerçek state için aşağıdaki veri alanları gerekir. Her mesaj yalnız `kind`, `tick`, `data` alanlarını taşır. `kind`, `state`, `command` veya `end` olur; `tick` negatif olmayan tamsayı, `data` nesnedir. UTF-8 JSON tek satır olarak yazılır ve `\n` ile biter. Satır sonu dahil sınır 1 MiB'dir. TCP'nin parçalama/birleştirmesi mesaj sınırı olarak kullanılmaz.
 
-Katalog erişimi:
+Python sunucudur, C++ istemcidir. Sıra `state(t) → command(t)` şeklindedir; Python yanlış tür veya `tick` değerindeki komutu uygulamaz. Süre sonunda `end` gönderilir. Yeniden bağlanma veya bağımsız atış kabul/red mesajı bulunmaz.
 
-```python
-catalog = blue.simObj.fdm.get_property_catalog()  # list[str]; erişim işaretleri dahil
-time_s = blue.simObj.fdm.get_property_value("simulation/sim-time-sec")
-physics_dt_s = blue.simObj.fdm.get_delta_t()
-```
+Tam örnekler [TCP mesaj klasöründedir](../mimari/mesaj_sablonlari/tcp/README.md).
 
-Property adını katalogla doğrula. Yazım hatasını veya olmayan bir alanı sıfır değerli geçerli telemetri sanma. R/W izinleri, komut aralığı ve modelin propertyyi ne için kullandığı farklı kavramlardır.
+### State veri alanları
 
-## 5. Aktarım seçenekleri: doğrudan, UDP, TCP, dosya, seri port
+| Alan | İçerik |
+|---|---|
+| `data.tick` | Dış adımdaki sayacın veri içindeki kopyası |
+| `data.sim_time_s` | Referans uçağın fizik saati |
+| `data.aircraft[]` | Uçak kimlikleri, sağlık ve ölçüm alanları |
+| `data.missiles[]` | Bütün mühimmat slotlarının kimlik, hedef ve durumları |
+| `data.flight_commands[]` | Son uygulanan yön/irtifa/gaz; ilk mesajda YAML hedefleri |
 
-| Yol | Hazır destek / ek iş | Format | Kullanım ve sınır |
-|---|---|---|---|
-| Aynı süreçte Python | Hazır: nesne/getter/property erişimi | float, dict, list, nesne | Kendi ajan karar kodun için en sade yol; ağ gerekmez |
-| JSBSim native UDP çıkışı | Output XML + BVRGym `data_output_xml` | `SOCKET`: metin, virgülle ayrılmış sayılar; başlıkta `<LABELS>` | Seçtiğin fizik propertyleri; paket kaybolabilir; isim/takım/mühimmat otomatik eklenmez |
-| JSBSim native TCP çıkışı | Output XML; alıcı sunucu / bağlantı düzeni gerekir | `SOCKET`: aynı metin biçimi | Sıralı byte akışı; mesajları satır sınırından ayır; gecikme birikebilir |
-| Özel Python UDP/TCP köprüsü | Ek yayıncı/alıcı kodu gerekir | Senin belirlediğin JSON veya ikili şema | Ajan + füze + göreli geometriyi birleştirir; komutları ayrı doğrulayarak uygular |
-| JSBSim native CSV / TABULAR | Output XML | Time ve seçilen sayısal sütunlar; CSV veya sekmeli metin | Disk kaydı; yüksek frekansta flush/okuma gecikmesi canlı kontrol için değerlendirilir |
-| JSBSim FLIGHTGEAR | Native output türü | FlightGear Native FDM ikili protokolü | FlightGear görselleştirmesi; JSON/CSV ile aynı değildir |
-| BVRGym TacviewLogger | Mevcut logger | Ayrı uçak/füze CSV dosyaları | Mevcut sürümde RAM'de birikir, `save_logs()` çağrısında diske yazılır |
-| HTTP/WebSocket | Özel sunucu/köprü gerekir | Genellikle JSON | Tarayıcı / arayüz; mevcut viewer HTTP durumu simülasyon komut köprüsü değildir |
-| Standart çıktı / pipe | `print` veya native CSV COUT; özel protokol düzeni | Metin; istenirse satır başına JSON | Konsol loglarıyla karıştırma; `print_status()` yapılandırılmış tam telemetri değildir |
-| Fiziksel seri port COM | BVRGym/JSBSim'in bu kurulumunda hazır output değil; ör. pyserial adaptörü gerekir | JSON satırı veya senin ikili çerçeven | Baud, çerçeveleme ve tamponlama eklenir; donanım bağlantısı için |
+Her uçakta `id`, `name`, `type`, `team`, `health` ile aşağıdaki kinematik alanlar bulunur. Füzenin `kinematics` nesnesi de aynı ölçüm alanlarını kullanır:
 
-“Düz” erişimden kastın Python içinden okumaksa ilk satır yeterli. Fiziksel seri port kastediliyorsa son satırdaki adaptör gerekir. Ağ kullanmak zorunlu değildir.
+| Alan | Kaynak / birim |
+|---|---|
+| `lat_deg` | `position/lat-geod-deg`, derece |
+| `lon_deg` | `get_long_gc_deg()`, derece |
+| `alt_msl_m` | `get_altitude()`, metre; referans için yukarıdaki tabloya bak |
+| `yaw_deg`, `pitch_deg`, `roll_deg` | JSBSim yönelim getterları, derece |
+| `tas_mps` | `get_true_airspeed()`, m/s |
+| `mach` | `get_mach()`, boyutsuz |
+| `velocity_ned_mps` | NED hız getterları, m/s |
 
-### Native UDP örneği
+Her füze `id`, `owner_id`, `target_id`, `state`, `outcome`, `flight_time_s`, `kinematics` taşır.
 
-Bu, oluşturabileceğin XML örneğidir; mevcut uçuş dosyasına uygulanmadı:
+| Durum | Sonuç ve fizik alanları |
+|---|---|
+| `ready` | Hedef, sonuç, uçuş zamanı ve kinematik `null` |
+| `in_flight` | Hedef kimliği, füze saati ve kinematik mevcut; sonuç genellikle `null` |
+| `ended` | Son kinematik durum ve `hit`/`lost` sonucu bulunabilir; uçuş artık sürmez |
 
-```xml
-<?xml version="1.0"?>
-<output name="127.0.0.1" type="SOCKET" protocol="UDP"
-        port="5600" rate="30" precision="12">
-  <property>position/lat-geod-deg</property>
-  <property>position/long-gc-deg</property>
-  <property>position/h-sl-meters</property>
-  <property>attitude/phi-deg</property>
-  <property>attitude/theta-deg</property>
-  <property>attitude/psi-deg</property>
-  <property>velocities/vt-fps</property>
-  <property>velocities/mach</property>
-</output>
-```
+`lost`, BVRGym'in `target_lost` bayrağının karşılığıdır; bağımsız sensör kilidi kaybı ölçümü olarak yorumlanmaz.
 
-`config.data_output_xml = str(xml_path)` ayarı **F16BVR oluşturulmadan önce** verilir. Zaman sütununu output sistemi ekler. Sütun sırası XML sırasıdır. Başlık başlangıçta/restart sırasında gönderilir; sonradan açılan UDP alıcısı başlığı kaçırabilir, bu yüzden şemayı alıcıda da bil. Bu çıktı JSON değildir; JSBSim'in metin satırıdır. `vt-fps` burada hâlâ ft/s'dir.
+### Command veri alanları
 
-İki uçak için farklı output XML/port kullanmak nesneleri ayırmanın basit yoludur: örneğin 5600 ve 5601. Port→ajan eşlemesini sen tutarsın. Bir porta birden çok nesne kimliksiz sayı paketi göndermek ayırt etmeyi zorlaştırır. Aynı portu iki alıcıyla bağlamaya çalışmak Windows'ta 10048 hatasına yol açabilir.
+| Alan | İçerik |
+|---|---|
+| `data.aircraft[]` | Her uçak için tek `{id, heading_deg, altitude_m, throttle}` |
+| `data.launch[]` | Tek adımlık `{id, target_id}` atış emirleri; yoksa boş liste |
+| `data.calculations.aircraft[]` | Uçak başına C++ hesabı; fizik komutu olarak uygulanmaz |
 
-## 6. Çıkış verisi ile komut girişini ayır
+`heading_deg` için `0..360`, `throttle` için `0..1` kabul edilir. Yön, irtifa ve gaz sonlu sayı olmalıdır. Python her ajan için tam bir komut ister. C++ mevcut iki uçağa komut üretir. `launch` belirli füze slotunu seçmez; Python hazır ilk fizik slotunu kullanır.
 
-UDP output açmak, o porttan komut alındığı anlamına gelmez. JSBSim'in native input desteği ayrı yapılandırılır; property düzeyindeki girişler ajan adı, hedef seçimi ve `launch_missile()` işlemini kendiliğinden temsil etmez. BVRGym'in PID denetleyicisi de doğrudan yazılan kumanda değerlerini sonraki adımda değiştirebilir.
+### End
 
-Senin amaçladığın akış:
+`kind="end"`, son `tick` ve boş `data` nesnesi gönderilir. C++ yanıt üretmeden ana döngüden çıkar.
+
+## 4. Kayıt dizini
 
 ```text
-JSBSim fizik durumu + BVRGym ajan/füze durumu
-                  ↓ snapshot
-         senin karar / kontrol programın
-                  ↓ açık komut
-  hedef yön / irtifa / gaz / hedef ID / ateşleme
-                  ↓ simülasyonun döngüsünde uygula
-       BaseBVRAgent → F16BVR / AAMBVR → JSBSim
+recordings/<oturum>/
+├── F-16 (<ad>--<ajan>) [<takım>].csv
+├── AIM-120 AMRAAM (<ad>--<ajan>--<slot>) [<takım>].csv
+├── events.jsonl
+├── calculations.csv
+└── manifest.json
 ```
 
-Aynı programda `apply_action([heading_deg, altitude_m, throttle])`, `set_target(target_agent)` ve `launch_missile()` çağrıları kullanılır. Ayrı programdan geliyorsa mesajı okuyup ajan ID'sine eşleyen bir köprü gerekir. Bu referans köprüyü kurmaz; mevcut uçuş kodunun davranışını değiştirmez.
+Her uçak ve slot için ayrı CSV vardır. İsimler kaydedicide dosya sistemi için temizlenir. `calculations.csv` yalnız hesap verisi geldiğinde açılır; yerel uçuş şablonunda bulunmaz.
 
-Özel ağ protokolünde en az `schema_version`, artan `sequence`, ortak `sim_time_s`, ajan/füze ID'si ve birimli alan adları bulunmalı. Nesne referansını ID, `None` değerini JSON `null`, NumPy scaları Python sayı, tuple/vektörü JSON liste olarak gönder. Ölçülen yön ile istenen yönü ayrı alanlar yap. Füze ID'si taşıyıcıyı da içermeli: ör. `Kartal-1/missile/0`.
+### Nesne CSV sütunları
 
-## 7. Güncellenme hızı ve zaman
+| Sütunlar | Kaynak / açıklama |
+|---|---|
+| `time_s` | Ortak ölçüm zamanı |
+| `lat_deg`, `lon_deg`, `alt_ft` | Konum; irtifa `position/h-sl-ft` |
+| `roll_deg`, `pitch_deg`, `yaw_deg` | Ham yönelim propertyleri |
+| `mach` | `velocities/mach` |
+| `lat_gc_deg` | `position/lat-gc-deg` |
+| `tas_kt` | `velocities/vtrue-kts`, KTAS |
+| `vel_north_kt`, `vel_east_kt`, `vel_down_kt` | NED hızları; kaynak ft/s × `0.3048 × 3600 / 1852` |
+| `load_factor_g` | `forces/load-factor` |
+| `fuel_lb` | `propulsion/total-fuel-lbs` |
+| `cmd_heading_deg`, `cmd_alt_ft`, `cmd_throttle_norm` | Yalnız uçakta; irtifa hedefi m → ft çevrilerek yazılır |
+| `missile_time_s` | Yalnız füzede; kendi fizik saati |
 
-- Yüklü F16 ve AIM modellerinin fizik zaman adımı yaklaşık **0.00833333 s**: simülasyon saniyesi başına yaklaşık 120 fizik adımı. Bu, duvar saatinde otomatik 120 Hz çalıştıkları anlamına gelmez.
-- `Sim_time_step` fizik `dt` değeriyle aynı değildir. BVRGym'in döngü tekrarını etkiler; bir `apply_action()` birden fazla `fdm.run()` çağırabilir. Kontrol alt adımlarıyla birlikte dış döngünün ilerlettiği süreyi belirler.
-- Anlık okuma zamanı için `get_sim_time_sec()` farkını ölç. `sleep` duvar saatinde bekletir; fizik adım büyüklüğünü değiştirmez.
-- Native output `rate` simülasyon zamanına göre örnekleme ister; fizik adımıyla sınırlıdır. Her dış döngüde Python snapshot almak farklı bir örnekleme hızıdır. Aynı snapshotı sık göndermek yeni ölçüm üretmez.
-- İki uçak ilerletildikten sonra ortak snapshot al. Her modelin zamanını kontrol et. Füzenin kendi saati launch/reset sonrasında sıfırdan başlayabilir; ortak senaryo zamanını ve füze uçuş süresini ayrı tut.
-- Ağ alıcı thread'i JSBSim nesnesini eşzamanlı değiştirmesin. Komut kuyruğuna koy; simülasyon thread'i adım sınırında uygulasın ve okuduğu durumun kopyasını yayınlasın.
-- Paket gelmediğinde veri yaşını/son sıra numarasını takip et. Son konumu yeni simülasyon ölçümü gibi göstermemek gerekir.
+Ek property sütunları yalnız modelde okunabiliyorsa açılır. Mevcut modellerle uçak CSV'sinde 18, füze CSV'sinde 16 sütun vardır; bu sayı bütün model sürümleri için sabit protokol değildir. Kesin liste ilgili dosya başlığında ve manifestin `objects[].columns` alanındadır.
 
-## 8. Mevcut kayıt ve model sınırları
+Hazır mühimmat yalnız CSV başlığıyla kalır. Uçan füze kayıt alır; bitiş durumu bir kez yazıldıktan sonra satır eklenmez. Snapshot, her fizik alt adımı değil `record()` çağrısıdır.
 
-Şimdiki `src/bvrgym_sim.py` akışında `data_output_xml=None`; native ağ çıktısı kapalıdır. Aşağıdaki sütunlar BVRGym'in yerleşik logger'ına aittir; bizim `src/recorder.py` kaydımız bunlara BVR alanları, uygulanan komut, `events.jsonl` ve `manifest.json` ekler. `TacviewLogger` sütunları: `Time, Longitude, Latitude, Altitude, Roll (deg), Pitch (deg), Yaw (deg)`. Zaman s, konum derece, irtifa m, açılar derecedir. Dosya adı ajan configinden türetilir: `uçak_adı (ajan_adı) [takım].csv`; füze kayıtlarında `AIM-120 AMRAAM (AIM{anahtar}) [takım].csv` kalıbı kullanılır. Dosya etiketini gerçek XML model adıyla karıştırma.
+### Calculations CSV
 
-Logger kayıtları `save_logs()` çağrıldığında yazar; mevcut şablonda uçuş sonunda veya Ctrl+C sonrasında. Bu sebeple mevcut CSV viewer, canlı dış karar programının telemetri kanalı yerine geçmez. Viewer'ın `/api/state` JSON'u görselleştiriciye aittir; tam fizik katalog çıktısı değildir. Logger seçilen kayıt klasörünü temizleyerek yeniden yazdığı için sürekli ara kayıtta davranışı ayrıca düzenlemek gerekir. Aynı takımda aynı füze anahtarlarının dosya adları çakışabilir.
+`time_s`, kaydedici tarafından ilgili uçağın son yazılmış ölçüm zamanı olarak eklenir. C++ hesap satırında `time_s` bulunamaz. Diğer alanlar `CalculationWriter` çıktısıdır:
 
-Mevcut kaynağa özgü ayrıntılar:
+| Grup | Alanlar |
+|---|---|
+| Kimlik / aşama | `id`, `target_id`, `phase` |
+| Mesafe / açı | `range_2d_nm`, `range_3d_nm`, `bearing_deg`, `ata_deg`, `aspect_deg` |
+| Görüş hattı | `los_north_nm`, `los_east_nm`, `los_down_nm` |
+| Kapanma | `rate_of_closure_kt`, `enemy_closing_kt` |
+| Angajman | `enemy_in_my_wez`, `me_in_enemy_wez`, `mar_nm`, `dor_nm` |
+| Profil / çizim | `radar_gimbal_deg`, `radar_range_nm`, `wez_min_range_nm`, `wez_max_range_nm` |
 
-- `get_lat_gc_deg()` jeosentrik enlem verir; geospatial yardımcıları bunu jeodezik dönüşüm fonksiyonuna geçiriyor. Hassas yeni hesaplarda `position/lat-geod-deg` kullanıp aynı koordinat tanımını koru.
-- `FDMObject.get_u()` şu anda öneksiz `u-fps` okuyor. Gövde ileri hızı için katalogdaki `velocities/u-fps` kaynağını kullan.
-- `AAMBVR.launch()` hız için `get_mach()` değerini `reset(..., vel=...)` içine veriyor; reset ise hızı m/s kabul ediyor. Bu kaynak uyuşmazlığı giderilmeden başlangıç füze hızının taşıyıcının m/s hızı olduğunu varsayma.
-- `active` işareti ile `is_active()` sonucu farklıdır; ikincisi alive/hit/lost durumlarını da dikkate alır. `target_norm` son hesaplanan mesafedir, doğrudan JSBSim propertysi değildir ve başlangıçta `None` olabilir.
-- `lost_count` kaynakta vardır; mesafeye dayalı `is_target_lost()` çağrısı mevcut `step()` içinde yorum satırıdır. Bu sayacı etkin bir hedef takip sensörü gibi yorumlama. Mach/irtifa koşulları da lost sonucuna yol açabilir.
-- Vuruş/sağlık BVRGym'in basitleştirilmiş olay mantığıdır. Radar tespiti, RCS, radar track kalitesi, kapsamlı hasar, WEZ/NEZ veya DOR/DR/MAR bu katalogda kendiliğinden hazır birer ölçüm değildir; ilgili model/hesap ayrıca gerekir.
+Boolean değerler CSV'de `1/0` olarak yazılır. Alan kümesi ilk mesajdan sonra değiştirilemez. `phase`: `0 Hold`, `1 Fire`, `2 Out`, `3 In`, `4 Crank`, `5 Notch`.
 
-## 9. Kaynaklar
+Pozitif ATA sağ taraf, pozitif kapanma yaklaşma anlamındadır. Radar gimbal değeri yarım açıdır: `60`, sağa ve sola 60° demektir. MAR/DOR'un mevcut `0` değerleri uygulanmış bir angajman çözümü değildir. WEZ ilk slotun profiline dayanır. Füzenin `target` hesapları bu uçak satırlarına ayrı füze ölçümü olarak aktarılmaz.
 
-Yerel kaynaklar: `Workspace/BVRGym/jsb_gym/simObjects/FDMObject.py`, `aircraft.py`, `missiles.py`, `jsb_gym/agents/agents.py`, `jsb_gym/utils/geospatial.py`, `jsb_gym/utils/loggers.py`; mevcut uçuş: `Workspace/src/bvrgym_sim.py` ve `Workspace/src/recorder.py`; viewer: proje kökündeki `BVRGym-Goruntuleyici`.
+Görüntüleyici hesapları uçak anahtarı ve **tam eşit `time_s`** ile ölçüme bağlar; en yakın zamanı seçmez. Eşleşmeyen hesap uyarıyla atlanır. Oynatma sırasında `calc`, bir sonraki ölçüme kadar önceki örneğin hesabı olarak tutulur; geometrisi yeniden hesaplanmaz. Son ölçüm için hesap olmayabilir.
 
-Resmî belgeler ve uygulama kaynakları:
+### Events JSONL
 
-- [JSBSim Python FGFDMExec API](https://jsbsim-team.github.io/jsbsim/python/FGFDMExec.html): property kataloğu, okuma/yazma, zaman ve model erişimi.
-- [JSBSim FGOutput](https://jsbsim-team.github.io/jsbsim/classJSBSim_1_1FGOutput.html): output türleri ve XML grupları.
-- [JSBSim FGOutputSocket uygulaması](https://jsbsim-team.github.io/jsbsim/FGOutputSocket_8cpp_source.html): UDP/TCP seçimi, LABELS başlığı ve metin veri biçimi. Eski sınıf açıklamasındaki SOCKET uyarısı yerine mevcut uygulama kodu esas alınmıştır.
-- [JSBSim FGInputSocket uygulaması](https://jsbsim-team.github.io/jsbsim/FGInputSocket_8cpp_source.html): native giriş çıkıştan ayrı bir mekanizmadır.
+Her satır ayrı bir JSON olayıdır. Temel alanlar: `seq`, `sim_time_s`, `agent`, `type`. Olaya göre `target`, `ammo` veya `from`/`to` eklenir.
 
-Çevrimiçi Python belgesi incelenirken 1.3.2 gösteriyordu; katalog ve yerel davranış doğrulaması bu bilgisayardaki **1.3.1** üzerinden yapıldı. Bu incelemede seri port, yeni ağ köprüsü veya yeni input protokolü kurulup test edilmedi.
+| Tür | Ek alan / anlam |
+|---|---|
+| `target_assigned`, `target_cleared` | `target`; ajanın hedef bağının değişmesi |
+| `missile_launched` | `ammo`, `target`; fırlatmanın gözlenmesi |
+| `missile_hit`, `missile_lost` | `ammo`, `target`; BVRGym sonuç bayrağı |
+| `health_changed` | `from`, `to`; sağlık değişimi |
+
+`agent` kimliktir; olay `target` değeri kaydedicinin tuttuğu görünen hedeftir. Olay zamanı durum değişiminin görüldüğü snapshot'tır. Görüntüleyici ilk 5000 olayı gösterir; daha fazlasını uyarır. Sonuç, kayıt aralığının bitmesinden türetilmez.
+
+### Manifest JSON
+
+Yeni kaydedici şeması `schema_version=3`, `kind="bvrgym-bvr-recording"` olarak bildirilir.
+Şema 2'nin `alt_m`, `tas_fps`, NED `_fps` ve hesap `_m`/`_mps` dosyaları eski
+oturumlarda korunur ve görüntüleyici tarafından okunur. Manifest senaryoyu,
+koordinat referansını, sütun/property/birim/çarpan kataloğunu, nesnelerin dosyalarını,
+fizik/kontrol adımlarını ve snapshot/olay/hesap sayılarını içerir. İlk açılışta ve
+kapanışta yazılır.
+
+Bu sürüm numarası TCP zarfında bulunmaz ve görüntüleyicinin HTTP `schema_version=3` değeriyle aynı sözleşme değildir.
+
+## 5. Yerleşik TacviewLogger biçimi
+
+Görüntüleyici ayrıca BVRGym logger'ının `Time`, `Longitude`, `Latitude`, `Altitude`, `Roll (deg)`, `Pitch (deg)`, `Yaw (deg)` adlandırmasını okur. Buradaki `Latitude` jeosantrik kabul edilip okuma sırasında jeodeziğe çevrilir. Bizim `lat_deg` sütunumuz doğrudan jeodeziktir.
+
+Yerleşik logger manifest/olay/hesap dosyası üretmek zorunda değildir. Sahiplik önce dosya adındaki ajan anahtarından, bu yoksa takımda tek olası uçak bulunmasından çözülür. Belirsiz sahiplik tahmin edilmez. Yerleşik logger dosya adı çakışmasıyla ölçümleri ezmişse görüntüleyici kaybolan veriyi üretemez.
+
+Görüntüleyicinin CSV okuması, özel recorder sütunlarının Tacview uygulamasınca doğrudan açılacağını garanti etmez. ACMI dönüştürme bu projede uygulanmış bir çıktı yolu değildir.
+
+## 6. Property katalogları
+
+- [JSBSIM_F16_PROPERTY_KATALOGU.csv](JSBSIM_F16_PROPERTY_KATALOGU.csv): oluşturulmuş F-16 modelinin property envanteri.
+- [JSBSIM_FUZE_PROPERTY_KATALOGU.csv](JSBSIM_FUZE_PROPERTY_KATALOGU.csv): oluşturulmuş füze modelinin property envanteri.
+- [BVRGYM_VERI_LISTESI.csv](BVRGYM_VERI_LISTESI.csv): bu projenin kullandığı ölçüm, komut ve hesap alanlarına toplu bakış.
+- [catalog_summary.json](catalog_summary.json): envanterin alındığı kurulum ve okuma özeti.
+
+Property katalogları ölçüm anına ait örnek değer ve erişim işaretlerini içerir; simülasyonun bütün bu alanları TCP'den gönderdiği anlamına gelmez. `R/RW/W` erişim iznidir; birim, geçerli komut aralığı veya fiziksel kullanım garantisi değildir. `ic/` başlangıç koşulları canlı ölçüm yerine kullanılamaz. Model/JSBSim değiştiğinde `get_property_catalog()` ile yeniden üretilmelidir.

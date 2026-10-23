@@ -43,7 +43,7 @@ class RecordingChecks(unittest.TestCase):
 
     def test_native_aircraft_and_missile_share_clock(self):
         self.write()
-        self.write('F-16 (Bogey) [Red].csv')
+        self.write('F-16 (Hostile) [Red].csv')
         self.write('AIM-120 AMRAAM (AIM0) [Blue].csv', [[10, 18.02, 59, 7000, 0, 0, 0], [15, 18.04, 59, 7500, 0, 1, 5]])
         samples, objects = read_recording(self.directory)
         self.assertEqual(len(objects), 3)
@@ -53,6 +53,31 @@ class RecordingChecks(unittest.TestCase):
         self.assertIsNone(missile['true_airspeed_mps'])
         self.assertEqual(missile['team'], 'blue')
         self.assertEqual([row['sim_time_s'] for row in samples], [0, 0, 10, 15, 20, 20])
+
+    def test_map_origin_matches_first_aircraft_even_when_missile_starts_earlier(self):
+        self.write(rows=[[5, 18, 59, 7000, 0, 0, 0], [20, 18.1, 59, 7000, 0, 0, 0]], header=OWN_HEADER)
+        self.write('AIM-120 AMRAAM (M0) [Blue].csv', [[0, 18.02, 59, 7000, 0, 0, 0]], header=OWN_HEADER)
+        store = self.ready()
+        packet = store.packet()
+        self.assertEqual(packet['map_origin'], dict(latitude_deg=59.0, longitude_deg=18.0, altitude_m=7000.0))
+        aircraft = next(row for row in packet['samples'] if row['kind'] == 'aircraft')
+        self.assertAlmostEqual(aircraft['east_m'], 0)
+        self.assertAlmostEqual(aircraft['north_m'], 0)
+        self.assertEqual(store.packet(after=2)['map_origin'], packet['map_origin'])
+
+    def test_legacy_enemy_names_display_as_hostile_without_changing_recording_ids(self):
+        aircraft = self.write('F-16 (Bogey--red) [Red].csv', header=OWN_HEADER)
+        missile = self.write('AIM-120 AMRAAM (Bogey--red--0) [Red].csv',
+                             [[10, 18.02, 59, 7000, 0, 0, 0]], header=OWN_HEADER)
+        before = {path.name: path.read_bytes() for path in (aircraft, missile)}
+        store = self.ready()
+        packet = store.packet()
+        self.assertEqual(next(row['name'] for row in packet['samples'] if row['id'] == aircraft.name), 'Hostile')
+        munition = packet['inventory'][aircraft.name][0]
+        self.assertEqual(munition['name'], 'Hostile-0')
+        self.assertEqual(munition['id'], missile.name)
+        self.assertEqual(munition['owner_id'], aircraft.name)
+        self.assertEqual({path.name: path.read_bytes() for path in (aircraft, missile)}, before)
 
     def test_own_column_names_are_read_as_geodetic(self):
         """`lat_deg` is already WGS84, so it is used as written; the older

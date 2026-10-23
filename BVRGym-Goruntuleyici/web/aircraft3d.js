@@ -13,7 +13,8 @@ function plate(points, thickness, material) {
   const shape=new THREE.Shape();
   points.forEach(([x,z],i)=>i?shape.lineTo(x,-z):shape.moveTo(x,-z));
   shape.closePath();
-  const geometry=new THREE.ExtrudeGeometry(shape,{depth:thickness,bevelEnabled:false});
+  const geometry=new THREE.ExtrudeGeometry(shape,{depth:thickness,bevelEnabled:thickness>.05,
+    bevelSize:Math.min(.025,thickness/4),bevelThickness:Math.min(.025,thickness/4),bevelSegments:1});
   geometry.rotateX(-Math.PI/2);geometry.translate(0,-thickness/2,0);
   return new THREE.Mesh(geometry,material);
 }
@@ -22,16 +23,18 @@ export function createF16(color=0x6b9bbc) {
   // Approximate F-16 silhouette: 15.06 m long, 9.96 m wingspan.
   // Model axes: X right wing, Y up, nose toward -Z.
   const aircraft=new THREE.Group();
-  const body=new THREE.MeshStandardMaterial({color,roughness:.48,metalness:.45});
+  const body=new THREE.MeshStandardMaterial({color,roughness:.62,metalness:.25});
   const edge=new THREE.MeshStandardMaterial({color:0x314454,roughness:.65,metalness:.3});
-  const glass=new THREE.MeshStandardMaterial({color:0x162e42,roughness:.13,metalness:.7});
+  const glass=new THREE.MeshStandardMaterial({color:0x17384e,roughness:.2,metalness:.45});
   const noseMaterial=new THREE.MeshStandardMaterial({color:0x48545f,roughness:.7});
   const nozzleMaterial=new THREE.MeshStandardMaterial({color:0x222d36,metalness:.7,roughness:.45});
   const section=[
-    [-8.0,0.015,.015],[-6.3,.24,.22],[-4.6,.43,.42],[-2.7,.58,.54],
-    [-.6,.69,.55],[1.8,.71,.56],[4.7,.48,.43],[6.4,.40,.37],[7.06,.38,.35]
+    [-8.0,.005,.005],[-7.6,.07,.065],[-7.0,.16,.14],[-6.3,.25,.23],
+    [-5.4,.35,.33],[-4.6,.43,.42],[-3.6,.52,.49],[-2.7,.58,.54],
+    [-1.5,.65,.56],[-.6,.69,.55],[.6,.72,.57],[1.8,.71,.56],
+    [3.4,.6,.5],[4.7,.48,.43],[6.4,.40,.37],[7.06,.38,.35]
   ];
-  const positions=[],indices=[],rings=16;
+  const positions=[],indices=[],rings=32;
   section.forEach(([z,width,height])=>{
     for(let i=0;i<rings;i++){const a=i/rings*Math.PI*2;positions.push(Math.cos(a)*width,Math.sin(a)*height,z);}
   });
@@ -39,8 +42,10 @@ export function createF16(color=0x6b9bbc) {
     const a=row*rings+i,b=row*rings+(i+1)%rings,c=b+rings,d=a+rings;
     indices.push(a,b,d,b,c,d);
   }
-  const skin=new THREE.BufferGeometry();skin.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));skin.setIndex(indices);skin.computeVertexNormals();
-  const fuselage=new THREE.Mesh(skin,body);aircraft.add(fuselage);
+  const skin=new THREE.BufferGeometry();skin.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));skin.setIndex(indices);
+  for(let row=0;row<section.length-1;row++)skin.addGroup(row*rings*6,rings*6,row<4?1:0);
+  skin.computeVertexNormals();
+  const fuselage=new THREE.Mesh(skin,[body,noseMaterial]);aircraft.add(fuselage);
   const wings=plate([[-.6,-1.6],[-4.98,2.45],[-4.98,3.85],[-.7,2.55],
     [.7,2.55],[4.98,3.85],[4.98,2.45],[.6,-1.6]],.16,body);
   aircraft.add(wings);
@@ -53,20 +58,30 @@ export function createF16(color=0x6b9bbc) {
     rail.rotation.x=Math.PI/2;rail.position.set(side*4.95,.05,3.05);aircraft.add(rail);
   }
   // Single vertical stabilizer.
-  const finGeometry=new THREE.BufferGeometry();
-  finGeometry.setAttribute('position',new THREE.Float32BufferAttribute([
-    0,.35,1.75, 0,2.65,4.35, 0,2.65,5.1, 0,.35,6.55
-  ],3));finGeometry.setIndex([0,1,2,0,2,3]);finGeometry.computeVertexNormals();
-  const finMaterial=body.clone();finMaterial.side=THREE.DoubleSide;
-  aircraft.add(new THREE.Mesh(finGeometry,finMaterial));
-  const canopy=new THREE.Mesh(new THREE.SphereGeometry(1,20,12),glass);
-  canopy.scale.set(.39,.46,1.18);canopy.position.set(0,.49,-3.45);aircraft.add(canopy);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(.24,1.7,16),noseMaterial);
-  nose.rotation.x=-Math.PI/2;nose.position.set(0,0,-7.15);aircraft.add(nose);
-  const intake=new THREE.Mesh(new THREE.SphereGeometry(1,16,8),edge);
-  intake.scale.set(.42,.35,.74);intake.position.set(0,-.48,-1.75);aircraft.add(intake);
-  const exhaust=new THREE.Mesh(new THREE.CylinderGeometry(.38,.41,.65,16,1,true),nozzleMaterial);
+  const finShape=new THREE.Shape();finShape.moveTo(1.75,.35);finShape.lineTo(4.35,2.65);finShape.lineTo(5.1,2.65);finShape.lineTo(6.55,.35);finShape.closePath();
+  const finGeometry=new THREE.ExtrudeGeometry(finShape,{depth:.09,bevelEnabled:true,bevelSize:.025,bevelThickness:.025,bevelSegments:1});
+  finGeometry.rotateY(-Math.PI/2);finGeometry.translate(.045,0,0);aircraft.add(new THREE.Mesh(finGeometry,body));
+  const canopyFrame=new THREE.Mesh(new THREE.SphereGeometry(1,28,16),edge);
+  canopyFrame.scale.set(.44,.4,1.35);canopyFrame.position.set(0,.52,-3.6);aircraft.add(canopyFrame);
+  const canopy=new THREE.Mesh(new THREE.SphereGeometry(1,28,16),glass);
+  canopy.scale.set(.37,.43,1.18);canopy.position.set(0,.59,-3.67);aircraft.add(canopy);
+  const intake=new THREE.Mesh(new THREE.SphereGeometry(1,24,12),body);
+  intake.scale.set(.48,.39,1.1);intake.position.set(0,-.5,-1.4);aircraft.add(intake);
+  const intakeOpening=new THREE.Mesh(new THREE.CircleGeometry(1,24),nozzleMaterial);
+  intakeOpening.rotation.y=Math.PI;intakeOpening.scale.set(.37,.25,1);intakeOpening.position.set(0,-.63,-2.42);aircraft.add(intakeOpening);
+  const exhaust=new THREE.Mesh(new THREE.CylinderGeometry(.38,.41,.65,24,1,true),nozzleMaterial);
   exhaust.rotation.x=Math.PI/2;exhaust.position.set(0,0,6.75);aircraft.add(exhaust);
+  const exhaustInside=new THREE.Mesh(new THREE.CircleGeometry(.34,24),nozzleMaterial);
+  exhaustInside.position.set(0,0,7.02);aircraft.add(exhaustInside);
+  const exhaustRim=new THREE.Mesh(new THREE.TorusGeometry(.365,.035,8,32),edge);
+  exhaustRim.position.set(0,0,7.01);aircraft.add(exhaustRim);
+  // Kanat kumanda yüzeyleri ve gövde sırtı: doku indirmeden okunabilir detay.
+  const panelPoints=[];
+  for(const side of [-1,1]){
+    panelPoints.push(new THREE.Vector3(side*.85,.105,1.55),new THREE.Vector3(side*4.7,.105,3.15),
+      new THREE.Vector3(side*.7,.085,4.65),new THREE.Vector3(side*2.35,.085,6.15));
+  }
+  aircraft.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(panelPoints),new THREE.LineBasicMaterial({color:0x263a49,transparent:true,opacity:.55})));
   aircraft.userData.bodyMaterial=body;
   return normalizeLength(aircraft,'aircraft',body);
 }

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {OrbitControls} from './vendor/OrbitControls.js';
 import {createF16,createMissile,createGeneric,disposeObject} from './aircraft3d.js';
 import {Scene as Scene2D,updateScaleBar} from './scene2d.js';
-import {MODEL_LENGTHS,altitudeLabel,speedLabel,visualScale} from './units.js';
+import {MODEL_LENGTHS,altitudeLabel,speedLabel,analysisLabel,guideLength,visualScale,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
 
 const point=e=>new THREE.Vector3(e.east_m,e.altitude_m,-e.north_m);
 const degrees=Math.PI/180;
@@ -17,17 +17,18 @@ export class Scene {
     this.speedUnit='mps';this.altitudeUnit='ft';this.distanceUnit='nm';
     this.trailDuration=300;this.labelMode='all';this.labelNames=true;this.labelAltitude=true;this.labelSpeed=true;
     this.models=new Map();this.altitudeGuideCache=new WeakMap();this.lastTheme=null;
-    this.hasData=false;this.objectScale=50;this.altitudeGuides=true;this.headingGuides=true;this.lastTrailUpdate=-Infinity;
+    this.hasData=false;this.objectScale=1;this.altitudeGuides=true;this.velocityGuides=true;this.lastTrailUpdate=-Infinity;
     this.world=new THREE.Scene();
-    this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+    // Logaritmik derinlik: 0,5 m ile 1000 km aynı sahnede; gerçek boy uçağa yakından bakılabilsin.
+    this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,logarithmicDepthBuffer:true});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.1;
-    this.camera=new THREE.PerspectiveCamera(44,1,10,1000000);
+    this.camera=new THREE.PerspectiveCamera(44,1,.5,1000000);
     this.camera.position.set(9000,11500,11000);
     this.controls=new OrbitControls(this.camera,canvas);
     this.controls.enableDamping=true;this.controls.dampingFactor=.12;
-    this.controls.minDistance=900;this.controls.maxDistance=200000;
+    this.controls.minDistance=25;this.controls.maxDistance=200000;
     this.controls.maxPolarAngle=Math.PI/2-.02;
     this.controls.screenSpacePanning=false;
     // Keep orbiting compatible with follow; explicit panning releases it.
@@ -49,24 +50,43 @@ export class Scene {
       shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
         '#include <common>\nvarying vec2 vGridPosition;\nuniform float gridEnabled;\nuniform vec3 gridColor;')
         .replace('#include <opaque_fragment>',`
+          // 2 km, 200 m ve 20 m katmanlar; hücresi ekranda seçilemeyecek kadar küçülen katman söner.
+          float gridAlpha=0.0;
           vec2 gridCoordinate=vGridPosition/2000.0;
           vec2 footprint=max(fwidth(gridCoordinate),vec2(0.000001));
-          vec2 lineDistance=abs(fract(gridCoordinate+0.5)-0.5)/footprint;
-          // Filter subpixel lines and fade cells too small to distinguish.
-          vec2 lineCoverage=1.0-smoothstep(vec2(0.1),vec2(0.9),lineDistance);
-          vec2 cellFade=1.0-smoothstep(vec2(0.12),vec2(0.5),footprint);
-          float gridAlpha=max(lineCoverage.x*cellFade.x,lineCoverage.y*cellFade.y);
+          for(int level=0;level<3;level++){
+            float cell=level==0?2000.0:level==1?200.0:20.0;
+            float weight=level==0?1.0:level==1?0.7:0.45;
+            vec2 coordinate=vGridPosition/cell;
+            vec2 levelFootprint=max(fwidth(coordinate),vec2(0.000001));
+            vec2 lineDistance=abs(fract(coordinate+0.5)-0.5)/levelFootprint;
+            // Filter subpixel lines and fade cells too small to distinguish.
+            vec2 lineCoverage=1.0-smoothstep(vec2(0.1),vec2(0.9),lineDistance);
+            vec2 cellFade=1.0-smoothstep(vec2(0.12),vec2(0.5),levelFootprint);
+            gridAlpha=max(gridAlpha,max(lineCoverage.x*cellFade.x,lineCoverage.y*cellFade.y)*weight);
+          }
           vec2 axisCoverage=1.0-smoothstep(vec2(0.45),vec2(1.55),abs(gridCoordinate)/footprint);
           gridAlpha=max(gridAlpha,max(axisCoverage.x,axisCoverage.y)*0.65);
           outgoingLight=mix(outgoingLight,gridColor,gridAlpha*gridEnabled*0.45);
           #include <opaque_fragment>
         `);
     };
-    this.ground.material.customProgramCacheKey=()=> 'filtered-ground-grid-v1';
+    this.ground.material.customProgramCacheKey=()=> 'filtered-ground-grid-v2';
     this.labels=document.createElement('div');this.labels.className='scene-labels';canvas.parentElement.append(this.labels);
+    // Otopilot hesapları: hedef çizgisi, etiketi ve radar açısı. app.js her kare this.analysis'i verir.
+    this.analysis=null;
+    this.targetLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+      new THREE.LineBasicMaterial({color:0xa2d4bb,transparent:true,opacity:.95,fog:false}));
+    this.radarFan=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineDashedMaterial({color:0x83b9d2,transparent:true,opacity:.7,fog:false}));
+    this.targetLine.visible=this.radarFan.visible=false;this.world.add(this.targetLine,this.radarFan);
+    // WEZ: uçağın etrafında, kendi irtifasında yatay min–max halkası. own: seçili uçak, enemy: hedefi.
+    this.wezRings={own:this.createWezRing(),enemy:this.createWezRing()};
+    this.analysisLabel=document.createElement('div');this.analysisLabel.className='analysis-label';this.analysisLabel.hidden=true;this.labels.append(this.analysisLabel);
     this.canvas2d=document.createElement('canvas');this.canvas2d.id='scene2d';this.canvas2d.hidden=true;
     this.canvas2d.setAttribute('aria-label','Uçakların üstten görünümü');canvas.parentElement.insertBefore(this.canvas2d,this.labels);
     this.flat=new Scene2D(this.canvas2d,onSelect,()=>{this.follow=this.flat.follow;this.onPan();});
+    this.basemap=this.flat.basemap;this.mapEnabled=false;this.mapMeshes=new Map();
+    this.mapGroup=new THREE.Group();this.world.add(this.mapGroup);
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
     let press=null;
     canvas.addEventListener('pointerdown',event=>{if(event.button===0)press={x:event.clientX,y:event.clientY};});
@@ -75,7 +95,19 @@ export class Scene {
         const rect=canvas.getBoundingClientRect();this.pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
         this.raycaster.setFromCamera(this.pointer,this.camera);
         const hits=this.raycaster.intersectObjects([...this.models.values()].filter(r=>r.model.visible).map(r=>r.model),true);
-        if(hits.length){let object=hits[0].object;while(object&&!object.userData.entityId)object=object.parent;if(object)this.onSelect(object.userData.entityId);}
+        let id=null;
+        if(hits.length){let object=hits[0].object;while(object&&!object.userData.entityId)object=object.parent;id=object?.userData.entityId??null;}
+        if(!id){
+          // Gerçek boy model uzaktan birkaç piksel: tıklanan noktaya 20 px içindeki en yakın nesneyi seç.
+          let best=20;
+          for(const record of this.models.values()){
+            if(!record.model.visible)continue;
+            const p=record.model.position.clone().project(this.camera);if(p.z<-1||p.z>1)continue;
+            const d=Math.hypot((p.x*.5+.5)*rect.width-(event.clientX-rect.left),(-p.y*.5+.5)*rect.height-(event.clientY-rect.top));
+            if(d<best){best=d;id=record.model.userData.entityId;}
+          }
+        }
+        if(id)this.onSelect(id);
       }
       press=null;
     });
@@ -91,6 +123,11 @@ export class Scene {
     this.flat.resize();
   }
 
+  // Kameradan `distance` uzaklıktaki noktada bir CSS pikselinin metre karşılığı.
+  metersPerPixel(distance,height=this.canvas.getBoundingClientRect().height){
+    return 2*distance*Math.tan(this.camera.fov*degrees/2)/(Math.max(1,height)*this.camera.zoom);
+  }
+
   zoom(factor) {
     if(this.mode==='2d'){this.flat.zoom(factor);return;}
     const offset=this.camera.position.clone().sub(this.controls.target);
@@ -102,8 +139,7 @@ export class Scene {
     this.follow=true;this.flat.objectScale=this.objectScale;
     if(this.mode==='2d'){this.flat.focusEntity(entity);return;}
     const target=point(entity),offset=this.camera.position.clone().sub(this.controls.target);
-    const length=(MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft)*visualScale(entity.kind,this.objectScale);
-    offset.setLength(Math.max(3500,length*5));
+    offset.setLength(Math.max(this.controls.minDistance,visualLength(entity.kind,this.objectScale)*6));
     this.controls.target.copy(target);this.camera.position.copy(target).add(offset);this.controls.update();this.hasData=true;
   }
 
@@ -135,13 +171,13 @@ export class Scene {
 
   addEntity(entity) {
     const model=entity.visual_model==='generic'?createGeneric(entity.kind,colorFor(entity)):entity.kind==='missile'?createMissile(colorFor(entity)):createF16(colorFor(entity));model.userData.entityId=entity.id;this.world.add(model);
-    const noseOffset=-new THREE.Box3().setFromObject(model).min.z;
     const trail=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:colorFor(entity),transparent:true,opacity:.9,fog:false}));
     const shadowTrail=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6b8c7b,transparent:true,opacity:.4}));
     const stemGeometry=new THREE.BufferGeometry();stemGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(6),3));
     const stem=new THREE.Line(stemGeometry,new THREE.LineBasicMaterial({color:colorFor(entity),transparent:true,opacity:.55,fog:false}));
-    const heading=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
-      new THREE.LineDashedMaterial({color:colorFor(entity),transparent:true,opacity:.85,dashSize:80,gapSize:55,fog:false}));
+    const velocityArrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,-1),new THREE.Vector3(),1,colorFor(entity));
+    velocityArrow.visible=false;
+    for(const part of [velocityArrow.line,velocityArrow.cone]){part.material.transparent=true;part.material.opacity=.9;part.material.fog=false;}
     const altitudeTrace=new THREE.LineSegments(new THREE.BufferGeometry(),
       new THREE.LineBasicMaterial({color:colorFor(entity),transparent:true,opacity:.12,fog:false}));
     const altitudeCurtain=entity.kind==='aircraft'?new THREE.Mesh(new THREE.BufferGeometry(),
@@ -149,12 +185,12 @@ export class Scene {
         side:THREE.DoubleSide,depthWrite:false,fog:false})):null;
     const ring=new THREE.Mesh(new THREE.RingGeometry(.8,1,48),new THREE.MeshBasicMaterial({color:0x81d6b1,side:THREE.DoubleSide,transparent:true,opacity:.55}));
     ring.rotation.x=-Math.PI/2;ring.position.y=3;
-    this.world.add(trail,shadowTrail,stem,ring,heading,altitudeTrace);
+    this.world.add(trail,shadowTrail,stem,ring,velocityArrow,altitudeTrace);
     if(altitudeCurtain)this.world.add(altitudeCurtain);
     const label=document.createElement('button');label.className='flight-label';label.onclick=()=>this.onSelect(entity.id);label.ondblclick=event=>{event.preventDefault();this.onFocus?.(entity.id);};this.labels.append(label);
     const labelName=document.createElement('span'),labelSpeedValue=document.createElement('span'),labelAltitudeValue=document.createElement('span');
     labelName.className='flight-label-name';labelSpeedValue.className='flight-label-speed';labelAltitudeValue.className='flight-label-altitude';label.append(labelName,labelSpeedValue,labelAltitudeValue);
-    const record={model,trail,shadowTrail,stem,ring,heading,altitudeTrace,altitudeCurtain,noseOffset,label,labelName,labelSpeedValue,labelAltitudeValue};this.models.set(entity.id,record);
+    const record={model,trail,shadowTrail,stem,ring,velocityArrow,altitudeTrace,altitudeCurtain,label,labelName,labelSpeedValue,labelAltitudeValue};this.models.set(entity.id,record);
     return record;
   }
 
@@ -231,22 +267,146 @@ export class Scene {
   }
 
   clear() {
+    this.basemap.setOrigin(null);this.clearMapMeshes();
     for(const record of this.models.values()){
-      for(const object of [record.model,record.trail,record.shadowTrail,record.stem,record.ring,record.heading,record.altitudeTrace,record.altitudeCurtain].filter(Boolean)){this.world.remove(object);disposeObject(object);}
+      for(const object of [record.model,record.trail,record.shadowTrail,record.stem,record.ring,record.velocityArrow,record.altitudeTrace,record.altitudeCurtain].filter(Boolean)){this.world.remove(object);disposeObject(object);}
       record.label.remove();
     }
     this.models.clear();this.hasData=false;this.lastTime=null;this.lastTrailUpdate=-Infinity;
+    this.targetLine.visible=this.radarFan.visible=false;this.analysisLabel.hidden=true;
+    for(const ring of Object.values(this.wezRings))ring.group.visible=false;
+  }
+
+  clearMapMeshes(){
+    for(const mesh of this.mapMeshes.values()){this.mapGroup.remove(mesh);mesh.geometry.dispose();mesh.material.map.dispose();mesh.material.dispose();}
+    this.mapMeshes.clear();this.mapStamp='';
+  }
+
+  drawBasemap(buffer,rect){
+    const map=this.basemap;map.enabled=this.mapEnabled;map.setOrigin(buffer.packet.map_origin);
+    this.mapGroup.visible=this.mapEnabled;
+    if(!this.mapEnabled||!map.origin)return;
+    const direction=this.controls.target.clone().sub(this.camera.position).normalize();
+    const ray=new THREE.Ray(this.camera.position,direction),ground=ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),new THREE.Vector3());
+    const center=ground&&ground.distanceTo(this.controls.target)<300000?ground:this.controls.target;
+    const span=Math.max(4000,this.camera.position.y*3,this.camera.position.distanceTo(this.controls.target)*2);
+    map.update(center.x,-center.z,span*rect.width/Math.max(1,rect.height),span,rect.width);
+    const stamp=map.originKey+':'+map.revision;
+    if(this.mapStamp!==stamp){
+      if(this.mapOriginKey!==map.originKey){this.clearMapMeshes();this.mapOriginKey=map.originKey;}
+      const tiles=map.tiles,ids=new Set(tiles.map(tile=>tile.id));
+      for(const [id,mesh] of this.mapMeshes){if(ids.has(id))continue;this.mapGroup.remove(mesh);mesh.geometry.dispose();mesh.material.map.dispose();mesh.material.dispose();this.mapMeshes.delete(id);}
+      for(const tile of tiles){
+        if(this.mapMeshes.has(tile.id))continue;
+        const {points,segments}=tile.projection,positions=[],uv=[],indices=[],stride=segments+1;
+        for(const p of points){positions.push(p.east_m,-.5,-p.north_m);uv.push(p.u,1-p.v);}
+        for(let y=0;y<segments;y++)for(let x=0;x<segments;x++){const i=y*stride+x;indices.push(i,i+stride,i+1,i+1,i+stride,i+stride+1);}
+        const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();
+        const texture=new THREE.Texture(tile.image);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;texture.anisotropy=Math.min(8,this.renderer.capabilities.getMaxAnisotropy());
+        const material=new THREE.MeshBasicMaterial({map:texture,toneMapped:false,fog:false});
+        material.onBeforeCompile=this.ground.material.onBeforeCompile;material.customProgramCacheKey=()=> 'basemap-grid-v1';
+        const mesh=new THREE.Mesh(geometry,material);this.mapGroup.add(mesh);this.mapMeshes.set(tile.id,mesh);
+      }
+      this.mapStamp=stamp;
+    }
+    const dark=document.documentElement.dataset.theme==='dark';
+    for(const mesh of this.mapMeshes.values())mesh.material.color.setHex(dark?0x8193a0:0xffffff);
+  }
+
+  createWezRing(){
+    const fill=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({transparent:true,side:THREE.DoubleSide,depthWrite:false,fog:false}));
+    const edge=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({transparent:true,fog:false}));
+    const group=new THREE.Group();group.add(fill,edge);group.visible=false;this.world.add(group);
+    return {group,fill,edge,radii:''};
+  }
+
+  // Halkayı min–max yarıçapla çiz; yarıçap değişmedikçe geometri yeniden kurulmaz.
+  // active: karşı uçak bu WEZ'in içinde; halka belirginleşir.
+  drawWezRing(ring,entity,minM,maxM,color,active){
+    ring.group.visible=maxM>minM&&maxM>0;
+    if(!ring.group.visible)return;
+    const radii=Math.round(minM)+':'+Math.round(maxM);
+    if(ring.radii!==radii){
+      ring.radii=radii;
+      const fill=new THREE.RingGeometry(Math.max(minM,.1),maxM,160,1);fill.rotateX(-Math.PI/2);
+      ring.fill.geometry.dispose();ring.fill.geometry=fill;
+      const points=[];
+      for(const radius of [minM,maxM]){
+        if(radius<=0)continue;
+        for(let i=0;i<160;i++){
+          const a=i/160*Math.PI*2,b=(i+1)/160*Math.PI*2;
+          points.push(new THREE.Vector3(Math.sin(a)*radius,0,Math.cos(a)*radius),new THREE.Vector3(Math.sin(b)*radius,0,Math.cos(b)*radius));
+        }
+      }
+      ring.edge.geometry.dispose();ring.edge.geometry=new THREE.BufferGeometry().setFromPoints(points);
+    }
+    ring.group.position.copy(point(entity));
+    ring.fill.material.color.setHex(color);ring.fill.material.opacity=active?.22:.08;
+    ring.edge.material.color.setHex(color);ring.edge.material.opacity=active?.95:.55;
+  }
+
+  // Radar açısı: radar_gimbal_deg yarım açı, burundan sağa ve sola (60 = ±60).
+  // Radar menzili uzunluğunda iki kenar ve aradaki yay; uçağın irtifasında yatay.
+  radarPoints(entity,calc){
+    const center=point(entity),gimbal=calc.radar_gimbal_deg,range=calc.radar_range_m;
+    const at=angle=>{const rad=(entity.heading_deg+angle)*degrees;return new THREE.Vector3(center.x+Math.sin(rad)*range,center.y,center.z-Math.cos(rad)*range);};
+    const points=[at(-gimbal),center,at(gimbal)];
+    for(let i=1;i<=64;i++)points.push(at(gimbal-2*gimbal*i/64));
+    return points;
+  }
+
+  drawAnalysis(rect){
+    const a=this.analysis,dark=document.documentElement.dataset.theme==='dark';
+    const showLine=Boolean(a?.options.line&&a.target);
+    this.targetLine.visible=showLine;this.analysisLabel.hidden=true;
+    if(showLine){
+      const from=point(a.entity),to=point(a.target),position=this.targetLine.geometry.attributes.position;
+      position.setXYZ(0,from.x,from.y,from.z);position.setXYZ(1,to.x,to.y,to.z);position.needsUpdate=true;
+      this.targetLine.geometry.computeBoundingSphere();this.targetLine.material.color.setHex(dark?0xa2d4bb:0x2c8062);
+      // Çizginin ortası ekran dışındaysa etiketi seçili uçağa doğru, görünen kısma kaydır.
+      const parts=analysisLabel(a.calc,a.options,this.distanceUnit);
+      const inside=p=>p.z>=-1&&p.z<=1&&Math.abs(p.x)<.95&&Math.abs(p.y)<.95;
+      const middle=Array.from({length:18},(_,i)=>.5/2**i).map(f=>from.clone().lerp(to,f).project(this.camera)).find(inside);
+      if(parts.length&&middle){
+        this.analysisLabel.textContent=parts.join(' · ');this.analysisLabel.hidden=false;
+        // Değer değiştikçe (eksi, basamak) genişlik oynar, ortalanan etiket titrer: genişlik yalnız büyür,
+        // gösterilen alanlar değişince sıfırlanır. Konum tam piksele yuvarlanır.
+        const key=parts.map(p=>p.split(' ')[0]).join();
+        if(this.analysisKey!==key){this.analysisKey=key;this.analysisWidth=0;this.analysisLabel.style.minWidth='';}
+        this.analysisWidth=Math.max(this.analysisWidth,this.analysisLabel.offsetWidth);
+        this.analysisLabel.style.minWidth=this.analysisWidth+'px';
+        const width=this.analysisWidth,height=this.analysisLabel.offsetHeight;
+        const x=Math.round(Math.max(8,Math.min(rect.width-width-8,(middle.x*.5+.5)*rect.width-width/2)));
+        const y=Math.round(Math.max(8,Math.min(rect.height-height-8,(-middle.y*.5+.5)*rect.height-height-6)));
+        this.analysisLabel.style.transform=`translate(${x}px,${y}px)`;
+      }
+    }
+    const radar=Boolean(a?.options.radar&&a.entity.heading_deg_known!==false&&a.calc.radar_gimbal_deg>0&&a.calc.radar_range_m>0);
+    this.radarFan.visible=radar;
+    if(radar){
+      this.replaceLine(this.radarFan,this.radarPoints(a.entity,a.calc));this.radarFan.computeLineDistances();
+      this.radarFan.material.dashSize=a.calc.radar_range_m/200;this.radarFan.material.gapSize=a.calc.radar_range_m/260;
+      this.radarFan.material.color.setHex(colorFor(a.entity));
+    }
+    // Dost WEZ: seçili uçağın kendi hesabı. Düşman WEZ: hedefin kendi hesabı (onun satırı).
+    const own=a?.options.ownWez?a.calc:null,enemy=a?.options.enemyWez&&a.target?a.target.calc:null;
+    if(own)this.drawWezRing(this.wezRings.own,a.entity,own.wez_min_range_m,own.wez_max_range_m,colorFor(a.entity),Boolean(own.enemy_in_my_wez));
+    else this.wezRings.own.group.visible=false;
+    if(enemy)this.drawWezRing(this.wezRings.enemy,a.target,enemy.wez_min_range_m,enemy.wez_max_range_m,colorFor(a.target),Boolean(enemy.enemy_in_my_wez));
+    else this.wezRings.enemy.group.visible=false;
   }
 
   draw(entities,buffer,time,selected) {
+    this.flat.mapEnabled=this.mapEnabled;
     this.flat.speedUnit=this.speedUnit;this.flat.altitudeUnit=this.altitudeUnit;this.flat.distanceUnit=this.distanceUnit;
     this.flat.follow=this.follow;this.flat.grid=this.grid;this.flat.trail=this.trail;
-    this.flat.objectScale=this.objectScale;this.flat.headingGuides=this.headingGuides;this.flat.trailDuration=this.trailDuration;this.flat.labelMode=this.labelMode;this.flat.labelNames=this.labelNames;this.flat.labelAltitude=this.labelAltitude;this.flat.labelSpeed=this.labelSpeed;
+    this.flat.analysis=this.analysis;this.flat.objectScale=this.objectScale;this.flat.velocityGuides=this.velocityGuides;this.flat.trailDuration=this.trailDuration;this.flat.labelMode=this.labelMode;this.flat.labelNames=this.labelNames;this.flat.labelAltitude=this.labelAltitude;this.flat.labelSpeed=this.labelSpeed;
     if(this.mode==='2d'){this.flat.draw(entities,buffer,time,selected);return;}
     this.theme();
+    this.controls.minDistance=Math.max(25,visualLength('aircraft',this.objectScale)*1.7);
     const ids=new Set(entities.map(e=>e.id));
     for(const [id,record] of this.models)if(!ids.has(id)){
-      for(const item of [record.model,record.trail,record.shadowTrail,record.stem,record.ring,record.heading,record.altitudeTrace,record.altitudeCurtain].filter(Boolean)){this.world.remove(item);disposeObject(item);}
+      for(const item of [record.model,record.trail,record.shadowTrail,record.stem,record.ring,record.velocityArrow,record.altitudeTrace,record.altitudeCurtain].filter(Boolean)){this.world.remove(item);disposeObject(item);}
       record.label.remove();this.models.delete(id);
     }
     const focus=entities.find(e=>e.id===selected&&e.visible!==false);
@@ -265,6 +425,9 @@ export class Scene {
     this.gridUniforms.gridEnabled.value=this.grid?1:0;
     const now=performance.now(),updateTrails=now-this.lastTrailUpdate>160||time<this.lastTime;
     const rect=this.canvas.getBoundingClientRect();
+    const velocityScale=this.metersPerPixel(this.camera.position.distanceTo(this.controls.target),rect.height)*VELOCITY_PIXELS_PER_MPS;
+    this.velocityMetersPerMps=velocityScale;
+    this.drawBasemap(buffer,rect);
     const labelRects=[];
     for(const entity of entities){
       let record=this.models.get(entity.id);const fresh=!record;
@@ -273,11 +436,14 @@ export class Scene {
       record.model.visible=entity.visible!==false;
       record.model.rotation.set(entity.pitch_deg*degrees,-entity.heading_deg*degrees,-entity.roll_deg*degrees,'YXZ');
       const distance=this.camera.position.distanceTo(position);
-      // Fixed world-space visual scale: zoom changes the apparent size naturally.
-      const scale=visualScale(entity.kind,this.objectScale);record.model.scale.setScalar(scale);
+      // Büyütme 1× gerçek boy; yakınlaştırma ekrandaki boyu değiştirir. Çizgiler büyütülmüş boyla orantılı.
+      const scale=visualScale(entity.kind,this.objectScale),modelLength=visualLength(entity.kind,this.objectScale);
+      record.model.scale.setScalar(scale);
+      const metersPerPixel=this.metersPerPixel(distance,rect.height);
       const isSelected=entity.id===selected;
       const dark=document.documentElement.dataset.theme==='dark',color=colorFor(entity);
-      for(const line of [record.trail,record.stem,record.heading,record.altitudeTrace])line.material.color.setHex(color);
+      for(const line of [record.trail,record.stem,record.altitudeTrace])line.material.color.setHex(color);
+      record.velocityArrow.setColor(color);
       record.shadowTrail.material.color.setHex(dark?0x6b8c7b:0x344b3c);
       record.model.userData.bodyMaterial.color.setHex(color);
       record.model.userData.bodyMaterial.emissive.setHex(colorFor(entity));record.model.userData.bodyMaterial.emissiveIntensity=dark?.15:0;
@@ -292,24 +458,21 @@ export class Scene {
         record.altitudeCurtain.material.color.setHex(entity.team==='unknown'?color:dark?(entity.team==='red'?0xe88480:0x65afe8):color);
         record.altitudeCurtain.material.opacity=dark?(isSelected?.32:.22):(isSelected?.42:.32);
       }
-      record.heading.visible=this.headingGuides&&entity.heading_deg_known!==false&&entity.visible!==false;
-      if(record.heading.visible){
-        const length=MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft;
-        const guideLength=Math.max(250,length*scale*.9);
-        const forward=new THREE.Vector3(0,0,-1).applyQuaternion(record.model.quaternion);
-        const start=position.clone().addScaledVector(forward,record.noseOffset*scale);
-        const end=start.clone().addScaledVector(forward,guideLength);
-        record.heading.geometry.attributes.position.setXYZ(0,start.x,start.y,start.z);
-        record.heading.geometry.attributes.position.setXYZ(1,end.x,end.y,end.z);
-        record.heading.geometry.attributes.position.needsUpdate=true;
-        record.heading.geometry.computeBoundingSphere();record.heading.computeLineDistances();
-        record.heading.material.dashSize=guideLength/7;record.heading.material.gapSize=guideLength/11;
+      const velocity=velocityVector(entity);
+      record.velocityArrow.visible=this.velocityGuides&&Boolean(velocity)&&entity.visible!==false;
+      if(record.velocityArrow.visible){
+        const direction=new THREE.Vector3(velocity.east,velocity.up,-velocity.north).normalize();
+        const length=velocity.speed*velocityScale,head=Math.min(length*.25,metersPerPixel*10);
+        record.velocityArrow.position.copy(position).addScaledVector(direction,modelLength*.55);
+        record.velocityArrow.setDirection(direction);record.velocityArrow.setLength(length,head,head*.6);
       }
       if(updateTrails||fresh){this.updateTrail(record,buffer.tracks.get(entity.id),entity,time);}
       record.stem.geometry.attributes.position.setXYZ(0,position.x,4,position.z);
       record.stem.geometry.attributes.position.setXYZ(1,position.x,position.y,position.z);
       record.stem.geometry.attributes.position.needsUpdate=true;record.stem.geometry.computeBoundingSphere();
-      record.ring.position.set(position.x,4,position.z);record.ring.scale.setScalar(scale*2.8);
+      // Yer halkası model boyunun 0,6 katı yarıçapında; uzaktan en az 6 px.
+      record.ring.position.set(position.x,4,position.z);
+      record.ring.scale.setScalar(guideLength(visualLength('aircraft',this.objectScale),.6,this.metersPerPixel(this.camera.position.distanceTo(record.ring.position),rect.height),6));
       const projected=position.clone().project(this.camera);
       const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed)&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
       record.label.hidden=!visible;record.label.classList.toggle('selected',isSelected);record.label.classList.toggle('stale',Boolean(entity.measurement_ended));
@@ -318,11 +481,13 @@ export class Scene {
       record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
       record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,record.labelName.textContent,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent].filter(Boolean).join(' · ');
       record.label.style.borderColor='#'+colorFor(entity).toString(16);
-      const length=MODEL_LENGTHS[entity.kind]||MODEL_LENGTHS.aircraft;
-      const labelOffset=Math.max(26,length*scale*rect.height/(4*distance*Math.tan(this.camera.fov*Math.PI/360))+8);
+      const labelOffset=Math.max(26,modelLength/metersPerPixel/2+8);
       if(visible){
         const width=record.label.offsetWidth,height=record.label.offsetHeight;
-        const x=Math.max(8,Math.min(rect.width-width-8,(projected.x*.5+.5)*rect.width+labelOffset));
+        const motion=velocity?position.clone().add(new THREE.Vector3(velocity.east,velocity.up,-velocity.north)).project(this.camera):null;
+        const arrowPointsRight=motion&&motion.x-projected.x>.25*Math.hypot(motion.x-projected.x,motion.y-projected.y);
+        const offset=record.velocityArrow.visible&&arrowPointsRight?-width-labelOffset:labelOffset;
+        const x=Math.max(8,Math.min(rect.width-width-8,(projected.x*.5+.5)*rect.width+offset));
         const initialY=Math.max(8,Math.min(rect.height-height-8,(-projected.y*.5+.5)*rect.height-height/2));
         let y=initialY;
         for(let i=0;i<labelRects.length+1;i++){
@@ -336,10 +501,10 @@ export class Scene {
       }
     }
     if(updateTrails)this.lastTrailUpdate=now;
+    this.drawAnalysis(rect);
     this.lastTime=time;this.renderer.render(this.world,this.camera);
     // Perspective scale at the orbit target's depth, in CSS pixels.
-    const metersPerPixel=2*this.camera.position.distanceTo(this.controls.target)*Math.tan(this.camera.fov*degrees/2)/(rect.height*this.camera.zoom);
-    updateScaleBar(this.distanceScale,metersPerPixel,rect.width,'3d',this.distanceUnit);
+    updateScaleBar(this.distanceScale,this.metersPerPixel(this.camera.position.distanceTo(this.controls.target),rect.height),rect.width,'3d',this.distanceUnit);
   }
 }
 

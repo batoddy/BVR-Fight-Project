@@ -21,6 +21,9 @@ try{
   const page=await browser.newPage({viewport:{width:1500,height:950}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error'&&!message.text().startsWith('Failed to load resource:'))errors.push(message.text());});
   await page.goto('http://127.0.0.1:'+port,{waitUntil:'domcontentloaded'});
+  async function toggleFollow(){
+    await page.locator('#view-options summary').click();await page.locator('#follow').click();await page.locator('#view-options summary').click();
+  }
   await page.waitForFunction(()=>document.querySelector('#status').textContent==='Kayıt bekleniyor');
   assert.equal(await page.locator('#timeline').isDisabled(),true);
   assert.equal(await page.locator('dialog').count(),0);
@@ -118,7 +121,7 @@ try{
   await page.evaluate(async()=>{const {buffer}=await import('/app.js');buffer.tracks=new Map([...buffer.tracks].reverse());});
   await page.locator('#object-filter').selectOption('red');await page.locator('#object-filter').selectOption('all');
   assert.deepEqual(await page.locator('#entity-list .entity').evaluateAll(nodes=>nodes.map(node=>node.dataset.team)),['blue','red']);
-  if(await page.locator('#follow').getAttribute('aria-pressed')==='false')await page.locator('#follow').click();
+  if(!await page.locator('#follow').isChecked())await toggleFollow();
   await page.waitForTimeout(200);
   assert.equal(await page.locator('#entity-list .munition').count(),4);
   assert.equal(await page.locator('#entity-list .munition.flying').count(),3);
@@ -190,7 +193,7 @@ try{
   assert.equal((await page.locator('#altitude-unit-label').textContent()).trim(),'ft');
   await page.evaluate(async time=>{
     const {scene,buffer}=await import('/app.js');
-    const {MODEL_LENGTHS}=await import('/units.js');
+    const {MODEL_LENGTHS,velocityVector}=await import('/units.js');
     const THREE=await import('three'),models=await import('/aircraft3d.js');
     const plane=models.createF16(),missile=models.createMissile();
     const a=new THREE.Box3().setFromObject(plane),b=new THREE.Box3().setFromObject(missile);
@@ -199,8 +202,8 @@ try{
     models.disposeObject(plane);models.disposeObject(missile);
     for(const [id,record] of scene.models){
       const entity=buffer.at(id,time);if(!entity)continue;
-      if(record.model.scale.x!==(entity.kind==='missile'?62.5:50))throw new Error('Incorrect aircraft/missile magnification');
-      if(record.stem.visible!==(entity.kind==='aircraft')||!record.heading.visible)throw new Error('Incorrect guides');
+      if(record.model.scale.x!==(entity.kind==='missile'?187.5:50))throw new Error('Incorrect aircraft/missile magnification');
+      if(record.stem.visible!==(entity.kind==='aircraft')||record.velocityArrow.visible!==Boolean(velocityVector(entity)))throw new Error('Incorrect guides');
       if(entity.kind==='missile'&&(record.altitudeTrace.visible||record.ring.visible))throw new Error('Missile altitude guide');
       if(entity.kind==='missile'&&record.altitudeCurtain)throw new Error('Missile curtain');
       if(entity.kind==='aircraft'){
@@ -215,23 +218,21 @@ try{
       }
       const stem=record.stem.geometry.attributes.position;
       if(Math.abs(stem.getY(1)-entity.altitude_m)>.002||stem.getY(0)!==4)throw new Error('Altitude guide mismatch');
-      const points=record.heading.geometry.attributes.position;
-      const delta=new THREE.Vector3(points.getX(1)-points.getX(0),points.getY(1)-points.getY(0),points.getZ(1)-points.getZ(0));
-      const expected=new THREE.Vector3(0,0,-1).applyQuaternion(record.model.quaternion).multiplyScalar(delta.length());
-      if(expected.distanceTo(delta)>.1)throw new Error('Nose direction mismatch');
+      const velocity=velocityVector(entity);
+      if(velocity){
+        const direction=new THREE.Vector3(0,1,0).applyQuaternion(record.velocityArrow.quaternion);
+        const expected=new THREE.Vector3(velocity.east,velocity.up,-velocity.north).normalize();
+        if(direction.distanceTo(expected)>.001)throw new Error('Velocity direction mismatch');
+      }
     }
     const aircraft=buffer.entities(time).find(entity=>entity.kind==='aircraft');
     for(const pitch of [-30,0,30])for(const heading of [0,90,180,270]){
-      const entities=buffer.entities(time).map(entity=>entity.id===aircraft.id?{...entity,pitch_deg:pitch,heading_deg:heading,roll_deg:45}:entity);
+      const entities=buffer.entities(time).map(entity=>entity.id===aircraft.id?{...entity,pitch_deg:pitch,heading_deg:heading,roll_deg:45,velocity_east_mps:300,velocity_north_mps:0,velocity_up_mps:40}:entity);
       scene.draw(entities,buffer,time,aircraft.id);
-      const record=scene.models.get(aircraft.id),points=record.heading.geometry.attributes.position;
-      const start=new THREE.Vector3(points.getX(0),points.getY(0),points.getZ(0));
-      const end=new THREE.Vector3(points.getX(1),points.getY(1),points.getZ(1));
-      const direction=end.clone().sub(start).normalize(),h=heading*Math.PI/180,p=pitch*Math.PI/180;
-      const expected=new THREE.Vector3(Math.sin(h)*Math.cos(p),Math.sin(p),-Math.cos(h)*Math.cos(p));
-      if(direction.distanceTo(expected)>.001)throw new Error('Pitch/heading regression');
-      const nose=new THREE.Vector3(0,0,-record.noseOffset).applyMatrix4(record.model.matrixWorld);
-      if(nose.distanceTo(start)>.02)throw new Error('Guide does not begin at nose');
+      const arrow=scene.models.get(aircraft.id).velocityArrow;
+      const direction=new THREE.Vector3(0,1,0).applyQuaternion(arrow.quaternion);
+      if(direction.distanceTo(new THREE.Vector3(300,40,0).normalize())>.001)throw new Error('Velocity incorrectly follows attitude');
+      if(Math.abs(arrow.cone.position.y-Math.hypot(300,40)*scene.velocityMetersPerMps)>.001)throw new Error('Velocity length is not proportional to speed');
     }
     scene.draw(buffer.entities(time),buffer,time,aircraft.id);
   },Number(await page.locator('#timeline').inputValue()));
@@ -244,15 +245,15 @@ try{
   await page.locator('#label-speed').check();await page.locator('#label-altitude').check();await page.locator('#label-names').check();
   assert.ok(await page.evaluate(async()=>{const {scene,buffer}=await import('/app.js');return [...scene.models].every(([id,record])=>record.stem.visible===(buffer.tracks.get(id).samples[0].kind==='aircraft'));}));
   await page.locator('#object-scale').selectOption('25');await page.waitForTimeout(150);
-  assert.ok(await page.evaluate(async()=>{const {scene,buffer}=await import('/app.js');return [...scene.models].every(([id,record])=>record.model.scale.x===(buffer.tracks.get(id).samples[0].kind==='missile'?31.25:25));}));
+  assert.ok(await page.evaluate(async()=>{const {scene,buffer}=await import('/app.js');return [...scene.models].every(([id,record])=>record.model.scale.x===(buffer.tracks.get(id).samples[0].kind==='missile'?93.75:25));}));
   await page.locator('#object-scale').selectOption('1');await page.waitForTimeout(150);
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>record.model.scale.x===1);}));
-  await page.locator('#object-scale').selectOption('50');await page.locator('#view-options').evaluate(menu=>menu.open=true);await page.locator('#grid').check();
+  await page.locator('#object-scale').selectOption('1');await page.locator('#view-options').evaluate(menu=>menu.open=true);await page.locator('#grid').check();
   await page.locator('#view-options summary').click();
-  await page.locator('#toggle-altitude-guides').click();await page.waitForTimeout(150);
+  await page.locator('#view-options summary').click();await page.locator('#altitude-guides').click();await page.locator('#view-options summary').click();await page.waitForTimeout(150);
   assert.equal(await page.locator('#altitude-guides').isChecked(),false);
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>!record.stem.visible&&!record.altitudeTrace.visible&&!record.ring.visible&&!record.altitudeCurtain?.visible);}));
-  await page.locator('#toggle-altitude-guides').click();await page.waitForTimeout(150);
+  await page.locator('#view-options summary').click();await page.locator('#altitude-guides').click();await page.locator('#view-options summary').click();await page.waitForTimeout(150);
   assert.equal(await page.locator('#altitude-guides').isChecked(),true);
   async function readScale(){
     assert.equal(await page.locator('#distance-scale').isVisible(),true);
@@ -296,7 +297,7 @@ try{
   assert.ok((await readScale()).metersPerPixel>scale2d.metersPerPixel);
   await page.locator('#view-3d').click();await page.waitForTimeout(250);
   async function checkFollow(){
-    assert.equal(await page.locator('#follow').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('#follow').isChecked(),true);
     await page.evaluate(async()=>{
       const {scene}=await import('/app.js');
       const record=[...scene.models.values()].find(record=>record.label.classList.contains('selected'));
@@ -309,9 +310,9 @@ try{
   await page.mouse.move(surface.x+surface.width/2,surface.y+surface.height*.7);
   await page.mouse.down({button:'right'});await page.mouse.move(surface.x+surface.width/2+150,surface.y+surface.height*.7-70,{steps:6});await page.mouse.up({button:'right'});
   await page.waitForTimeout(300);
-  assert.equal(await page.locator('#follow').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('#follow').isChecked(),false);
   const offset=await page.evaluate(async()=>{const {scene}=await import('/app.js');return scene.camera.position.clone().sub(scene.controls.target).toArray();});
-  await page.locator('#follow').click();await page.waitForTimeout(250);await checkFollow();
+  await toggleFollow();await page.waitForTimeout(250);await checkFollow();
   await page.evaluate(async offset=>{
     const {scene}=await import('/app.js'),THREE=await import('three');
     if(scene.camera.position.clone().sub(scene.controls.target).distanceTo(new THREE.Vector3(...offset))>.001)throw new Error('Recenter changed camera angle or zoom');
@@ -331,7 +332,7 @@ try{
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-native.png'),fullPage:true});
   assert.equal(await page.locator('#record-drop').count(),0);
   assert.ok((await page.locator('#record-source').textContent()).includes(path.basename(options.native)));
-  assert.equal(await page.locator('#object-scale option:checked').textContent(),'Nesne büyütme · 50×');
+  assert.equal(await page.locator('#object-scale option:checked').textContent(),'1×');
   assert.equal(await page.locator('#open-settings').evaluate(node=>getComputedStyle(node).userSelect),'none');
   await page.evaluate(async()=>{const {scene}=await import('/app.js');scene.follow=false;scene.zoom(.3);});
   const beforeFocus=await page.evaluate(async()=>{const {scene}=await import('/app.js');return scene.camera.position.distanceTo(scene.controls.target);});
@@ -343,9 +344,20 @@ try{
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>[0x0756a5,0xae2432,0xa83215,0x8a5700].includes(record.trail.material.color.getHex()));}));
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-day-3d.png'),fullPage:true});
   await page.locator('#view-2d').click();await page.waitForTimeout(200);
+  await page.evaluate(async()=>{
+    const {scene}=await import('/app.js'),flat=scene.flat,rect=flat.canvas.getBoundingClientRect();
+    const position=flat.positions.find(p=>p.label);
+    if(!position)throw new Error('Missing 2D label');
+    if(flat.hitTest({clientX:rect.left+position.label.right-2,clientY:rect.top+position.label.y+3})?.id!==position.id)throw new Error('2D label edge cannot be selected');
+    const saved=flat.positions;
+    try{
+      flat.positions=[{id:'far',x:100,y:100},{id:'near',x:110,y:100}];
+      if(flat.hitTest({clientX:rect.left+111,clientY:rect.top+100})?.id!=='near')throw new Error('2D selected the first object instead of the nearest');
+    }finally{flat.positions=saved;}
+  });
   const flatLabel=await page.evaluate(async()=>{const {scene}=await import('/app.js');scene.follow=false;const label=scene.flat.positions.find(p=>p.label).label;const rect=scene.canvas2d.getBoundingClientRect();return {x:rect.x+label.x+5,y:rect.y+label.y+5};});
   await page.mouse.dblclick(flatLabel.x,flatLabel.y);await page.waitForTimeout(200);
-  assert.equal(await page.locator('#follow').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#follow').isChecked(),true);
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-day-2d.png'),fullPage:true});
   await page.locator('#toggle-theme').click();await page.locator('#view-3d').click();
 
@@ -368,7 +380,7 @@ try{
   assert.ok(await page.locator('#entity-list .munition.spent').count()>0);
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].some(record=>!record.model.visible&&record.trail.visible);}));
   await page.locator('#camera-mode').selectOption('all');
-  assert.equal(await page.locator('#follow').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('#follow').isChecked(),false);
   await page.locator('#seek-time').fill('10');await page.locator('#seek-time').press('Enter');
   await page.waitForTimeout(200);assert.ok(Math.abs(Number(await page.locator('#timeline').inputValue())-10)<.01);
   await page.locator('#playback-speed').focus();await page.keyboard.press('Space');
@@ -379,10 +391,10 @@ try{
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'false');
   await page.keyboard.press('Space');
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'true');
-  const follow=await page.locator('#follow').getAttribute('aria-pressed');
-  await page.locator('#follow').focus();await page.keyboard.press('Space');
+  const follow=await page.locator('#follow').isChecked();
+  await page.locator('#zoom-in').focus();await page.keyboard.press('Space');
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'false');
-  assert.equal(await page.locator('#follow').getAttribute('aria-pressed'),follow);
+  assert.equal(await page.locator('#follow').isChecked(),follow);
   await page.keyboard.press('Space');
   await page.locator('#seek-time').focus();await page.keyboard.press('Space');
   assert.equal(await page.locator('#play-pause').getAttribute('aria-pressed'),'true');
@@ -478,7 +490,7 @@ try{
   if(options.screenshot)await page.screenshot({path:options.screenshot.replace('.png','-settings-mobile.png'),fullPage:true});
   await page.locator('#close-settings').click();
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,nativeObjects:geometry,inventory:true,estimatedSpeed:true,nauticalMiles:true,sharedScale:true,headingGuides:true,altitudeGuides:true,importValidation:true,folderSelection:true,directorySelection:true,replay2x:true,retainedMissileTrails:true,preferences:true,panelResize:true,compactDock:true,mobile:true,errors}));
+  console.log(JSON.stringify({passed:true,nativeObjects:geometry,inventory:true,estimatedSpeed:true,nauticalMiles:true,sharedScale:true,velocityGuides:true,altitudeGuides:true,importValidation:true,folderSelection:true,directorySelection:true,replay2x:true,retainedMissileTrails:true,preferences:true,panelResize:true,compactDock:true,mobile:true,errors}));
 }finally{
   if(browser)await browser.close();
   if(child.exitCode===null){child.kill();await new Promise(resolve=>child.once('exit',resolve));}

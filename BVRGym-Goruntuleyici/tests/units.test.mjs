@@ -1,6 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {toFeet,toNauticalMiles,headingOffset,munitionState,MODEL_LENGTHS,speedLabel,speedValue,altitudeValue,altitudeLabel,distanceLabel,distanceScale} from '../web/units.js';
+import {toFeet,toNauticalMiles,headingOffset,munitionState,MODEL_LENGTHS,speedLabel,speedValue,altitudeValue,altitudeLabel,altitudeReferenceInfo,distanceLabel,distanceScale} from '../web/units.js';
+
+test('Velocity arrows use motion components, preserve magnitude and omit ended/unknown motion',async()=>{
+  const {velocityVector,VELOCITY_PIXELS_PER_MPS}=await import('../web/units.js');
+  const slow={velocity_east_mps:300,velocity_north_mps:0,velocity_up_mps:0,heading_deg:0};
+  const fast={...slow,velocity_east_mps:600};
+  assert.equal(velocityVector(slow).east,300);
+  assert.equal(velocityVector(fast).speed/velocityVector(slow).speed,2);
+  assert.equal(velocityVector(slow).speed*VELOCITY_PIXELS_PER_MPS,54);
+  assert.equal(velocityVector({...slow,measurement_ended:true}),null);
+  assert.equal(velocityVector({heading_deg:90,true_airspeed_mps:300}),null);
+  assert.equal(velocityVector({...slow,velocity_east_mps:0}),null);
+  assert.equal(velocityVector({...slow,velocity_up_mps:NaN}),null);
+});
+
+test('Altitude reference follows recording metadata without assuming MSL',()=>{
+  assert.equal(altitudeReferenceInfo('WGS84 ellipsoid height').label,'İrtifa · WGS84');
+  assert.equal(altitudeReferenceInfo('MSL').label,'İrtifa · MSL');
+  assert.equal(altitudeReferenceInfo(undefined).label,'İrtifa');
+  assert.ok(altitudeReferenceInfo(undefined).note.includes('belirtmiyor'));
+  assert.ok(altitudeReferenceInfo('JSBSim radial MSL').note.includes('JSBSim radial MSL'));
+});
 
 test('Display unit conversions preserve SI input and prioritize recorded Mach',()=>{
   const entity={true_airspeed_mps:1852/3600,mach:.8,estimated_mach:.7};
@@ -64,4 +85,14 @@ test('Recorded outcome is shown only when asked, and only after it happened',()=
   assert.equal(munitionState(lost,21,true),'lost');
   // Olaysiz kayit her iki durumda da yalnizca olcumun bittigini soyler.
   assert.equal(munitionState({record_start_s:10,record_end_s:20},21,true),'spent');
+});
+
+test('Target line label shows only the chosen autopilot values, unchanged',async()=>{
+  const {analysisLabel,angleLabel}=await import('../web/units.js');
+  const calc={ata_deg:-23.44,bearing_deg:145,range_3d_m:18520,aspect_deg:170};
+  assert.deepEqual(analysisLabel(calc,{ata:true,bearing:true,range:true,aspect:false},'nm'),['ATA 23,4° L','BRG 145,0°','R 10,0 NM']);
+  assert.deepEqual(analysisLabel(calc,{range:true},'km'),['R 18,5 km']);
+  assert.deepEqual(analysisLabel(null,{ata:true}),[]);
+  assert.equal(angleLabel(undefined),'—');
+  assert.equal(angleLabel(-1.7e-9),'0,0°');
 });

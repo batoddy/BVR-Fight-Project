@@ -14,7 +14,7 @@
     <div class="toolbar-record">
       <details id="record-info-options" class="toolbar-menu">
         <summary id="record-info" class="record-summary" title="Kayıt ayrıntıları"><strong id="record-title">Kayıt seç</strong><span id="record-duration">Tacview CSV</span></summary>
-        <section id="record-info-panel" class="popover info-popover" aria-labelledby="info-title"><div class="menu-heading"><h2 id="info-title">Kayıt bilgisi</h2><button id="close-info" aria-label="Kayıt bilgisini kapat">×</button></div><dl id="record-details"></dl><p>İrtifa deniz seviyesine göredir; yer düzlemi 0 m referansıdır.</p></section>
+        <section id="record-info-panel" class="popover info-popover" aria-labelledby="info-title"><div class="menu-heading"><h2 id="info-title">Kayıt bilgisi</h2><button id="close-info" aria-label="Kayıt bilgisini kapat">×</button></div><dl id="record-details"></dl><p id="altitude-reference-note">İrtifa referansı kayıttan okunur. Yer düzlemi çizim için 0 m referansıdır; arazi yüksekliği gösterilmez.</p></section>
       </details>
       <span id="status" class="badge" role="status">Kayıt bekleniyor</span>
     </div>
@@ -35,17 +35,17 @@
       </details>
       <div class="button-group" aria-label="Görünüm"><button id="view-3d" aria-pressed="true">3D</button><button id="view-2d" aria-pressed="false">2D</button></div>
       <label class="sr-only" for="camera-mode">Kamera</label><select id="camera-mode"><option value="orbit">Serbest kamera</option><option value="top">Üstten</option><option value="all">Tüm nesneler</option></select>
-      <button id="follow" aria-pressed="true">Takip</button>
-      <button id="toggle-altitude-guides" aria-pressed="true" title="Uçakların irtifa dolgusu ve çizgilerini göster/gizle">İrtifa</button>
-      <select id="object-scale" aria-label="Nesne büyütme oranı" title="Nesne büyütme oranı; füzeler görünürlük için ayrıca %25 büyütülür"><option value="1">Nesne büyütme · 1×</option><option value="25">Nesne büyütme · 25×</option><option value="50" selected>Nesne büyütme · 50×</option><option value="100">Nesne büyütme · 100×</option></select>
+      <label class="object-scale-control" for="object-scale">Nesne ölçeği:<select id="object-scale" title="Model ölçeği; füzelerin ek büyütmesi korunur. 2D'de uzaktaki modeller okunabilir bir simgeyle gösterilir."><option value="1" selected>1×</option><option value="3">3×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
       <details id="view-options" class="toolbar-menu"><summary>Görünüm</summary><div class="popover">
+      <label><input id="follow" type="checkbox" checked><span id="follow-caption">Seçili nesneyi takip et</span></label>
       <label><input id="trail" type="checkbox" checked>Uçuş izi</label>
       <label for="trail-duration">İz süresi<select id="trail-duration"><option value="60">1 dakika</option><option value="300">5 dakika</option><option value="-1">Tüm kayıt</option></select></label>
-      <label><input id="show-history" type="checkbox" checked>Kaydı biten füzelerin izini koru</label>
+      <label><input id="show-history" type="checkbox" checked>Kaydı biten füzeleri son konumunda tut</label>
       <label title="Mühimmat sonucunu ve zaman çubuğundaki olay işaretlerini gösterir; kayıtta olay yoksa etkisi olmaz"><input id="missile-outcomes" type="checkbox">Füze vuruş bilgisi</label>
       <label><input id="grid" type="checkbox" checked>Yer referansı</label>
+      <label title="İnternet bağlantısıyla coğrafi haritayı zemine yerleştirir; arazi yüksekliği içermez"><input id="basemap" type="checkbox">Harita · OpenStreetMap</label>
       <label><input id="altitude-guides" type="checkbox" checked>İrtifa dolgusu ve çizgiler</label>
-      <label><input id="heading-guides" type="checkbox" checked>Burun yönü · kesikli 3D çizgi</label>
+      <label title="Hareket yönü ve hızı; 100 m/s için 18 px ok uzunluğu. 2D'de yatay hız gösterilir."><input id="velocity-guides" type="checkbox" checked>Hız vektörleri · oklar</label>
       <label for="label-mode">Etiketler<select id="label-mode"><option value="all">Tüm nesneler</option><option value="selected">Yalnızca seçili</option><option value="none">Kapalı</option></select></label>
       <label><input id="label-names" type="checkbox" checked>Nesne adı</label>
       <label><input id="label-altitude" type="checkbox" checked>İrtifa</label>
@@ -82,6 +82,7 @@
         <div id="empty-scene" class="empty-scene"><strong>Uçuş kaydını aç</strong><p>BVRGym'in Tacview CSV dosyalarını birlikte seç.</p><button id="empty-open">Kayıt aç</button></div>
         <div id="scene-message" class="scene-message" role="status" hidden></div>
         <div id="compass" class="compass" title="Gerçek kuzey"><span id="north-arrow">↑</span> K</div>
+        <div id="map-attribution" class="map-attribution" hidden><span id="map-status" role="status"></span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></div>
         <div class="scene-reference">
           <div id="distance-scale" class="distance-scale" role="img" aria-label="Mesafe ölçeği" hidden>
             <span class="distance-scale-label"></span><span class="distance-scale-bar" aria-hidden="true"></span>
@@ -94,9 +95,9 @@
         <div id="dock-resizer" class="dock-resizer" role="separator" tabindex="0" aria-label="Oynatma alanının yüksekliği" aria-orientation="horizontal"><span></span></div>
         <div class="dock-body">
           <div class="playback-main">
-            <button id="restart-playback" title="Baştan izle" aria-label="Baştan izle" disabled>↤</button>
-            <button id="play-pause" title="Oynat / duraklat · Space" aria-keyshortcuts="Space" aria-label="Duraklat" aria-pressed="false" disabled>Ⅱ</button>
-            <button id="record-end" title="Sona git" aria-label="Sona git" disabled>↦</button>
+            <button id="restart-playback" title="Baştan izle" aria-label="Baştan izle" disabled><svg class="playback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-9 6 9 6Z"/></svg></button>
+            <button id="play-pause" title="Oynat / duraklat · Space" aria-keyshortcuts="Space" aria-label="Oynat" aria-pressed="true" disabled><span id="play-icon" aria-hidden="true">▶</span><span id="pause-icon" aria-hidden="true" hidden><svg class="playback-icon pause-symbol" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button>
+            <button id="record-end" title="Sona git" aria-label="Sona git" disabled><svg class="playback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l9 6-9 6Z"/></svg></button>
             <label class="sr-only" for="seek-time">Gösterim zamanı; düzenleyerek belirli zamana git</label><input id="seek-time" value="00:00.0" title="Zamana git: saniye veya dakika:saniye" aria-label="Zamana git" disabled>
             <div class="timeline-track"><input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıt zamanı" disabled><div id="timeline-events" class="timeline-events"></div></div>
             <output id="timeline-last">—</output>
@@ -109,10 +110,39 @@
       <button id="toggle-detail" class="panel-arrow" aria-label="Bilgi panelini kapat" aria-expanded="true" aria-controls="detail-content">›</button>
       <div id="detail-content" class="panel-body">
         <h2 id="detail-title">Nesne bilgisi</h2><h3 id="selected-name">Nesne seç</h3><p id="model" class="muted">Kayıt ölçümleri</p><span id="entity-state" class="entity-state"></span>
-        <dl class="measures"><div><dt>İrtifa · MSL</dt><dd><output id="altitude">—</output><small id="altitude-unit-label"> ft</small></dd></div><div><dt>Burun yönü</dt><dd><output id="heading">—</output><small> °</small></dd></div><div id="speed-measure"><dt>Hava hızı · TAS</dt><dd><output id="speed">—</output><small id="speed-unit-label"> m/s</small></dd></div><div id="mach-measure"><dt>Mach</dt><dd><output id="mach">—</output></dd></div><div><dt>Yatış</dt><dd><output id="roll">—</output><small> °</small></dd></div><div><dt>Yunuslama</dt><dd><output id="pitch">—</output><small> °</small></dd></div></dl>
+        <dl class="measures"><div><dt>İrtifa</dt><dd><output id="altitude">—</output><small id="altitude-unit-label"> ft</small></dd></div><div><dt>Burun yönü</dt><dd><output id="heading">—</output><small> °</small></dd></div><div id="speed-measure"><dt>Hava hızı · TAS</dt><dd><output id="speed">—</output><small id="speed-unit-label"> m/s</small></dd></div><div id="mach-measure"><dt>Mach</dt><dd><output id="mach">—</output></dd></div><div><dt>Yatış</dt><dd><output id="roll">—</output><small> °</small></dd></div><div><dt>Yunuslama</dt><dd><output id="pitch">—</output><small> °</small></dd></div><div title="Gövdeye dik yük faktörü (JSBSim forces/load-factor); düz uçuşta 1 g"><dt>Yük faktörü</dt><dd><output id="load-factor">—</output><small> g</small></dd></div><div title="Verilen gaz komutu (0..1); motor buna birkaç saniyede ulaşır"><dt>Gaz</dt><dd><output id="throttle">—</output><small> %</small></dd></div></dl>
         <p id="record-warning" class="data-note" hidden></p><p id="missing-data" class="data-note" hidden>Bu kayıtta hava hızı ve Mach ölçümü bulunmuyor.</p>
         <dl class="positions"><div><dt>Yerel doğu</dt><dd id="east">—</dd></div><div><dt>Yerel kuzey</dt><dd id="north">—</dd></div></dl>
-        <section id="detail-inventory" class="detail-inventory" hidden><h3>Mühimmat</h3><div id="detail-inventory-list"></div></section><div class="record-interval"><span>Ölçüm aralığı</span><output id="entity-interval">—</output><button id="jump-entity" disabled>İlk ölçüme git</button></div>
+        <section id="relative" class="relative" hidden>
+          <h3>Hedefe göre <span id="relative-target" class="relative-target"></span></h3>
+          <dl class="relative-measures">
+            <div class="wide"><dt title="Otopilotun bu andaki manevra/aşaması">Manevra:</dt><dd id="calc-phase">—</dd></div>
+            <div><dt title="Antenna Train Angle: burun ile hedef arası; + sağda">ATA</dt><dd id="calc-ata">—</dd></div>
+            <div><dt title="Kuzeye göre hedefin yönü; + doğu">Bearing</dt><dd id="calc-bearing">—</dd></div>
+            <div><dt>Range · 3B</dt><dd id="calc-range-3d">—</dd></div>
+            <div><dt>Range · yatay</dt><dd id="calc-range-2d">—</dd></div>
+            <div><dt title="Hedefin burnu ile bize bakışı: 0 hot, 180 cold">Aspect</dt><dd id="calc-aspect">—</dd></div>
+            <div><dt title="Benim WEZ'im: ilk füzeme göre, bu düşmana karşı">WEZ menzili</dt><dd id="calc-wez">—</dd></div>
+            <div><dt>Düşman WEZ'imde</dt><dd id="calc-enemy-in-my-wez">—</dd></div>
+            <div><dt>Düşmanın WEZ'indeyim</dt><dd id="calc-me-in-enemy-wez">—</dd></div>
+            <div><dt title="Minimum Abort Range">MAR</dt><dd id="calc-mar">—</dd></div>
+            <div><dt title="Desired Out Range">DOR</dt><dd id="calc-dor">—</dd></div>
+          </dl>
+          <p id="relative-empty" class="data-note" hidden>Bu ölçüm anında otopilot hesabı kayıtlı değil.</p>
+        </section>
+        <section class="overlay-options" aria-labelledby="overlay-title">
+          <h3 id="overlay-title">Sahnede göster</h3>
+          <label><input id="overlay-line" type="checkbox">Hedef çizgisi</label>
+          <div class="overlay-indent">
+            <label><input id="overlay-ata" type="checkbox">ATA</label>
+            <label><input id="overlay-bearing" type="checkbox">Bearing</label>
+            <label><input id="overlay-range" type="checkbox">Range</label>
+            <label><input id="overlay-aspect" type="checkbox">Aspect</label>
+          </div>
+          <label><input id="overlay-radar" type="checkbox">Radar açısı</label>
+          <label title="Seçili uçağın WEZ'i: etrafında min–max halkası"><input id="overlay-own-wez" type="checkbox">Dost WEZ</label>
+          <label title="Hedef uçağın WEZ'i: etrafında min–max halkası"><input id="overlay-enemy-wez" type="checkbox">Düşman WEZ</label>
+        </section>
       </div>
       <div id="detail-resizer" class="panel-resizer" role="separator" tabindex="0" aria-label="Bilgi paneli genişliği" aria-orientation="vertical"></div>
     </aside>

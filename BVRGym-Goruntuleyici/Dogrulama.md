@@ -1,19 +1,82 @@
-# Görüntüleyici doğrulaması
+# Doğrulama ve test rehberi
 
-10 Ekim 2026. BVRGym kaynakları değiştirilmedi.
+Bu belge tekrar çalıştırılabilir kontrolleri ve doğrulamanın sınırlarını tanımlar. Kullanım için [görüntüleyici rehberi](README.md), sistemin bileşenleri için [mimari](../docs/mimari/BVR_SISTEM_MIMARISI.md) okunur.
 
-**WGS84 ve sütun adlandırması (12 Ekim 2026):** `recorder.py` artık kendi sütun adlarını yazıyor (`schema_version` 2): boşluk yok, birim adda, enlem WGS84 jeodezik (`lat_deg` ← `position/lat-geod-deg`), BVRGym'in iç jeosantrik enlemi ayrı `lat_gc_deg` sütununda. `fcs/throttle-cmd-norm` kaldırıldı: uçakta `set_throttle()` doğrudan komut değerini yazdığı için `cmd_throttle_norm` ile birebir aynı, füzede autopilot sabit 0,7 yazıyor. Uçak 18, füze 16 sütun. Görüntüleyici iki adlandırmayı da okuyor; ECEF tek referansa (jeodezik enlem + elipsoid yüksekliği) indirildi, yerleşik logger'ın `Latitude` sütunu okuma anında çevriliyor. Doğrulananlar: JSBSim 1.3.1'de ölçüm — `position/h-sl-meters` ile `position/geod-alt-ft` farkı 0°/59°/80° enlemlerinde ≤1,3 cm, ve yeni `(lat-geod, long, h-sl)`+WGS84 ECEF ile eski `(lat-gc, long, h-sl)`+radyal ECEF 0,000 m farkla aynı nokta; 33 Python testi geçti (ikisi yeni: kendi sütun adlarının jeodezik okunması, eksik zorunlu sütunun bildirilmesi); gerçek koşuda 180 s / 2162 snapshot üretildi; görüntüleyici yeni kaydı uyarısız okudu ve 4324 örneğin tamamında eski kayıtla aynı konumu çözdü (en büyük fark: enlem 4,7e-10°, kuzey 5,4e-7 m, boylam/irtifa 0). Atışlı 60 s'lik koşu da yapıldı: `target_assigned` ve `missile_launched` olayları yazıldı, atılan füzenin dosyası 722 veri satırı aldı (`time_s` taşıyıcının, `missile_time_s` füzenin saati), atılmayan üç füze başlıkta kaldı, görüntüleyici kaydı uyarısız okudu ve füzenin TAS'ını 420,23 m/s / Mach 1,279 olarak çözdü. **Doğrulanmayanlar:** JavaScript testleri ve tarayıcı kontrolü yine koşulmadı (Node.js kurulu değil); isabet/kayıp sonucu üreten uzun bir angajman koşulmadı, dolayısıyla `missile_hit`/`missile_lost` yeni adlandırmayla görülmedi.
+## Python testleri
 
-**Kayıt sözleşmesi değişikliğinden sonra (10 Ekim 2026):** `recorder.py` BVR alan listesine indirildi (uçak 19, füze 17 sütun), `Latitude` tekrar `position/lat-gc-deg`, komut sütunları ile `events.jsonl` ve `manifest.json` eklendi. Arayüzde ölçülen hız `velocities/vt-fps`'ten okunuyor, mühimmat sahipliği dosya adından çözülüyor, manifest referansı doğrulanıyor. Doğrulananlar: 31 Python testi geçti; gerçek koşuda 180 s / 2162 snapshot üretildi; beş olay türü (`target_assigned`, `missile_launched`, `missile_hit`, `missile_lost`, `health_changed`) gerçek atışla tetiklendi; arayüz yeni kaydı okuyup ölçülen TAS'ı 299,96 m/s, enlemi 59,0000225 olarak çözdü, dört mühimmatın da sahibini dosya adından buldu, uyarı üretmedi. **Doğrulanmayanlar:** JavaScript testleri ve tarayıcı kontrolü bu değişiklikten sonra koşulmadı (bu makinede Node.js kurulu değil); Tacview uygulamasında açılış denenmedi.
+Proje kökünden ve Python ortamı etkin halde:
 
-**Olay zaman çizelgesi ve oturum paneli (10 Ekim 2026):** `events.jsonl` ve `manifest.json` artık okunuyor, klasör imzasına dahil ve `/api/state` ile yayınlanıyor. Doğrulananlar: 31 Python testi geçti; gerçek atışlı kayıtta üç olay ve `missile_lost` sonucu mühimmata bağlandı; manifest özeti (enlem referansı, fizik adımı, snapshot sayısı, 20 girişli sütun kataloğu) HTTP yanıtında göründü; yerleşik logger biçimindeki eski kayıt olay/manifest olmadan sorunsuz açıldı ve sahipliği çözülemeyen mühimmat için doğru uyarıyı verdi. Tarayıcı tarafı yalnızca statik kontrol edildi: sekiz JS dosyasında ayraç dengesi, 180 `el(id)` çağrısının `index.html` ile eşleşmesi (biri dinamik oluşturulan `session-columns`, güvenli erişimle) ve `units.js` importlarının tutarlılığı. **Zaman çubuğu işaretleri, mühimmat İsabet/Kayıp durumu, Füze vuruş bilgisi kutusu ve oturum paneli tarayıcıda görsel olarak kontrol edilmedi.** `munitionState` için tercihli davranışı kapsayan JS testi yazıldı ama koşulamadı.
+```powershell
+Push-Location BVRGym-Goruntuleyici
+python -m unittest discover -s tests -p "test_*.py"
+Pop-Location
+```
 
-**Örnek kayıt (10 Ekim 2026):** `tests/ornek_kayit.py` iki uçaklı gerçek bir uçuş koşuyor ve altı olay türünün hepsini içeren bir kayıt üretiyor: hedef ataması, fırlatma, isabet, kayıp, sağlık değişimi, hedefin kaldırılması. Üretilen kayıt HTTP üzerinden okundu: 4 nesne, 3379 ölçüm, 100,1 s, 8 olay, uyarı yok; `Bogey-0` isabet (45,1 s), `KE-0` kayıp (73,3 s), atılmamış iki mühimmatın sonucu boş. Sonuçlar senaryo geometrisinden çıktı, dayatılmadı.
+Bu testler CSV okuma/doğrulama, koordinat ve hız dönüşümleri, hesapların tam zamanla eşleşmesi, kayıt değişimi, HTTP, envanter, olaylar ve kayıt silme davranışlarını kapsar. Yerleşik Windows klasör penceresi bazı testlerde taklit edilir; testin geçmesi işletim sistemi penceresinin görsel kontrolü değildir.
 
-- **31 Python testi:** CSV doğrulama, sayfalama, koordinat dönüşümü, hız tahmini, envanter, HTTP, dizin seçimi ve hatalı kayıtta eski uçuş/adını koruma.
-- **23 JavaScript testi:** zamanlama, interpolasyon, birimler, mühimmat durumları, iz penceresi ve biten uçak ölçümünün işaretlenmesi.
-- **Ana tarayıcı kontrolü:** gerçek yerleşik logger ile 5 nesneli kayıt ve 1199,5 saniyelik 10 nesneli kayıt. Dizin değiştirme, kayıt seçme, yanlış kayıtta eski ölçümleri koruma, 2D/3D, birim dönüşümleri, kısayollar, takip, izler, tema, ölçek, açılır menüler, panel/dock boyutlandırma ve 430×850 ekran kontrol edildi; hata yok.
-- **Ek tarayıcı kontrolü:** klasör seçimi API akışı, MiG/Meteor için genel geometri, nötr takım rengi, eksik heading için —/kapalı çizgi, biten uçak ölçümü için sabit/soluk gösterim ve çok uçaklı logger sınırı uyarısı; hata yok. Windows pencere sonucu tarayıcı testinde taklit edildi; işletim sistemi penceresi görsel olarak kontrol edilmedi.
-- **Koordinat referansı:** bilgisayardaki JSBSim 1.3.1 ile 59° jeosantrik enlem ve 5000 m radyal MSL irtifada yarıçap ve jeodezik enlem karşılaştırıldı. ECEF yarıçap farkı 0,001 m'den küçüktür. Kutup/ekvator ve radyal tırmanış ayrı test edilir.
+## JavaScript testleri
 
-Veri akışı VERI_AKISI.md'dedir. CSV'de yazım tamamlanma işareti bulunmadığından iki saniyelik sakinlik kesin tamamlanma garantisi değildir. Logger'ın aynı takım/füze numarası çakışması arayüzde uyarılır; kaybolan veri uydurulmaz. Tacview uygulamasında ayrıca görsel karşılaştırma yapılmadı.
+Node.js kuruluysa görüntüleyici dizininde:
+
+```powershell
+node --test tests/stream.test.mjs tests/units.test.mjs tests/range.test.mjs tests/basemap.test.mjs
+```
+
+Kontroller oynatma saati, interpolasyon, birimler, nesne ölçeği, menzil/analiz yardımcıları ve harita projeksiyonunu kapsar. Normal görüntüleyici çalışması için Node.js gerekmez.
+
+## Tarayıcı kontrolleri
+
+`tests/browser-qa.mjs` ve `tests/review-browser.mjs`, Playwright ile ayrı sunucu ve geçici kayıt açar. Ortamda Node.js, Playwright paketi ve uyumlu Chromium bulunmalıdır. Parametreler bu kurulumdaki gerçek yollarla verilir:
+
+```powershell
+node tests/browser-qa.mjs --python "C:\ortam\python.exe" --playwright "C:\paketler\playwright\index.js" --browser "C:\tarayici\chrome.exe"
+node tests/review-browser.mjs --python "C:\ortam\python.exe" --playwright "C:\paketler\playwright\index.js" --browser "C:\tarayici\chrome.exe"
+```
+
+Bunlar yer tutucu yollardır. Gerçek çalıştırmada mevcut Python, Playwright modülü ve tarayıcı yolları kullanılmalıdır. Testler headless çalışır; gerçek Windows klasör seçimi veya dış harita hizmetinin bütün ağ koşulları ayrıca ele alınır.
+
+Elle incelemede kayıt açma/silme, hatalı kayıtta eski görüntünün korunması, iki görünümde hedef/radar/WEZ katmanları, zaman sarma, klavye, birimler, panel boyutlandırma, dar ekran, tema ve isteğe bağlı harita denenir. Sadece test dosyasının bulunması bu kontrollerin yapıldığı anlamına gelmez.
+
+## Gerçek BVRGym logger kontrolü
+
+Görüntüleyici dizininden:
+
+```powershell
+python tests/integration_bvrgym.py --bvrgym "..\BVRGym" --output "..\recordings\verification"
+```
+
+Bu kontrol JSBSim/BVRGym gerektirir ve gerçek kayıt dosyaları üretir. Yerleşik logger'la ve loggersız uçuş sonucunu karşılaştırır, Üretilen Örneklerin okunmasını kontrol eder. Projenin özel `Recorder` ve C++ taktik döngüsünün tamamını bunun tek başına doğruladığı varsayılmaz.
+
+`tests/ornek_kayit.py`, arayüzde denenebilecek olaylı bir uçuş üretir; birim testi değildir.
+
+## Python–C++ bütünleşme kontrolü
+
+C++ derlendikten sonra kısa bir senaryoda şu zincir doğrulanır:
+
+```text
+Simulation.read_state
+→ TCP state
+→ Sim::step
+→ TCP command
+→ Recorder.record_calculations
+→ açık atışlar ve Simulation.step
+→ Recorder.record
+→ görüntüleyici read_recording
+```
+
+Başarılı sonuç için komut `tick` değerleri eşleşmeli, iki uçak komutu eksiksiz olmalı, C++ `end` ile normal kapanmalı ve hesap satırları aynı zamandaki uçak ölçümlerine bağlanmalıdır. Kısa koşu bütün taktik aşamaları, uzun menzil performansını veya isabet/kayıp davranışının tamamını sınamaz.
+
+## 20 Ekim 2026 doğrulaması
+
+Bu belgeler hazırlanırken mevcut çalışma ağacında yapılan kontroller:
+
+| Kontrol | Sonuç / kapsam |
+|---|---|
+| `cmake --build src/otopilot/build` | Başarılı Windows C++ derlemesi |
+| Görüntüleyici Python testleri | 37 test, başarılı |
+| Geçici dizinde 1 saniyelik gerçek Python–C++ uçuşu | 13 dış adım, 14 snapshot, 26 hesap satırı |
+| Aynı kaydın görüntüleyicide okunması | 4 uçmuş nesne, 52 örnek, 4 olay, uyarı yok |
+| Ölçülen fizik adımı | `0.00833333 s` |
+| Mevcut recorder kolonları | Uçak 18, füze 16; okunabilir model alanlarına bağlı |
+
+Kısa bütünleşme kontrolünde süre yalnız bellekteki senaryo kopyasında değiştirildi; proje `scenario.yaml` dosyası değiştirilmedi. TCP örnekleri aynı koşudaki eşleşen state/command çifti ve kapanış mesajından üretildi. Node.js PATH'te bulunmadığı için JavaScript ve Playwright testleri bu doğrulamada çalıştırılmadı. Tam süreli muharebe, manuel tarayıcı incelemesi ve Tacview uygulamasında açılış bu sonuçların kapsamı dışındadır.

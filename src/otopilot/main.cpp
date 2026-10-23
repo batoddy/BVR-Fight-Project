@@ -1,20 +1,20 @@
 #include <iostream>
-#include "autopilot.hpp"
-#include "connection.hpp"
+#include "control/sim.hpp"
+#include "io/connection.hpp"
 
-// Ana döngü: ölçümü al -> otopilota ver -> komutu gönder.
-// TCP ayrıntıları Connection, uçuş mantığı Autopilot içindedir.
+// Ana döngü: ölçümü al -> Sim'e ver -> komutu gönder.
+// TCP ayrıntıları Connection, adımın yönetimi Sim içindedir.
 int main(int argc, char* argv[])
 {
     try
     {
         Connection connection(argc, argv);   // Python sunucusuna bağlan (varsayılan 127.0.0.1:6000)
-        Autopilot autopilot;
+        Sim sim;
         Message state;
 
         while (connection.receive(state))    // Python "end" gönderince false döner
         {
-            Message command = autopilot.step(state);
+            Message command = sim.step(state);
             connection.send(command);
         }
     }

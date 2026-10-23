@@ -1,149 +1,86 @@
-# Python simülasyon dosyaları
+# Python simülasyon katmanı
 
-Güncelleme: 17 Ekim 2026. C++ ve Python ayrı programlar olarak çalışır.
-Python ölçümü gönderir, C++ komutunu bekler ve ardından bir adım ilerler.
-C++ tarafı: [`../otopilot/README.md`](../otopilot/README.md). Kurulum ve çalıştırma:
-[`docs/CALISTIRMA_KILAVUZU.md`](../../docs/CALISTIRMA_KILAVUZU.md).
+Bu paket BVRGym/JSBSim uçaklarını ve mühimmatını oluşturur, fizik durumunu C++'a gönderir, gelen komutları uygular ve oturumu kaydeder. Taktik kararın sahibi C++ otopilotlarıdır. Python'daki uçuş kontrolü bu kararların yön/irtifa/gaz hedeflerini fizik modeline uygular.
 
-## Hangi dosya ne yapar?
+Kurulum ve terminal sırası [çalıştırma kılavuzunda](../../docs/CALISTIRMA_KILAVUZU.md), alanların tamamı [veri referansında](../../docs/veri_info/SIMULASYON_VERI_REFERANSI.md) açıklanır.
 
-| Dosya | Görevi |
+## Dosyalar
+
+| Dosya | Görev |
 |---|---|
-| `sim_main.py` | YAML'ı okur; simülasyon, TCP ve recorder'ı sırayla çağırır. |
-| `simulation.py` | Config kopyalar, ajan oluşturur, ölçüm okur ve komut uygular. |
-| `connector.py` | `Message` ve `TCPConnection`: yalnızca JSON mesajı gönder/al. |
-| `recorder.py` | Mevcut CSV, events.jsonl ve manifest.json kaydını alır. |
-| `sim_local.py` | C++ olmadan, YAML'daki ilk hedeflerle yerel uçuş yapar. |
+| [sim_main.py](sim_main.py) | Senaryo, TCP, kayıt ve dış adım döngüsünü birleştirir |
+| [scenario.py](scenario.py) | Dosya yolları, YAML okuma ve temel senaryo doğrulaması |
+| [scenario.yaml](scenario.yaml) | Süre, adım tekrarları, bağlantı ve ajan başlangıçları |
+| [bvrgym_setup.py](bvrgym_setup.py) | Ajan başına config kopyaları, BVRGym nesneleri ve kontrol kurulumu |
+| [simulation.py](simulation.py) | Ölçüm okuma, uçuş komutu doğrulama, açık atış ve fizik adımı |
+| [flight_control.py](flight_control.py) | Yatış ve yük faktörüyle yön/irtifa kontrolü |
+| [connector.py](connector.py) | Tek TCP istemcisi ve satır başına JSON mesajı |
+| [recorder.py](recorder.py) | ft/kt ölçüm CSV'leri, NM/kt hesapları, olay ve manifest yazımı |
+| [_sim_local_template.py](_sim_local_template.py) | TCP/C++ olmadan sabit veya elle değiştirilen komutlarla uçuş |
 
-`Simulation` oluşturulunca YAML'daki bütün uçaklar ve mühimmatları oluşturulur.
-`read_state()` sadece okur. `step(aircraft_commands)` bütün uçakları ilerletir;
-TCP, kayıt ve uyuma bu sınıfta bulunmaz. Böylece kendi döngünde de kullanabilirsin.
-Import yapmak simülasyonu veya sunucuyu başlatmaz; giriş dosyası `main()` çağırır.
+## Kurulum ve konfigürasyon
 
-## Çalıştırma
+`load_scenario()` bu paket içindeki `scenario.yaml` dosyasını okur. Yollar terminalin konumundan değil kaynak dosyasının konumundan türetilir. `validate_scenario()` pozitif tamsayı `sim_time_step`, sonlu/negatif olmayan süre ve bekleme ile boş olmayan ajan listesi ister. Komut alanlarının doğrulaması fizik ilerlemeden önce ayrıca yapılır.
 
-Workspace içinde mevcut venv'i kullan:
+`create_agents()` BVRGym'i yoluna ekler ve nesne oluştururken geçici olarak model dizinine geçer. Her ajan için F-16 ve füze ayarları derin kopyalanır; bir uçağın ayarı diğerine sızmaz. Nesne kurulumu başarısız olsa da çağıranın çalışma dizini geri yüklenir.
 
-```powershell
-# Python sunucusunu aç; ardından C++ istemcini çalıştır.
-python .\src\sim\sim_main.py
+`type`, C++ profil etiketidir. Uçak fiziği `F16BVR`, mühimmat fiziği `AAMBVR` olarak kurulur. `ammo` kadar slot oluşturulur. Native XML çıkışı ve BVRGym içindeki gerçek zaman beklemesi kapatılır; beklemeyi `sim_main.py` yönetir. Füze config'inde `dive_at=25000` kullanılır.
 
-# C++ kullanmadan yerel uçuşu çalıştırmak için:
-python .\src\sim\sim_local.py
-```
+## Bir adım
 
-`src/sim/scenario.yaml` içindeki `connection.host` ve `connection.port` TCP adresidir.
-Varsayılan `127.0.0.1:6000`. `world.duration_s`, `sim_time_step`, `sleep_s`
-ayarları aynı YAML'dan alınır. `sleep_s` yalnızca dış döngünün sonunda uygulanır.
-C++ hesabı ve iletişim süresi de gerçek sürenin parçasıdır.
+1. Başlangıç ölçümü, ilk komutlarla kaydedilir.
+2. `read_state()` ölçümleri ve son uygulanan uçuş komutlarını üretir; fizik ilerlemez.
+3. Python `state` yollar ve aynı `tick` için `command` bekler.
+4. C++ hesapları henüz ilerlememiş ölçümün zamanıyla yazılır.
+5. `launch` listesindeki açık atış emirleri uygulanır.
+6. Bütün uçuş komutları doğrulanır; ajanların `apply_action()` çağrıları yapılır.
+7. `commands` güncellenir, `tick` artırılır ve yeni ölçüm kaydedilir.
+8. Varsa `sleep_s` kadar gerçek zaman beklenir.
 
-## Ölçüm → komut → ilerletme
+Süre kontrolü ilk uçağın fizik saatindeki başlangıca göre yapılır. Bağlantı bekleme süresi fizik süresine eklenmez. Son ölçüm C++'a gönderilmeyebilir; bu nedenle ölçüm sayısı ile hesap adımı sayısı aynı olmak zorunda değildir.
 
-1. `sim_main` ölçümü `Simulation.read_state()` ile okur ve gönderir.
-2. `connection.receive()` C++ komutunun tamamlanmasını bekler. Uçaklar bu sırada ilerlemez.
-3. Komutun `kind` alanı `command`, `tick` alanı mevcut adımla aynı olmalı.
-   Önce `launch` listesindeki atış emirleri `Simulation.fire()` ile uygulanır.
-4. `Simulation.step()` her uçak için bir yön/irtifa/gaz komutu ister. Eksik,
-   tekrarlanan, bilinmeyen veya geçersiz komut varsa hiçbir uçak ilerlemez.
-5. Recorder yeni durumu kaydeder. Süre dolunca `end` mesajı gönderilir.
+## Uçuş komutları ve atış
 
-Bir bağlantı tekrar tekrar kullanılır. Her mesaj UTF-8, tek satır JSON ve `\n`
-ile biter. TCP mesajı parçalasa veya iki mesaj birlikte gelse de satırlar ayrı okunur.
-En büyük mesaj satır sonu dahil 1 MiB. Bağlantı kapanırsa döngü durur ve kayıtlar kapanır;
-yeniden bağlanma otomatik yapılmaz. İstemci komut göndermiyorsa beklemeye devam edilir.
+`Simulation.step()` her uçak için tam bir `{id, heading_deg, altitude_m, throttle}` komutu ister. Bilinmeyen/tekrarlanan kimlik, eksik uçak, sonlu olmayan sayı, yönün `0..360` veya gazın `0..1` dışına çıkması hatadır. Komut listesi tamamen doğrulanmadan hiçbir uçak ilerletilmez. Ana döngüdeki atış emirleri bu doğrulamadan önce işlendiği için tüm mesajın işlemsel geri alınması sağlanmaz.
 
-## Mesajın üç alanı
+`fire(shooter_id, target_id)`, kendine atışı ve hazır mühimmat yokluğunu `False` ile sonuçlandırır. Hazır ilk slotun hedefini bağlar ve fırlatır. Havadaki başka füze yeni atışı engellemez. `launch()` sonrası yeniden başlatma, taşıyıcının gerçek hava hızını m/s olarak kullanır; bu, BVRGym fırlatma yolundaki Mach/m/s uyuşmazlığını bu katmanda karşılar.
 
-| Alan | Anlamı |
+## Fizik ve kontrol zamanları
+
+Mevcut modelde fizik `dt` yaklaşık `1/120 s`, `Control_time_step` değeri `10`'dur. Dış adım yaklaşık `dt × Control_time_step × sim_time_step` sürer. YAML'da `sim_time_step=1` yaklaşık 12 dış adım/s verir. Bu alan saniye değildir.
+
+Uçak `F16BVR._step()` içinde yön ve irtifa hatasını bir iç çevrim başında hesaplar; kontrol yüzeyleri her fizik alt adımında güncellenir. `flight_control.py` kendi integral hesabında `DT_S=1/120` kullanır; fizik adımı değiştirilirse bu varsayım da gözden geçirilmelidir.
+
+## Yön ve irtifa kontrolü
+
+`install()` her uçağın kendi `AircraftPIDAutopilot` nesnesine kontrol fonksiyonunu bağlar. Dikey ivme isteği irtifa hatası ve dikey hız sönümünden gelir. Büyük yön hatasında sert dönüş yatışı, küçük hatada koordineli dönüş yatışı kullanılır. Elevator PI kontrolü, yatışta irtifayı koruyacak yük faktörünü izler.
+
+| Ayar | Mevcut değer / rol |
 |---|---|
-| `kind` | `state`, `command` veya `end`. |
-| `tick` | Fizik saniyesi değil, dış ilerletme adımının sayacı. |
-| `data` | Ölçümde bütün uçak/füzeler; komutta uçak hedefleri (`aircraft`) ve atış emirleri (`launch`). |
+| `K_ALT`, `K_VS` | `0.04`, `0.4`; irtifa hatası ve dikey hız |
+| `A_MAX` | `3 m/s²`; dikey düzeltme sınırı |
+| `N_MIN`, `N_MAX` | `0.5`, `6 g`; kontrolün istediği yük sınırları |
+| `TAU_HEAD` | `2 s`; küçük yön hatasını kapatma süresi |
+| `BIG_ALT_CHANGE_M` | `1500 m`; üzerinde BVRGym'in özgün kontrolü kullanılır |
 
-Ölçümde `data.sim_time_s` gerçek JSBSim saatidir; başlangıç resetinden dolayı
-ilk ölçüm sıfırdan biraz büyük olabilir. `data.aircraft` uçakları, `data.missiles`
-mühimmat durumunu içerir. Atılmamış füzenin `kinematics` ve `flight_time_s`
-alanları `null`; hazır/havada/sona erdi durumları `ready/in_flight/ended` olarak gelir.
-Uçakların açısı derece, hızı m/s, irtifası `position/h-sl-meters` kaynağından metredir.
-Jeodezik enlem `position/lat-geod-deg` üzerinden okunur; BVRGym spawn enlemini
-jeosantrik olarak kullanır. Recorder'ın kendi ham sütun ve referansları değiştirilmedi.
+Büyük irtifa hatasına geçildiğinde integral sıfırlanır. Normal bölgede integral mevcut elevator komutundan başlatılır. Bu kontrol, C++ profilindeki `max_g` veya `max_mach` değerlerinden otomatik ayarlanmaz.
 
-Komut örneği (tek satır gönderilir):
+## Kayıt
 
-```json
-{"kind":"command","tick":0,"data":{"aircraft":[{"id":"blue","heading_deg":90,"altitude_m":5000,"throttle":0.49},{"id":"red","heading_deg":270,"altitude_m":5000,"throttle":0.49}],"launch":[{"id":"blue","target_id":"red"}]}}
-```
+Yeni kayıt şeması `3`'tür: irtifa `alt_ft`, gerçek hava hızı `tas_kt`, NED
+hızları `vel_north_kt/vel_east_kt/vel_down_kt`, irtifa komutu `cmd_alt_ft` olarak
+yazılır. C++ hesap mesafeleri `_nm`, kapanma hızları `_kt` alanlarındadır.
+JSBSim'in feet ve knot propertyleri doğrudan okunur; NED hızları ft/s'den kt'ye,
+Python irtifa komutu metreden feet'e çevrilir. Kaynak ve çarpan manifestte bulunur.
+Python uçuş mesajları ve YAML başlangıç ayarları metre/m/s kullanmaya devam eder.
+Görüntüleyici yeni ve eski kayıtların birimlerini okuma sınırında çözer.
 
-`launch` boş liste olabilir ya da hiç yazılmayabilir.
+`Recorder.record()` bir dış snapshot yazar. Okunabilen propertyler ilk kullanımda belirlenir; modelde olmayan ek alanın sütunu açılmaz. Uçaklar her snapshot'ta, füzeler uçuşa başladıktan sonra ve bitiş durumları bir kez yazılarak kaydedilir. Hazır slotlar başlıklarıyla envanterde kalır.
 
-JSON şablonları: `src/msgs/state.json`, `src/msgs/command.json`, `src/msgs/end.json` (bu dosyadan göreli klasör: `../msgs/`).
-Dosyalar aktarımda okunmaz/yazılmaz; mesajlar TCP'de bellekte aktarılır.
+Olaylar durum değişimlerinden oluşur: hedef ataması/kaldırılması, fırlatma, isabet, kayıp ve sağlık değişimi. Olay zamanı değişimin görüldüğü snapshot zamanıdır. `record_calculations()` C++ verisini tekrar hesaplamadan yazar ve aynı uçağın son ölçüm zamanını ekler. Alan kümesi ilk hesap mesajından sonra sabit olmalıdır.
 
-## Uçuş kodunu değiştirmek
+`manifest.json`, senaryoyu, koordinat referansını, kaynak propertyleri, gerçek fizik adımını ve dosya/satır sayılarını açıklar. Başlangıçta ve kapanışta yazılır; her snapshot'ta yenilenmez. Alan ve birim ayrıntıları veri referansındadır.
 
-`simulation.agents["blue"]` BVRGym'in `BaseBVRAgent` nesnesidir.
-Yerel uçuşta `sim_local.py` içindeki komut listesini değiştirebilirsin.
-TCP kullanımında C++ her döngüde bütün uçakların hedeflerini doldurur.
-Python tarafında otomatik hedef seçimi, manevra veya atış kararı yoktur; bunlar C++'tadır.
+## Yerel şablon
 
-`simulation.fire("blue", "red")` açık Python atış çağrısıdır; atış uygulanırsa
-`True`, aynı uçak/hedef, mühimmat yokluğu veya aktif füze kısıtında `False` döner.
-TCP komut mesajındaki `launch` listesi (`[{"id": "blue", "target_id": "red"}]`)
-`sim_main.py` tarafından uçuş komutlarından **önce** bu çağrıyla uygulanır.
-Reddedilen atış sessizce düşer; C++ sonucu bir sonraki ölçümde füzenin `state`'inden görür.
-Atış ve sonucu `events.jsonl`'a yazılır.
-
-C++ otopilot `src/otopilot` içindedir. Derleme, iki terminalden kullanım ve kodun
-dosya dosya açıklaması: [`../otopilot/README.md`](../otopilot/README.md). Mimari:
-[`docs/mimari/OTOPILOT_MIMARISI.md`](../../docs/mimari/OTOPILOT_MIMARISI.md).
-Python tarafına yeni paket gerekmez.
-
-Ölçümdeki `data.flight_commands` son uygulanan yön, irtifa ve gaz hedefleridir.
-C++ bunu her ölçümde okur: fighter için bir önceki adımda kendi gönderdiği komut
-(ilk adımda YAML başlangıcı), bogey için hiç değiştirmediğinden hep YAML başlangıcıdır.
-
-
-
-## Paket ve dosya yolları
-
-Kodlar `src/sim`, JSON mesaj şablonları `src/msgs` içindedir. Senaryo
-`src/sim/scenario.yaml` dosyasından okunur. BVRGym ve kayıt klasörleri
-Workspace altında kalır; yollar çalıştırılan terminalin konumuna göre değişmez.
-
-Workspace içinden doğrudan dosya komutlarının yanında şunlar da kullanılabilir:
-
-```powershell
-python -m src.sim.sim_local
-python -m src.sim.sim_main
-```
-
-Dosya doğrudan çalıştırıldığında komşu modüller, paket olarak çalıştırıldığında
-göreli paket import'ları kullanılır. JSON şablonları örnek değerler taşır;
-çalışan simülasyon bu dosyaları okuyup komut uygulamaz veya ölçüm yazmaz.
-
-
-## Uçak tipi
-
-Her ajan için `src/sim/scenario.yaml` içinde `type` yazılabilir:
-
-```yaml
-agents:
-  blue:
-    name: KE
-    type: F16
-  red:
-    name: Bogey
-    type: Su57
-```
-
-Bu parça alanı gösterir; mevcut takım/mühimmat/spawn ayarlarını koru.
-`data.aircraft` içindeki her nesnenin `type` alanı C++'a TCP üzerinden taşınır.
-Alan serbest bir metindir: `F16`, `Su57`, `CustomAircraft` gibi profil adları
-kullanılabilir. Büyük/küçük harf korunur, baştaki/sondaki boşluklar temizlenir.
-Alan yoksa eski senaryolar için `F16` kullanılır; boş veya metin olmayan değer reddedilir.
-
-C++ `type`'ı `src/otopilot/aircraft_profiles.hpp` tablosunda arar ve uçağın profilini
-(Mach, g, WEZ, radar) oradan alır; tabloda olmayan tipte durur. Bu alan tek başına
-JSBSim fizik modelini değiştirmez; uçaklar mevcut F-16 modeliyle simüle edilir.
-Yeni fizik modeli için XML/config adaptasyonu ayrı yapılmalıdır.
-Senaryo type alanı recorder'ın manifest içindeki senaryo kopyasında da saklanır.
+`_sim_local_template.py`, `Simulation` ve `Recorder` kullanır; ağ açmaz. Döngüde `commands` listesi değiştirilerek uçuş hedefi verilebilir. C++ çağrılmadığından otopilot hesap dosyası oluşmaz. `src/temp/` içindeki eski deneme dosyaları normal giriş yolu değildir.

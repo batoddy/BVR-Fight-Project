@@ -15,6 +15,43 @@ def file(name, rows, header=HEADER):
     return dict(name=name,text=header+'\n'+'\n'.join(rows))
 
 class TelemetryTests(unittest.TestCase):
+    def test_recorded_ned_velocity_is_used_even_when_position_and_heading_disagree(self):
+        header='time_s,lon_deg,lat_deg,alt_m,yaw_deg,vel_north_fps,vel_east_fps,vel_down_fps'
+        samples,_=read_exports([file(AIR,['0,18,59,5000,180,100,200,-50','1,18,59,5000,180,100,200,-50'],header)])
+        for row in samples:
+            self.assertEqual(row['velocity_source'],'recorded')
+            self.assertAlmostEqual(row['velocity_north_mps'],30.48)
+            self.assertAlmostEqual(row['velocity_east_mps'],60.96)
+            self.assertAlmostEqual(row['velocity_up_mps'],15.24)
+
+    def test_old_recordings_derive_vector_from_position_not_aircraft_attitude(self):
+        header='time_s,lon_deg,lat_deg,alt_m,yaw_deg'
+        samples,_=read_exports([file(AIR,['0,18,59,5000,0','2,18.01,59,5020,0'],header)])
+        for row in samples:
+            self.assertEqual(row['velocity_source'],'position')
+            self.assertAlmostEqual(row['velocity_east_mps'],(samples[1]['east_m']-samples[0]['east_m'])/2)
+            self.assertGreater(row['velocity_east_mps'],200)
+            self.assertAlmostEqual(row['velocity_up_mps'],10)
+
+    def test_single_sample_cannot_invent_direction_from_tas_or_yaw(self):
+        samples,_=read_exports([file(AIR,['0,18,59,5000,0,0,90,250'],HEADER+',TAS')])
+        self.assertIsNone(samples[0]['velocity_source'])
+        self.assertTrue(all(samples[0][key] is None for key in ('velocity_north_mps','velocity_east_mps','velocity_up_mps')))
+
+    def test_missile_velocity_fallback_uses_carrier_time_and_actual_displacement(self):
+        samples,_=read_exports([file(MISSILE,['10,18,59,7000,0,0,0','12,18.02,59,7100,0,0,0'])])
+        self.assertTrue(all(row['velocity_source']=='position' for row in samples))
+        self.assertTrue(all(abs(row['velocity_up_mps']-50)<1e-9 for row in samples))
+        self.assertGreater(samples[0]['velocity_east_mps'],500)
+
+    def test_velocity_rotates_from_each_objects_local_frame_to_recording_frame(self):
+        header='time_s,lon_deg,lat_deg,alt_m,vel_north_fps,vel_east_fps,vel_down_fps'
+        samples,_=read_exports([file(AIR,['0,18,59,5000,0,100,0'],header),
+                               file('F-16 (Hostile--red) [Red].csv',['0,19,59,5000,0,100,0'],header)])
+        other=next(row for row in samples if row['team']=='red')
+        self.assertAlmostEqual(other['velocity_east_mps'],30.48*math.cos(math.radians(1)))
+        self.assertAlmostEqual(other['velocity_north_mps'],30.48*math.sin(math.radians(59))*math.sin(math.radians(1)))
+
     def test_speed_uses_true_elapsed_time_and_initial_sample_is_not_false_zero(self):
         samples,_=read_exports([file(AIR,['0,18,59,5000,0,0,90','0.2,18,59,5002,0,0,90','1.7,18,59,5017,0,0,90'])])
         for row in samples:
