@@ -32,7 +32,7 @@ struct AircraftProfile
 
     double out_g = 0.0; // g, yaklaşık out dönüşünde kullanılan yük faktörü
     std::vector<AltitudeFactor> out_distance_factor; // irtifa artan sırada
-    double out_offset_nm = 0.0;
+    double out_offset_nm = 0;
 };
 
 // Değerlerin kaynağı:
@@ -47,9 +47,9 @@ inline const std::map<std::string, AircraftProfile>& aircraft_profiles()
 {
     static const std::map<std::string, AircraftProfile> table = {
         //                   name               loadout (slot sırasıyla)        mach   g     radar   gimbal  out_g  out alt factors                                   out_offset_nm
-        {"F16",            {"F-16",             {FOX3, FOX3, FOX3, FOX3},       2.05,  9.0,  45,  60,     5.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 1}},
-        {"Su57",           {"Su-57",            {FOX3, FOX3, FOX3, FOX2, FOX2}, 2.0,   9.0,  55,  60,     5.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 1}},
-        {"CustomAircraft", {"Ornek ozel ucak",  {FOX1, FOX1, FOX2, FOX2},       1.2,   4.0,  30,  45,     4.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 1}},
+        {"F16",            {"F-16",             {FOX3, FOX3, FOX3, FOX3},       2.05,  9.0,  45,  60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 1}},
+        {"Su57",           {"Su-57",            {FOX3, FOX3, FOX3, FOX2, FOX2}, 2.0,   9.0,  55,  60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 1}},
+        {"CustomAircraft", {"Ornek ozel ucak",  {FOX1, FOX1, FOX2, FOX2},       1.2,   4.0,  30,  45,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 1}},
     };
     return table;
 }

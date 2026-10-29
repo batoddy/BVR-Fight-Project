@@ -18,7 +18,7 @@ export function interpolate(a,b,time) {
   if(!b||b.sim_time_s<=a.sim_time_s)return {...a};
   const f=Math.max(0,Math.min(1,(time-a.sim_time_s)/(b.sim_time_s-a.sim_time_s)));
   const result={...a};
-  for(const key of ['east_m','north_m','altitude_m','velocity_east_mps','velocity_north_mps','velocity_up_mps','true_airspeed_mps','mach','position_speed_mps','estimated_mach','load_factor_g','pitch_deg','latitude_deg','longitude_deg'])
+  for(const key of ['east_m','north_m','altitude_m','velocity_east_mps','velocity_north_mps','velocity_up_mps','true_airspeed_mps','mach','position_speed_mps','estimated_mach','load_factor_g','pitch_deg','latitude_deg','longitude_deg','path_m'])
     result[key]=Number.isFinite(a[key])&&Number.isFinite(b[key])?a[key]+(b[key]-a[key])*f:null;
   for(const key of ['heading_deg','roll_deg']) {
     const delta=((b[key]-a[key]+540)%360)-180;
@@ -51,6 +51,12 @@ export class SampleBuffer {
       const last=track.samples.at(-1);
       if(!last||item.sim_time_s>last.sim_time_s)track.samples.push(item);
       else if(item.sim_time_s===last.sim_time_s)track.samples[track.samples.length-1]=item;
+      else{this.cursor=item.sequence;continue;}
+      // İlk örnek zamanı (füzede atış anı) ve o andan beri gidilen yol, m:
+      // yol = önceki yol + √(Δdoğu² + Δkuzey² + Δirtifa²)
+      const samples=track.samples,before=samples.at(-2);
+      item.start_s=samples[0].sim_time_s;
+      item.path_m=before?before.path_m+Math.hypot(item.east_m-before.east_m,item.north_m-before.north_m,item.altitude_m-before.altitude_m):0;
       this.cursor=item.sequence;
     }
     this.cursor=Math.max(this.cursor,packet.cursor);

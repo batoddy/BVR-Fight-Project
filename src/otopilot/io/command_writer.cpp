@@ -51,5 +51,16 @@ Json CommandWriter::to_json(const std::string& id, const FlightCommand& command)
     j["heading_deg"] = wrap_360(command.heading_deg_180);   // ±180 -> 0..360
     j["altitude_m"] = feet_to_meter(command.altitude_ft); // Python komutu metre bekler.
     j["throttle"] = command.throttle;                   // 0..1
+    
+    // İsteğe bağlı: 0 ise alan yazılmaz, Python varsayılanı kullanır.
+    if (command.g_limit > 0.0)
+    {
+        if (command.g_limit < 1.5 || command.g_limit > 9.0)
+        {
+            throw std::runtime_error(id + ": g_limit 1.5..9 disinda: " + std::to_string(command.g_limit));
+        }
+        j["g_limit"] = command.g_limit;
+    }
+
     return j;
 }

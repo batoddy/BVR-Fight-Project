@@ -28,6 +28,8 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& target)
     j["enemy_closing_kt"] = own.enemy.enemy_closing_kt;
     j["enemy_in_my_wez"] = own.enemy.enemy_in_my_wez;
     j["me_in_enemy_wez"] = own.enemy.me_in_enemy_wez;
+    j["stern_wez_nm"] = own.enemy.stern_wez_nm;
+    j["nez_nm"] = own.enemy.nez_nm;
     j["mar_nm"] = own.enemy.mar_nm;
     j["dor_nm"] = own.enemy.dor_nm;
 

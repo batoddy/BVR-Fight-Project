@@ -21,6 +21,7 @@ FILES['/recording-menu.js'] = ('recording-menu.js', 'text/javascript; charset=ut
 FILES['/units.js'] = ('units.js', 'text/javascript; charset=utf-8')
 FILES['/inventory.js'] = ('inventory.js', 'text/javascript; charset=utf-8')
 FILES['/basemap.js'] = ('basemap.js', 'text/javascript; charset=utf-8')
+FILES['/ruler.js'] = ('ruler.js', 'text/javascript; charset=utf-8')
 
 
 def make_server(store, port=8765, directory_picker=choose_directory):

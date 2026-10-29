@@ -34,6 +34,7 @@
         </section>
       </details>
       <div class="button-group" aria-label="Görünüm"><button id="view-3d" aria-pressed="true">3D</button><button id="view-2d" aria-pressed="false">2D</button></div>
+      <button id="ruler" class="ruler-button" aria-pressed="false" aria-keyshortcuts="C" title="Cetvel · C: aç/kapa · İz üzerinde iki nokta seç · Orta tuş: kaydır · Shift + sol tuş: döndür · Esc: temizle/kapat" aria-label="Cetvel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.5 15.5 3 21 8.5 8.5 21Z"/><path d="M7 11.5l2 2M10 8.5l2 2M13 5.5l2 2"/></svg></button>
       <label class="sr-only" for="camera-mode">Kamera</label><select id="camera-mode"><option value="orbit">Serbest kamera</option><option value="top">Üstten</option><option value="all">Tüm nesneler</option></select>
       <label class="object-scale-control" for="object-scale">Nesne ölçeği:<select id="object-scale" title="Model ölçeği; füzelerin ek büyütmesi korunur. 2D'de uzaktaki modeller okunabilir bir simgeyle gösterilir."><option value="1" selected>1×</option><option value="3">3×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
       <details id="view-options" class="toolbar-menu"><summary>Görünüm</summary><div class="popover">
@@ -127,6 +128,8 @@
             <div><dt>Düşmanın WEZ'indeyim</dt><dd id="calc-me-in-enemy-wez">—</dd></div>
             <div><dt title="Minimum Abort Range">MAR</dt><dd id="calc-mar">—</dd></div>
             <div><dt title="Desired Out Range">DOR</dt><dd id="calc-dor">—</dd></div>
+            <div><dt title="Düşman füzesinin, ben kaçarken (kuyruktan) yetişebileceği en uzak atış mesafesi">Stern WEZ</dt><dd id="calc-stern-wez">—</dd></div>
+            <div><dt title="No Escape Zone">NEZ</dt><dd id="calc-nez">—</dd></div>
           </dl>
           <p id="relative-empty" class="data-note" hidden>Bu ölçüm anında otopilot hesabı kayıtlı değil.</p>
         </section>
@@ -142,6 +145,13 @@
           <label><input id="overlay-radar" type="checkbox">Radar açısı</label>
           <label title="Seçili uçağın WEZ'i: etrafında min–max halkası"><input id="overlay-own-wez" type="checkbox">Dost WEZ</label>
           <label title="Hedef uçağın WEZ'i: etrafında min–max halkası"><input id="overlay-enemy-wez" type="checkbox">Düşman WEZ</label>
+          <h3>Düşman çevresinde</h3>
+          <div class="overlay-indent">
+            <label title="Seçili uçağın stern_wez hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-stern-wez" type="checkbox">Stern WEZ</label>
+            <label title="Seçili uçağın nez hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-nez" type="checkbox">NEZ</label>
+            <label title="Seçili uçağın mar hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-mar" type="checkbox">MAR</label>
+            <label title="Seçili uçağın dor hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-dor" type="checkbox">DOR</label>
+          </div>
         </section>
       </div>
       <div id="detail-resizer" class="panel-resizer" role="separator" tabindex="0" aria-label="Bilgi paneli genişliği" aria-orientation="vertical"></div>

@@ -29,6 +29,7 @@ flowchart LR
 | `web/scene.js`, `web/scene2d.js` | 3D/2D çizim ve yardımcı katmanlar |
 | `web/aircraft3d.js` | Yerel model geometrileri |
 | `web/inventory.js`, `web/units.js` | Envanter sunumu, ölçü birimleri ve ortak etiketler |
+| `web/ruler.js` | Cetvel: iz üzerinde iki nokta arası süre, kat edilen yol ve düz mesafe |
 | `web/basemap.js` | Harita görsellerini yerel koordinatlara projekte etme ve önbellek |
 
 ## Okuma ve normalleştirme

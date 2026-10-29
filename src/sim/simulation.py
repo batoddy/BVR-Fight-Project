@@ -12,6 +12,8 @@ else:
     from bvrgym_setup import create_agents
     from scenario import validate_scenario
 
+G_LIMIT_MIN, G_LIMIT_MAX = 1.5, 9.0   # g; komuttaki g_limit aralığı (9: F-16 yapısal sınırı)
+
 
 class Simulation:
     # =========================================================================
@@ -24,9 +26,10 @@ class Simulation:
         self.tick = 0
         self.agents = create_agents(scenario, bvrgym_path)
 
-        # Her uçak için son uygulanan hedefler: [yön (derece), irtifa (m), gaz (0..1)].
+        # Her uçak için son uygulanan hedefler: [yön (derece), irtifa (m), gaz (0..1), g sınırı].
+        # g sınırı isteğe bağlı; None ise flight_control.py'nin varsayılanı kullanılır.
         self.commands = {
-            key: [settings["spawn"]["heading"], settings["spawn"]["alt"], settings["throttle"]]
+            key: [settings["spawn"]["heading"], settings["spawn"]["alt"], settings["throttle"], None]
             for key, settings in scenario["agents"].items()
         }
         self.clock = next(iter(self.agents.values())).simObj
@@ -42,10 +45,13 @@ class Simulation:
 
     def read_flight_commands(self):
         """Güncel hedefleri mesajdaki liste biçimine çevir; ilk ölçümde YAML hedefleridir."""
-        return [
-            dict(id=key, heading_deg=values[0], altitude_m=values[1], throttle=values[2])
-            for key, values in self.commands.items()
-        ]
+        result = []
+        for key, values in self.commands.items():
+            command = dict(id=key, heading_deg=values[0], altitude_m=values[1], throttle=values[2])
+            if values[3] is not None:
+                command["g_limit"] = values[3]
+            result.append(command)
+        return result
 
     @staticmethod
     def _kinematics(model):
@@ -94,8 +100,11 @@ class Simulation:
         commands = self._validate_flight_commands(aircraft_commands)
 
         # Bütün komutlar doğrulanmadan hiçbir uçağı ilerletme.
+        # g sınırı BVRGym'in apply_action yolundan geçmez; uçağın kontrolcüsüne doğrudan yazılır.
         for key, agent in self.agents.items():
-            agent.apply_action(commands[key])
+            heading_deg, altitude_m, throttle, g_limit = commands[key]
+            agent.simObj.aircraft_control.g_limit = g_limit
+            agent.apply_action([heading_deg, altitude_m, throttle])
 
         self.commands = commands
         self.tick += 1
@@ -117,7 +126,14 @@ class Simulation:
                 raise ValueError(f"{key}: heading, altitude ve throttle sonlu sayı olmalı.")
             if not 0 <= values[0] <= 360 or not 0 <= values[2] <= 1:
                 raise ValueError(f"{key}: heading 0..360, throttle 0..1 aralığında olmalı.")
-            commands[key] = values
+            # İsteğe bağlı g sınırı: dönüşte çekilecek en büyük yük (out sert, crank/beam yumuşak).
+            g_limit = item.get("g_limit")
+            if g_limit is not None:
+                if type(g_limit) not in (int, float) or not math.isfinite(g_limit):
+                    raise ValueError(f"{key}: g_limit sonlu sayı olmalı.")
+                if not G_LIMIT_MIN <= g_limit <= G_LIMIT_MAX:
+                    raise ValueError(f"{key}: g_limit {G_LIMIT_MIN}..{G_LIMIT_MAX} aralığında olmalı.")
+            commands[key] = values + [g_limit]
         if set(commands) != set(self.agents):
             raise ValueError("Her uçak için tam bir komut gerekli.")
 
@@ -126,6 +142,39 @@ class Simulation:
     # =========================================================================
     # AÇIK FÜZE ATIŞ EMRİ
     # =========================================================================
+
+    # -------------------------------------------------------------------------
+    # BVRGym'in ORİJİNAL atış yolu (değiştirilmedi; biz onun yerine fire() kullanıyoruz)
+    #
+    # BVRGym/jsb_gym/agents/agents.py → BaseBVRAgent.launch_missile():
+    #
+    #     def launch_missile(self):
+    #         if not self.is_own_missile_active():          # havada kendi füzesi varsa hiç atmaz
+    #             for i in self.ammo:
+    #                 if self.ammo[i].is_ready_to_launch():
+    #                     self.ammo[i].set_target(self.target)
+    #                     self.ammo[i].launch(self)
+    #                     break
+    #
+    # BVRGym/jsb_gym/simObjects/missiles.py → AAMBVR.launch():
+    #
+    #     def launch(self, carrier_aircraft):
+    #         if self.is_alive():
+    #             self.active = True
+    #             lat = carrier_aircraft.simObj.get_lat_gc_deg()
+    #             long = carrier_aircraft.simObj.get_long_gc_deg()
+    #             alt = carrier_aircraft.simObj.get_altitude()
+    #             vel = carrier_aircraft.simObj.get_mach()        # Mach veriliyor ...
+    #             heading = carrier_aircraft.simObj.get_psi()
+    #
+    #             self.reset(lat, long, alt, vel, heading)       # ... ama reset() m/s bekliyor
+    #
+    # Farklarımız:
+    #   1. is_own_missile_active() koruması yok: C++ atış emri verdiyse havada füze olsa da atılır.
+    #   2. Hedef BVRGym'in agent.target'ından değil, C++'ın target_id'sinden gelir.
+    #   3. launch() sonrası füze aynı konum/yönde get_true_airspeed() (m/s) ile yeniden reset edilir;
+    #      orijinalde Mach sayısı m/s sanılıyordu: Mach 0.9 ile atılan füze 0.9 m/s ile başlıyordu.
+    # -------------------------------------------------------------------------
 
     def fire(self, shooter_id, target_id):
         """Hazır ilk füzeyi belirtilen hedefe at; uygulanırsa True, atılamazsa False."""

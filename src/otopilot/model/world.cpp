@@ -19,6 +19,8 @@ static void read_enemy_info(Aircraft& own, const Aircraft& target)
     // ... sonra silah: Engagement, yukarıda dolan geometriyi own.enemy'den okur.
     own.enemy.my_wez          = Engagement::wez(own);
     own.enemy.enemy_in_my_wez = Engagement::in_wez(own.enemy.range_3d_nm, own.enemy.my_wez);
+    own.enemy.stern_wez_nm     = Engagement::r_cold(own, target);
+    own.enemy.nez_nm           = Engagement::nez_nm(own, target);
     own.enemy.mar_nm           = Engagement::mar_nm(own, target);
     own.enemy.dor_nm           = Engagement::dor_nm(own, target);
 }

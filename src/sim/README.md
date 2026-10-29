@@ -24,7 +24,7 @@ Kurulum ve terminal sırası [çalıştırma kılavuzunda](../../docs/CALISTIRMA
 
 `create_agents()` BVRGym'i yoluna ekler ve nesne oluştururken geçici olarak model dizinine geçer. Her ajan için F-16 ve füze ayarları derin kopyalanır; bir uçağın ayarı diğerine sızmaz. Nesne kurulumu başarısız olsa da çağıranın çalışma dizini geri yüklenir.
 
-`type`, C++ profil etiketidir. Uçak fiziği `F16BVR`, mühimmat fiziği `AAMBVR` olarak kurulur. `ammo` kadar slot oluşturulur. Native XML çıkışı ve BVRGym içindeki gerçek zaman beklemesi kapatılır; beklemeyi `sim_main.py` yönetir. Füze config'inde `dive_at=25000` kullanılır.
+`type`, C++ profil etiketidir. Uçak fiziği `F16BVR`, mühimmat fiziği `AAMBVR` olarak kurulur. `ammo` kadar slot oluşturulur. Native XML çıkışı ve BVRGym içindeki gerçek zaman beklemesi kapatılır; beklemeyi `sim_main.py` yönetir. Füze config'i, uçakla aynı `Sim_time_step` dışında BVRGym'deki haliyle kullanılır.
 
 ## Bir adım
 
@@ -41,9 +41,9 @@ Süre kontrolü ilk uçağın fizik saatindeki başlangıca göre yapılır. Ba�
 
 ## Uçuş komutları ve atış
 
-`Simulation.step()` her uçak için tam bir `{id, heading_deg, altitude_m, throttle}` komutu ister. Bilinmeyen/tekrarlanan kimlik, eksik uçak, sonlu olmayan sayı, yönün `0..360` veya gazın `0..1` dışına çıkması hatadır. Komut listesi tamamen doğrulanmadan hiçbir uçak ilerletilmez. Ana döngüdeki atış emirleri bu doğrulamadan önce işlendiği için tüm mesajın işlemsel geri alınması sağlanmaz.
+`Simulation.step()` her uçak için tam bir `{id, heading_deg, altitude_m, throttle}` komutu ister; isteğe bağlı `g_limit` (`1.5..9 g`) dönüş yükünü sınırlar ve `cmd_g_limit` sütununa yazılır. Bilinmeyen/tekrarlanan kimlik, eksik uçak, sonlu olmayan sayı, yönün `0..360` veya gazın `0..1` dışına çıkması hatadır. Komut listesi tamamen doğrulanmadan hiçbir uçak ilerletilmez. Ana döngüdeki atış emirleri bu doğrulamadan önce işlendiği için tüm mesajın işlemsel geri alınması sağlanmaz.
 
-`fire(shooter_id, target_id)`, kendine atışı ve hazır mühimmat yokluğunu `False` ile sonuçlandırır. Hazır ilk slotun hedefini bağlar ve fırlatır. Havadaki başka füze yeni atışı engellemez. `launch()` sonrası yeniden başlatma, taşıyıcının gerçek hava hızını m/s olarak kullanır; bu, BVRGym fırlatma yolundaki Mach/m/s uyuşmazlığını bu katmanda karşılar.
+`fire(shooter_id, target_id)`, kendine atışı ve hazır mühimmat yokluğunu `False` ile sonuçlandırır. Hazır ilk slotun hedefini bağlar ve fırlatır. Havadaki başka füze yeni atışı engellemez. Fırlatma BVRGym `launch()` ile olduğu gibi yapılır. BVRGym `reset()`'e taşıyıcının Mach sayısını m/s diye verdiği için füze neredeyse sıfır hızla başlar; bu uyuşmazlık bu katmanda düzeltilmez.
 
 ## Fizik ve kontrol zamanları
 
@@ -53,17 +53,25 @@ Uçak `F16BVR._step()` içinde yön ve irtifa hatasını bir iç çevrim başın
 
 ## Yön ve irtifa kontrolü
 
-`install()` her uçağın kendi `AircraftPIDAutopilot` nesnesine kontrol fonksiyonunu bağlar. Dikey ivme isteği irtifa hatası ve dikey hız sönümünden gelir. Büyük yön hatasında sert dönüş yatışı, küçük hatada koordineli dönüş yatışı kullanılır. Elevator PI kontrolü, yatışta irtifayı koruyacak yük faktörünü izler.
+`install()` her uçağın kendi `AircraftPIDAutopilot` nesnesine kontrol fonksiyonunu bağlar; BVRGym kaynağı değişmez. Zincir: irtifa hatası → istenen dikey hız → istenen dikey ivme → yatış → hedef g → elevator PI. Büyük irtifa değişimi de aynı yoldan, dikey hız sınırıyla yapılır; BVRGym'in kendi kontrolüne devredilmez.
+
+Dönüşte çekilecek en büyük yük komuttaki isteğe bağlı `g_limit` alanından gelir (yoksa `DEFAULT_TURN_G`). Büyük yön hatasında sert dönüş: yatış `acos((1 + a/g) / g_limit)`, yatış oturmadan çekilir; alçalma istenirse yatış 90°'ye yaklaşır ve uçak burun aşağı döner (out). Küçük hatada koordineli dönüş, yatış `acos(1 / g_limit)` ile sınırlı (crank, beam, recommit için düşük `g_limit`). Elevator, yatışta istenen dikey ivmeyi verecek yükü izler. Elevator 1 s'den uzun tam çekişte kalırsa (F-16 uçuş kontrol bilgisayarı yavaş hızda yükü sınırlar) yatış ulaşılan g'ye göre kurulur.
 
 | Ayar | Mevcut değer / rol |
 |---|---|
-| `K_ALT`, `K_VS` | `0.04`, `0.4`; irtifa hatası ve dikey hız |
-| `A_MAX` | `3 m/s²`; dikey düzeltme sınırı |
-| `N_MIN`, `N_MAX` | `0.5`, `6 g`; kontrolün istediği yük sınırları |
+| `K_H`, `K_VZ` | `0.08`, `0.5` 1/s; irtifa hatası → dikey hız → dikey ivme (ω 0,2 rad/s, aşmasız) |
+| `VZ_UP_MAX`, `VZ_DOWN_MAX` | `60`, `120 m/s`; tırmanma/alçalma hız sınırı |
+| `A_UP_MAX`, `A_DOWN_MAX` | `1 g`; dikey ivme komutu sınırı |
+| `A_UP_HARD` | `0.3 g`; sert dönüşte yatışı küçülten yukarı düzeltme sınırı (öncelik dönüş) |
+| `DEFAULT_TURN_G` | `6 g`; komutta `g_limit` yoksa |
+| `N_MIN` | `0.5 g`; alt yük sınırı |
+| `ENTRY_G` | `1 g`; sert dönüşe girişte yatış oturmadan izin verilen ek dikey yük |
+| `SATURATED_S` | `1 s`; tam çekiş süresi, sonrası yatış ulaşılan g'ye göre |
 | `TAU_HEAD` | `2 s`; küçük yön hatasını kapatma süresi |
-| `BIG_ALT_CHANGE_M` | `1500 m`; üzerinde BVRGym'in özgün kontrolü kullanılır |
 
-Büyük irtifa hatasına geçildiğinde integral sıfırlanır. Normal bölgede integral mevcut elevator komutundan başlatılır. Bu kontrol, C++ profilindeki `max_g` veya `max_mach` değerlerinden otomatik ayarlanmaz.
+Gaz komutu doğrudan uygulanır. F-16 modelinde `0..0.5` rölantiden askeri güce (MIL), `0.5..1.0` art yakıcı aralığıdır (`fcs/throttle-cmd-norm` × 2, motor `augmethod 2`).
+
+Ölçüm (180° dönüş, 6 g): 5 km / 460 m/s'de 169°'ye 24 s, en fazla +235 ft; 3300 ft alçalma komutuyla 25 s ve hız 905 → 957 kt. 3 g crank 50°: 14.5 s, +224 ft.
 
 ## Kayıt
 

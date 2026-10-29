@@ -4,16 +4,36 @@
 
 FlightCommand Hold::compute(const Aircraft& fighter, const FlightCommand& current)
 {
-    (void)fighter;     // hold ölçüme bakmaz
-    return current;    // aynı yön, irtifa ve gaz
+    FlightCommand command;     // hold ölçüme bakmaz
+    command.altitude_ft = fighter.kinematics.altitude_ft;
+    command.heading_deg_180 = fighter.kinematics.heading_deg_180;
+    command.throttle = current.throttle;
+    
+    return command;    // aynı yön, irtifa ve gaz
+}
+
+void Out::begin(const Aircraft& fighter)
+{
+    const double entry_ft = fighter.kinematics.altitude_ft;
+    const double wanted_ft = entry_ft - descend_ft_;
+
+    double lowest_ft = floor_ft_;
+    if (entry_ft < floor_ft_)
+    {
+        lowest_ft = entry_ft;
+    }
+
+    target_altitude_ft_ = std::max(wanted_ft, lowest_ft);
 }
 
 FlightCommand Out::compute(const Aircraft& fighter, const FlightCommand& current)
 {
-    FlightCommand command = current;   // irtifa ve gaz aynı kalacak; yalnızca yön değişir
+    FlightCommand command = current;
 
     command.heading_deg_180 = wrap_180(fighter.enemy.bearing_deg - 180);
-    command.throttle = 0.99;
+    command.altitude_ft = target_altitude_ft_;   // begin()'de hesaplanan sabit hedef
+    command.throttle = 1.00;                     // tam art yakıcı
+    command.g_limit = fighter.profile.out_g;     // NEZ/MAR ile aynı g
 
     return command;
 }

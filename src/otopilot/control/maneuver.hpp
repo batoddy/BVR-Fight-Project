@@ -29,10 +29,15 @@ private:
 class Out : public Maneuver
 {
 public:
+    // ilk girişte çağrılır
+    void begin(const Aircraft& fighter);
+
     FlightCommand compute(const Aircraft& fighter, const FlightCommand& current) override;
 
 private:
-    // Manevranın kendi ayarları ve durumu burada durur (ör. hangi tarafa crank, pay açısı).
+    double descend_ft_ = 3300.0;       // ft, out'ta ne kadar alçalınacak
+    double floor_ft_ = 10000.0;        // ft, out bunun altına indirmez
+    double target_altitude_ft_ = 0;    // ft, begin()'de bir kez hesaplanır, out boyunca sabit
 };
 
 class In : public Maneuver

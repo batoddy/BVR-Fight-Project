@@ -16,6 +16,53 @@ FlightCommand OtopilotFighter::step(
         fighter.phase = Phase::Hold;
         command_ = maneuvers_.hold.compute(fighter, command_);
 
+        if (fighter.enemy.range_3d_nm < fighter.enemy.mar_nm)
+        {
+            state_ = 1;
+            maneuvers_.out.begin(fighter);
+        }
+        break;
+
+    case 1:
+        fighter.phase = Phase::Out;
+        command_ = maneuvers_.out.compute(fighter, command_);
+        if (std::fabs(fighter.enemy.ata_deg) > 177)
+        {
+            state_ = 2;
+        }
+        break;
+
+    case 2:
+        fighter.phase = Phase::Hold;
+        command_ = maneuvers_.hold.compute(fighter, command_);
+        break;
+
+    default:
+        break;
+    }
+
+    return command_;
+}
+/*
+
+#include "control/otopilot_fighter.hpp"
+
+#include <cmath>
+
+FlightCommand OtopilotFighter::step(
+    Aircraft& fighter,
+    const World& world,
+    const FlightCommand& current)
+{
+    // Python'un son uyguladığı komutla başla.
+    command_ = current;
+
+    switch (state_)
+    {
+    case 0:
+        fighter.phase = Phase::Hold;
+        command_ = maneuvers_.hold.compute(fighter, command_);
+
         if (fighter.enemy.enemy_in_my_wez)
         {
             state_ = 1;
@@ -87,3 +134,5 @@ FlightCommand OtopilotFighter::step(
 
     return command_;
 }
+
+*/

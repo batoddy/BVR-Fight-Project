@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-double Aircraft::get_turn_radius_nm() const
+double Aircraft::get_turn_radius_mt() const
 {
     // Hızı knot'tan m/s'ye çevir.
     const double speed_mps = knot_to_mps(kinematics.tas_kt);
@@ -15,20 +15,58 @@ double Aircraft::get_turn_radius_nm() const
     const double radius_m = (speed_mps * speed_mps) /
         (GRAVITY_MPS2 * std::sqrt(n * n - 1.0));
 
-    return meter_to_nmile(radius_m);
+    return radius_m;
 }
 
-double Aircraft::get_out_distance_nm(const Aircraft& enemy) const
+double Aircraft::get_after_out_speed_kt() const
 {
-    (void)enemy;
-    return 0.0;
+    return kinematics.tas_kt;
 }
 
-double Aircraft::get_in_distance_nm(const Aircraft& enemy) const
+// Out dönüşü süresi: Δt = Δψ · r / V
+//   Δψ: düşmanı kuyruğa almak için dönülecek açı = 180° - |ATA|  (radyan)
+//   r:  dönüş yarıçapı (m)
+//   V:  dönüş boyunca ortalama hız (m/s)
+double Aircraft::get_out_time_spend_sec() const
 {
-   (void)enemy;
-   return 0.0;
+    // ATA ±180; işaret yalnız dönüş yönünü söyler, açı için mutlak değer.
+    const double turn_deg = 180.0 - std::fabs(enemy.ata_deg);
+    const double turn_rad = DEG_TO_RAD * turn_deg;
+
+    // Yay uzunluğu: açı · yarıçap
+    const double arc_m = turn_rad * get_turn_radius_mt();
+
+    // giriş ve çıkış hızı sabit olarak hesaplama yapılıyor. 
+    // Dönüş başı ve sonu hızlarının ortalaması, m/s
+    const double average_kt = (kinematics.tas_kt + get_after_out_speed_kt()) / 2.0;
+    const double average_mps = knot_to_mps(average_kt);
+
+    return arc_m / average_mps;
 }
+
+// Out dönüşü bitince düşmana yatay mesafedeki değişim, NM; + yaklaştık, - uzaklaştık.
+// Düşman bakışında eksenler: x düşmana doğru, y yana. Dönüş yayının bitiş noktası:
+//   x = -r · sin|ATA|
+//   y =  r · (1 + cos|ATA|)
+//   yeni mesafe = sqrt((R - x)² + y²)
+//   yaklaşma    = R - yeni mesafe
+double Aircraft::get_out_approach_nm() const
+{
+    const double radius_m = get_turn_radius_mt();
+    const double ata_rad = DEG_TO_RAD * std::fabs(enemy.ata_deg);
+
+    // Dönüş bitince düşmana göre konumumuz (dönüş başı orijin)
+    const double x_m = -radius_m * std::sin(ata_rad);
+    const double y_m = radius_m * (1.0 + std::cos(ata_rad));
+
+    // Dönüş bitince düşmana yatay mesafe
+    const double range_m = nmile_to_meter(enemy.range_2d_nm);
+    const double along_m = range_m - x_m;
+    const double new_range_m = std::sqrt(along_m * along_m + y_m * y_m);
+
+    return meter_to_nmile(range_m - new_range_m);
+}
+
 
 bool Aircraft::fire_missile(const MissileProfile& type)
 {

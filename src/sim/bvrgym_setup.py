@@ -68,10 +68,6 @@ def _create_agent(settings, sim_time_step):
     aircraft.aircraft_simulation.Sim_time_step = sim_time_step
     missile.missile_simulation.Sim_time_step = sim_time_step
 
-    # Mevcut dalış ayarı: yüksekten gelen füze inişe daha erken başlayabilsin.
-    # Önceki denemelerin açıklaması README'deki uçuş ayarları bölümündedir.
-    missile.missile_navigation.dive_at = 25e3
-
     for config in (aircraft, missile):
         config.data_output_xml = None
         config.fg_sleep_time = None  # Gerçek zaman beklemesini ana döngü yönetir.

@@ -24,6 +24,9 @@ public:
 
     static double f_pole_nm(const Aircraft& own, const Aircraft& enemy);
 
+    static double r_cold(const Aircraft& own, const Aircraft& enemy);
+
+    static double nez_nm(const Aircraft& own, const Aircraft& enemy);
 
     // NM, Minimum Abort Range
     static double mar_nm(const Aircraft& own, const Aircraft& enemy);

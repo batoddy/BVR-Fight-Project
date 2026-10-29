@@ -70,6 +70,7 @@ COMMAND_COLUMNS = (
     ("cmd_heading_deg", "deg"),
     ("cmd_alt_ft", "ft"),
     ("cmd_throttle_norm", "-"),
+    ("cmd_g_limit", "g"),
 )
 
 # C++ hesap dosyası. Sütunları C++ belirler (ilk mesajdaki anahtarlar); başta bunlar.
@@ -85,8 +86,12 @@ class Recorder:
     # KAYIT KLASÖRÜ VE DOSYALARIN YAŞAM DÖNGÜSÜ
     # =========================================================================
 
-    def __init__(self, directory, scenario=None):
-        self.directory = Path(directory) / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    def __init__(self, directory, scenario=None, name=None):
+        # name verilmezse klasör adı başlangıç zamanıdır. Aynı adlı klasör varsa
+        # mkdir hata verir; eski kayıt üzerine yazılmaz.
+        if name is None:
+            name = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        self.directory = Path(directory) / name
         self.directory.mkdir(parents=True)
         self.scenario = scenario
         self.created_at = datetime.now().isoformat(timespec="seconds")
@@ -225,11 +230,13 @@ class Recorder:
         name, team = agent.conf.agent_name, agent.conf.team
         command = None
         if commands is not None and key in commands:
-            heading_deg, altitude_m, throttle = commands[key]
+            heading_deg, altitude_m, throttle, g_limit = commands[key]
             # Python uçuş komutu metre; CSV irtifa komutu feet olarak saklanır.
+            # g_limit gelmediyse hücre boş kalır (kontrolcü varsayılanı kullandı).
             command = dict(cmd_heading_deg=heading_deg,
                            cmd_alt_ft=altitude_m / METERS_PER_FOOT,
-                           cmd_throttle_norm=throttle)
+                           cmd_throttle_norm=throttle,
+                           cmd_g_limit=g_limit)
 
         prefix = f"{key}__aircraft"
         filename = f"{AIRCRAFT_MODEL} ({name}--{key}) [{team}].csv"

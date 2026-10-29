@@ -2,7 +2,11 @@
 
 Workspace içinden: python src/sim/sim_main.py
 Python ölçüm gönderir, C++ komutunu bekler, ardından bir adım ilerler.
+
+İsteğe bağlı parametreler (verilmeyen YAML'daki değerle kalır):
+  python src/sim/sim_main.py --name deneme1 --altitude 8000 --throttle 0.9
 """
+import argparse
 import sys
 import time
 
@@ -23,13 +27,38 @@ else:
 # =============================================================================
 
 
+def read_arguments():
+    parser = argparse.ArgumentParser(description="BVRGym simülasyonunu C++ otopilotla çalıştır.")
+    parser.add_argument("--name", help="Kayıt klasörünün adı (recordings/<name>). Yoksa tarih-saat.")
+    parser.add_argument("--altitude", type=float, help="İki uçağın da başlangıç irtifası, MSL metre.")
+    parser.add_argument("--throttle", type=float, help="İki uçağın da başlangıç gaz komutu, 0..1.")
+    arguments = parser.parse_args()
+    if arguments.throttle is not None and not 0.0 <= arguments.throttle <= 1.0:
+        parser.error("--throttle 0..1 aralığında olmalı.")
+    return arguments
+
+
 def main():
+    arguments = read_arguments()
+
     # Kurulum tek sefer yapılır; fizik yalnız simulation.step() ile ilerler.
     scenario = load_scenario()
+
+    # Verilen irtifa her uçağın YAML'daki spawn.alt'ının yerine geçer. İlk irtifa
+    # komutu da spawn.alt'tan alındığı için uçaklar bu irtifayı korur.
+    if arguments.altitude is not None:
+        for settings in scenario["agents"].values():
+            settings["spawn"]["alt"] = arguments.altitude
+
+    # Verilen gaz her uçağın YAML'daki throttle'ının yerine geçer.
+    if arguments.throttle is not None:
+        for settings in scenario["agents"].values():
+            settings["throttle"] = arguments.throttle
+
     simulation = Simulation(scenario, WORKSPACE / "BVRGym")
     network = scenario["connection"]
 
-    with Recorder(WORKSPACE / "recordings", scenario=scenario) as recorder:
+    with Recorder(WORKSPACE / "recordings", scenario=scenario, name=arguments.name) as recorder:
         print("Kayıt:", recorder.directory, flush=True)
         # İlk ölçümü de kaydet: C++ ilk kararını bu durum üzerinden verecek.
         recorder.record(simulation.agents, simulation.commands)
@@ -178,47 +207,28 @@ if __name__ == "__main__":
 # 1. UÇUŞ KONTROLÜ — dışarıdan, oluşturulan her uçak nesnesine bağlanır.
 #    Yer: src/sim/flight_control.py → install(), _control()
 #    AircraftPIDAutopilot.get_control_input yerine bizim kontrolümüz çalışır.
-#    Yön/irtifa hatası yatış ve hedef yük faktörüne çevrilir; elevator PI kontrolü
-#    ile uygulanır. Sert dönüş hedefi 6 g, yük faktörü sınırları 0,5..6 g'dir.
-#    İrtifa hatası 1500 m'yi aşınca orijinal get_control_input çağrılır.
+#    İrtifa hatası dikey hız ve dikey ivmeye, yön hatası yatışa çevrilir; hedef yük
+#    elevator PI kontrolüyle izlenir. Dönüş yükü komuttaki isteğe bağlı g_limit'ten
+#    gelir (yoksa 6 g). Büyük irtifa değişimi de bu kontrolle yapılır; BVRGym'e devredilmez.
+#    Aç/kapa: flight_control.py → FLIGHT_CONTROL_ENABLED (1 bizim kontrol, 0 BVRGym'in kendi PID'i).
 #
 # 2. ATIŞ — BVRGym'in launch_missile() yolu yerine hazır slot doğrudan kullanılır.
 #    Yer: src/sim/simulation.py → Simulation.fire()
 #    BaseBVRAgent.launch_missile() havada kendi füzesi varken yeni atışı engeller.
-#    Biz C++'tan açık atış emri gelince ilk hazır füzeye hedef atayıp launch()
+#    Biz C++'tan açık atış emri gelince ilk hazır füzeye hedef atayıp BVRGym launch()'ını
 #    çağırırız; havada başka bir füzenin bulunması yeni atışı engellemez.
 #    Ajan olarak BaseBVRAgent kullanılır; atış kararını C++ verir.
 #
-# 3. ATIŞTA HIZ BİRİMİ — launch() sonrasında başlangıç durumu düzeltilir.
-#    Yer: src/sim/simulation.py → Simulation.fire()
-#    Orijinal AAMBVR.launch(), reset()'e hız olarak Mach verir; reset() m/s bekler.
-#    Bu nedenle füze aynı konum ve yönde, taşıyıcının get_true_airspeed() değeriyle
-#    yeniden reset edilir. Düzeltme Simulation.fire() yolunda uygulanır.
+# 3. FÜZE — fırlatma, güdüm, config ve sonlanma BVRGym'deki haliyle kullanılır.
+#    AAMBVR.launch() reset()'e hız olarak Mach verir (reset() m/s bekler); düzeltilmez.
 #
 # 4. KURULUM AYARLARI — orijinal config'lerin ajan başına kopyalarına uygulanır.
 #    Yer: src/sim/bvrgym_setup.py → _copy_config(), _create_agent()
-#    Uçak ve füzenin Sim_time_step değeri scenario.yaml'dan alınır.
-#    Füzenin dive_at değeri 15 km yerine 25 km yapılır; hedefe yaklaşırken seyir
-#    irtifasından hedefe dalışa daha erken geçmesi amaçlanır.
+#    Uçak ve füzenin Sim_time_step değeri scenario.yaml'dan alınır; ikisi aynı adımla ilerler.
 #    data_output_xml ve fg_sleep_time kapatılır. Kayıt Recorder ile, gerçek zaman
 #    beklemesi sim_main.py içindeki world.sleep_s ile yönetilir.
 #
-# 5. FÜZENİN SONLANMASI — BVRGym kaynak dosyaları doğrudan değiştirildi.
-#    Yer: BVRGym/jsb_gym/simObjects/missiles.py → AAMBVR.step()
-#    Orijinalde ilk ivmelenme aşamasından sonra Mach 1 altına düşen füze kayıp
-#    sayılıyordu. Bu kontrol is_speed_low() ile gerçek hava hızına (m/s) çevrildi.
-#    target_lost_below_mach yerine target_lost_below_speed_mps alanı kullanılır:
-#      BVRGym/data_classes/missile_dataclass.py → MissilePerformance
-#      BVRGym/jsb_gym/simObjects/config/AAM_config.py → missile_performance
-#    Hız eşiği 200 m/s'dir; orijinal ilk ivmelenme aşaması koruması sürer.
-#    Mevcut irtifa eşiği 0 m'dir:
-#    get_altitude() < target_lost_below_alt olduğunda kayıp sayılır.
-#    İsabet kontrolü de uçuşu sonlandırır; mevcut etkin yarıçap 300 m'dir.
-#    Hız/irtifa sınırı veya isabet oluşunca step() hemen döner; kalan fizik alt
-#    adımları çalıştırılmaz. Hız ve irtifa kontrolleri isabetten önce yapılır.
-#    is_target_lost() çağrısı orijinalde de yorum satırıydı; şu anda da kapalıdır.
-#
-# 6. DIŞ KONTROL DÖNGÜSÜ — Python ölçüm gönderir, C++ kararını bekleyip ilerler.
+# 5. DIŞ KONTROL DÖNGÜSÜ — Python ölçüm gönderir, C++ kararını bekleyip ilerler.
 #    Yer: src/sim/sim_main.py, simulation.py, connector.py, recorder.py
 #    Uçuş ve atış emirleri TCP üzerinden gelir; durum okuma fiziği ilerletmez.
 #    BVRGym apply_action() çağrısı önce uçağı, sonra onun aktif füzelerini uçurur.

@@ -16,6 +16,20 @@ export function velocityVector(entity){
   const speed=Math.hypot(east,north,up);
   return speed>1e-3?{east,north,up,speed}:null;
 }
+// Düşman merkezli taktik bölgeler: yarıçap seçili uçağın kendi hesabından (C++ *_nm → *_m),
+// çember hedefin etrafında. Seçili uçak çemberin içindeyse (range_3d < yarıçap) çizgi belirginleşir.
+// 2D ve 3D aynı listeyi kullanır; sıra içten dışa beklenen sıradır.
+// style: 'line' düz çizgi, 'dash' kesikli çizgi, 'hatch' içi çapraz taralı daire + çizgi.
+// Renkler radar renkleriyle (RADAR_COLORS) çakışmaz.
+export const ENEMY_ZONES=[
+  {key:'sternWez',field:'stern_wez_m',label:'Stern WEZ',style:'line',dark:'#f9a24b',light:'#b45309'},
+  {key:'nez',field:'nez_m',label:'NEZ',style:'hatch',dark:'#f05252',light:'#b91c1c'},
+  {key:'mar',field:'mar_m',label:'MAR',style:'dash',dark:'#facc15',light:'#8a6d00'},
+  {key:'dor',field:'dor_m',label:'DOR',style:'line',dark:'#22d3ee',light:'#0e7490'},
+];
+// Radar açısı rengi takıma göre: mavi takım yeşil, kırmızı takım mor (uçak renkleriyle karışmasın).
+export const RADAR_COLORS={blue:{dark:'#4ade80',light:'#15803d'},red:{dark:'#c084fc',light:'#7e22ce'}};
+export const radarColor=(team,dark)=>(RADAR_COLORS[team]||RADAR_COLORS.blue)[dark?'dark':'light'];
 export const toNauticalMiles=meters=>meters/METERS_PER_NM;
 export const toFeet=meters=>meters/METERS_PER_FOOT;
 export const SPEED_UNITS={mps:{symbol:'m/s',factor:1,digits:1,labelDigits:0},kmh:{symbol:'km/sa',factor:3.6,digits:1,labelDigits:0},kms:{symbol:'km/s',factor:.001,digits:3,labelDigits:2},kts:{symbol:'kt',factor:3600/1852,digits:1,labelDigits:0},mach:{symbol:'Mach',digits:2,labelDigits:2}};
@@ -38,6 +52,14 @@ export function speedValue(entity,unit='mps'){
   if(unit==='mach')return Number.isFinite(entity.mach)?entity.mach:Number.isFinite(entity.estimated_mach)?entity.estimated_mach:null;
   const speed=Number.isFinite(entity.true_airspeed_mps)?entity.true_airspeed_mps:entity.position_speed_mps;
   return Number.isFinite(speed)?speed*(SPEED_UNITS[unit]||SPEED_UNITS.mps).factor:null;
+}
+
+// Füze etiketi: atıştan beri geçen süre ve gidilen yol, ör. "t+12,3 s · 8,40 km".
+export function flightLabel(entity,unit='nm'){
+  const seconds=entity.sim_time_s-entity.start_s;
+  const time=Number.isFinite(seconds)?'t+'+seconds.toLocaleString('tr-TR',{minimumFractionDigits:1,maximumFractionDigits:1})+' s':'t+—';
+  const path=Number.isFinite(entity.path_m)?distanceLabel(entity.path_m,unit,2):'—';
+  return time+' · '+path;
 }
 
 export function speedLabel(entity,unit='mps'){

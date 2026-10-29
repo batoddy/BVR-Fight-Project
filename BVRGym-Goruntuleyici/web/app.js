@@ -4,11 +4,13 @@ import {Scene as Scene2D} from './scene2d.js';
 import {setupRecordingMenu} from './recording-menu.js';
 import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,altitudeValue,altitudeReferenceInfo,speedValue,distanceLabel,munitionState,angleLabel,sideAngleLabel} from './units.js';
 import {inventoryPanel} from './inventory.js';
+import {Ruler} from './ruler.js';
 
 const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
   altitudeGuides:true,velocityGuides:true,objectScale:1,trail:true,trailDuration:300,history:true,grid:true,basemap:false,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm',
-  overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true};
+  overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true,
+  overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDor:true};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
@@ -110,6 +112,8 @@ function setMode(value){
   el('camera-help').textContent=value==='3d'?'Sol tuş: döndür · Sağ tuş: taşı':'Sürükle: taşı · Tekerlek: yakınlaştır';
 }
 setMode(preferences.mode);el('view-3d').onclick=()=>setMode('3d');el('view-2d').onclick=()=>setMode('2d');
+const ruler=new Ruler(el('scene').parentElement,()=>scene,active=>el('ruler').setAttribute('aria-pressed',String(active)));
+el('ruler').onclick=()=>ruler.setActive(!ruler.active);
 function camera(value){
   preferences.camera=value;scene.follow=false;preferences.follow=false;
   if(value==='all'){
@@ -140,7 +144,8 @@ el('label-mode').value=['all','selected','none'].includes(preferences.labelMode)
 for(const id of ['basemap','altitude-guides','velocity-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','missile-outcomes','trail-duration','label-mode'])el(id).onchange=viewSettings;
 viewSettings();updateFollow();
 // Sahnede gösterilecek otopilot hesapları: sağ paneldeki seçimler.
-const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar']];
+const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar'],
+  ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dor','overlayDor']];
 function overlaySettings(){
   for(const [id,key] of overlayInputs)preferences[key]=el(id).checked;
   for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect'])el(id).disabled=!preferences.overlayLine;
@@ -283,7 +288,9 @@ function analysis(){
   return {entity,calc:entity.calc,target:target&&allowed(target)?target:null,
     options:{line:preferences.overlayLine,ata:preferences.overlayAta,bearing:preferences.overlayBearing,
       range:preferences.overlayRange,aspect:preferences.overlayAspect,radar:preferences.overlayRadar,
-      ownWez:preferences.overlayOwnWez,enemyWez:preferences.overlayEnemyWez}};
+      ownWez:preferences.overlayOwnWez,enemyWez:preferences.overlayEnemyWez,
+      // Anahtarlar units.js ENEMY_ZONES key'leriyle aynı.
+      zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dor:preferences.overlayDor}}};
 }
 // C++ aircraft.hpp enum class Phase ile aynı sırada.
 const PHASE_NAMES=['HOLD','FIRE','OUT','IN','CRANK','NOTCH'];
@@ -304,6 +311,7 @@ function relativePanel(first,entity){
   el('calc-enemy-in-my-wez').textContent=yes(calc?.enemy_in_my_wez??calc?.in_wez);
   el('calc-me-in-enemy-wez').textContent=yes(calc?.me_in_enemy_wez);
   el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dor').textContent=distance(calc?.dor_m);
+  el('calc-stern-wez').textContent=distance(calc?.stern_wez_m);el('calc-nez').textContent=distance(calc?.nez_m);
 }
 function renderList(){
   if(!buffer.complete)return;
@@ -473,7 +481,8 @@ function render(timestamp){
   const bounds=buffer.bounds();if(canPlay&&bounds&&viewTime>=bounds.last)paused=true;
   const tracked=buffer.at(selected,viewTime);
   if(selected&&scene.follow&&(!tracked||!allowed(tracked))){scene.follow=false;preferences.follow=false;save();updateFollow();}
-  renderList();scene.analysis=analysis();scene.draw(buffer.complete?renderEntities():[],buffer,viewTime??0,selected);
+  renderList();scene.analysis=analysis();const entities=buffer.complete?renderEntities():[];
+  scene.draw(entities,buffer,viewTime??0,selected);ruler.draw(entities,buffer,viewTime??0);
   if(!webglError&&preferences.mode==='3d'){const north=scene.controls.target.clone().set(0,0,-1).applyQuaternion(scene.camera.quaternion.clone().invert());el('north-arrow').style.transform=`rotate(${Math.atan2(north.x,north.y)*180/Math.PI}deg)`;}
   else el('north-arrow').style.transform='none';
   if(timestamp-lastLabels>150){labels();lastLabels=timestamp;}

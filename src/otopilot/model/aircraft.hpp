@@ -133,6 +133,8 @@ struct EnemyInfo
     Wez my_wez;                    // benim WEZ'im: ilk füzem (missiles[0]) bu düşmana karşı      | Engagement::wez
     bool enemy_in_my_wez = false;  // düşman benim WEZ'imde mi: my_wez.min_nm < range < my_wez.max_nm | Engagement::in_wez
     bool me_in_enemy_wez = false;  // ben düşmanın WEZ'inde miyim: karşı uçağın enemy_in_my_wez'i | World::update
+    double stern_wez_nm = 0;   // NM, düşman füzesinin biz kaçarken yetişebileceği mesafe | Engagement::r_cold
+    double nez_nm = 0;         // NM, düşman füzesinden kaçamayacağımız mesafe            | Engagement::nez_nm
     double mar_nm = 0;              // NM, Minimum Abort Range                                     | Engagement::mar_nm
     double dor_nm = 0;              // NM, Desired Out Range                                       | Engagement::dor_nm
 };
@@ -159,10 +161,10 @@ struct Aircraft
 
     EnemyInfo enemy;                // hesaplanan: karşı uçağa göre
 
-    double get_turn_radius_nm() const;
-    double get_in_distance_nm(const Aircraft& enemy) const;
-
-    double get_out_distance_nm(const Aircraft& enemy) const;
+    double get_turn_radius_mt() const;
+    double get_out_time_spend_sec() const;
+    double get_after_out_speed_kt() const;
+    double get_out_approach_nm() const;
     // Füze at: o tipteki (FOX1 / FOX2 / FOX3) ilk atılmamış slot. Bu step launch emri gider.
     // O tipte füze kalmadıysa ya da bu step emri verilmiş bir füze varsa false döner; havadaki füze engel değil.
     bool fire_missile(const MissileProfile& type);
