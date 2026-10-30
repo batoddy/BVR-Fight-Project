@@ -18,11 +18,11 @@ agents:
     type: F16
     team: Blue
     ammo: 4
-    throttle: 0.90  # Başlangıç gaz komutu. 
+    throttle: 0.45  # Başlangıç gaz komutu. 
     spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
-      lat: 58.8
+      lat: 59.2
       long: 18.0
-      alt: 5000
+      alt: 6000
       vel: 300
       heading: 0
 
@@ -31,10 +31,10 @@ agents:
     type: F16
     team: Red
     ammo: 2
-    throttle: 0.90  # [0 - 0.5] normal güç,  [0.5 - 1.0] arası art yakıcı
+    throttle: 0.45  # [0 - 0.5] normal güç,  [0.5 - 1.0] arası art yakıcı
     spawn:
       lat: 60.0
       long: 18.0
-      alt: 5000
+      alt: 6000
       vel: 300
       heading: 180

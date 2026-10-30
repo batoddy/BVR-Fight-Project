@@ -51,66 +51,32 @@ double Engagement::f_pole_nm(const Aircraft& own, const Aircraft& enemy)
     return range_nm - own.enemy.rate_of_closure_kt * hit_time_s / SECONDS_PER_HOUR;
 }
 
-// R_cold = s* - V_kaçış · τ*
+// r_cold_nm = s* - V_kaçış · τ*
 //   s*, τ*: füzenin hızı V_kaçış'a düştüğünde uçtuğu yol ve geçen süre (glide_table)
 // Tablo eşit adımlı: satır = (Mach - ilk Mach) / adım; iki satır arası doğrusal.
-double Engagement::r_cold(const Aircraft& own, const Aircraft& enemy)
+double Engagement::r_cold_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    const std::vector<MissileGlidePoint>& table = enemy.missiles[0].profile.glide_table_10km;
+    (void)enemy;
 
-    // Kaçış hızımızı tablonun Mach'ına çevir.
-    const double escape_mps = knot_to_mps(own.get_after_out_speed_kt());
-    const double escape_mach = escape_mps / 299.5;
+    // Kaçan hedefe atış taramasından (4-10 km, 560-870 kt) üstel uyum.
+    const double x = feet_to_meter(own.kinematics.altitude_ft) / 1000.0 - 10.0;   // km
+    const double y = own.get_after_out_speed_kt() - 700.0;                         // kt
 
-    const double lowest_mach = table.front().mach;    // eğrinin sonu
-    const double highest_mach = table.back().mach;    // tepe hız
-    const double mach_step = table[1].mach - table[0].mach;
+    const double r_cold_nm = std::exp(2.646  + 0.1523 * x - 0.00201 * y - 0.00008 * x * y);
 
-     // Tepe hızdan hızlıysak füze hiç yetişemez.
-    if (escape_mach >= highest_mach)
-    {
-        return 0.0;
-    }
-
-    double stop_distance_m = 0.0;
-    double stop_time_s = 0.0;
-
-    if (escape_mach <= lowest_mach)
-    {
-        // Füze bizim hızımıza inmeden ömrü bitti: eğrinin sonu.
-        stop_distance_m = table.front().distance_m;
-        stop_time_s = table.front().time_s;
-    }
-    else
-    {
-        // Hangi iki satırın arasındayız: tam kısmı alt satır, kesirli kısmı oran.
-        const double position = (escape_mach - lowest_mach) / mach_step;
-        const size_t lower_index = static_cast<size_t>(position);
-        const double ratio = position - lower_index;
-
-        const MissileGlidePoint& lower = table[lower_index];
-        const MissileGlidePoint& upper = table[lower_index + 1];
-
-        stop_distance_m = lower.distance_m + ratio * (upper.distance_m - lower.distance_m);
-        stop_time_s = lower.time_s + ratio * (upper.time_s - lower.time_s);
-    }
-
-    // Füzenin yolu - bizim aynı sürede kaçtığımız yol.
-    const double escape_distance_m = escape_mps * stop_time_s;
-    const double stern_m = stop_distance_m - escape_distance_m;
-
-    return meter_to_nmile(stern_m);
+    return 1.1 * r_cold_nm;   // güvenlik payı: ölçülen bütün noktaları kapsar
 }
+
 
 // NM, No Escape Zone: düşman füzesini biz dönüşe başladığımız an atarsa kaçamayacağımız mesafe.
 // Füze dönüşümüz boyunca uçar; biz o sürede kaçamayız. Dönüş bitince kaçmaya başlarız.
-//   NEZ = R_cold + d + V_kaçış · Δt
-//     R_cold:          baştan kaçıyor olsaydık füzenin yetişeceği mesafe
+//   NEZ = r_cold_nm + d + V_kaçış · Δt
+//     r_cold_nm:          baştan kaçıyor olsaydık füzenin yetişeceği mesafe
 //     d:               dönüşte düşmana yaklaşmamız
 //     V_kaçış · Δt:    dönerken kaçamadığımız yol
 double Engagement::nez_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    const double cold_nm = r_cold(own, enemy);
+    const double cold_nm = r_cold_nm(own, enemy);
     const double approach_nm = own.get_out_approach_nm();
 
     const double turn_time_s = own.get_out_time_spend_sec();
@@ -122,13 +88,13 @@ double Engagement::nez_nm(const Aircraft& own, const Aircraft& enemy)
 
 // NM, Minimum Abort Range: dönüşün herhangi bir anında atılan füzeden kaçabileceğimiz en kısa mesafe.
 // Düşman dönüş boyunca (0..Δt) herhangi bir anda atabilir. İki uç durum:
-//   1) dönüş başında atar: füze Δt uçmuş, biz kaçamamışız      → R_cold + d + V_kaçış · Δt   (= NEZ)
-//   2) dönüş sonunda atar: düşman Δt boyunca bize yaklaşmış     → R_cold + d + V_düşman · Δt
+//   1) dönüş başında atar: füze Δt uçmuş, biz kaçamamışız      → r_cold_nm + d + V_kaçış · Δt   (= NEZ)
+//   2) dönüş sonunda atar: düşman Δt boyunca bize yaklaşmış     → r_cold_nm + d + V_düşman · Δt
 // Arası doğrusal; en kötüsü iki uçtan büyük olanı.
 //   MAR = max(1, 2) + patlama yarıçapı + out payı
 double Engagement::mar_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    const double cold_nm = r_cold(own, enemy);
+    const double cold_nm = r_cold_nm(own, enemy);
     const double approach_nm = own.get_out_approach_nm();
     const double turn_time_s = own.get_out_time_spend_sec();
 
@@ -147,8 +113,20 @@ double Engagement::mar_nm(const Aircraft& own, const Aircraft& enemy)
     return worst_nm + blast_nm + own.profile.out_offset_nm;
 }
 
+bool Engagement::is_in_mar(const Aircraft& own, const Aircraft& enemy)
+{
+    bool _is_in_mar = false;
+    
+    if(own.enemy.range_3d_nm <= mar_nm(own, enemy))
+    {
+        _is_in_mar = true;
+    }
+
+    return _is_in_mar;
+}
 
 double Engagement::dor_nm(const Aircraft& own, const Aircraft& enemy)
 {
  return 0;
 }
+

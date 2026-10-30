@@ -37,6 +37,7 @@ struct MissileProfile
     // Tablo tek bir koşulda ölçülmüştür (AIM-120C: 10 km, ses hızı 299.5 m/s).
     // Boşsa bu füze için eğri yok.
     std::vector<MissileGlidePoint> glide_table_10km;
+    double glide_factor = 1.0;    // birimsiz, tablodan okunan mesafe ve süre bununla çarpılır
 };
 // AIM-120C, 10 km, 45 kg yakıt, 7 s yanma. Mach-süre ve Mach-mesafe grafiklerinden
 // 0.1 Mach adımlarla ara değer alınarak türetildi. Yalnız tepe hızdan (3.3) sonrası.
@@ -80,4 +81,4 @@ inline const std::vector<MissileGlidePoint> AIM120C_GLIDE_TABLE_10KM = {
 inline const MissileProfile FOX1 = {"AIM-7M", MissileType::Fox1,   14, 1,   1750, 0.0, 10, AIM120C_GLIDE_TABLE_10KM};
 inline const MissileProfile FOX2 = {"AIM-9X", MissileType::Fox2,   6,  0.2, 1550, 0.0, 10, AIM120C_GLIDE_TABLE_10KM};
 //                                  name        type               max_nm   min_nm  speed_kt  pitbull_nm  blast_radius_ft  mach_by_time           mach_by_distance
-inline const MissileProfile FOX3 = {"AIM-120C", MissileType::Fox3, 27, 1,   1940, 8,   10, AIM120C_GLIDE_TABLE_10KM};
+inline const MissileProfile FOX3 = {"AIM-120C", MissileType::Fox3, 50, 1,   1940, 8,   10, AIM120C_GLIDE_TABLE_10KM, 1.8};

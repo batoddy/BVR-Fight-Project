@@ -133,8 +133,9 @@ struct EnemyInfo
     Wez my_wez;                    // benim WEZ'im: ilk füzem (missiles[0]) bu düşmana karşı      | Engagement::wez
     bool enemy_in_my_wez = false;  // düşman benim WEZ'imde mi: my_wez.min_nm < range < my_wez.max_nm | Engagement::in_wez
     bool me_in_enemy_wez = false;  // ben düşmanın WEZ'inde miyim: karşı uçağın enemy_in_my_wez'i | World::update
-    double stern_wez_nm = 0;   // NM, düşman füzesinin biz kaçarken yetişebileceği mesafe | Engagement::r_cold
+    double stern_wez_nm = 0;   // NM, düşman füzesinin biz kaçarken yetişebileceği mesafe | Engagement::r_cold_nm
     double nez_nm = 0;         // NM, düşman füzesinden kaçamayacağımız mesafe            | Engagement::nez_nm
+    bool is_in_mar = false;
     double mar_nm = 0;              // NM, Minimum Abort Range                                     | Engagement::mar_nm
     double dor_nm = 0;              // NM, Desired Out Range                                       | Engagement::dor_nm
 };

@@ -36,7 +36,6 @@ double Aircraft::get_out_time_spend_sec() const
     // Yay uzunluğu: açı · yarıçap
     const double arc_m = turn_rad * get_turn_radius_mt();
 
-    // giriş ve çıkış hızı sabit olarak hesaplama yapılıyor. 
     // Dönüş başı ve sonu hızlarının ortalaması, m/s
     const double average_kt = (kinematics.tas_kt + get_after_out_speed_kt()) / 2.0;
     const double average_mps = knot_to_mps(average_kt);

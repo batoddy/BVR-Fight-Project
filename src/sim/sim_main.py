@@ -4,7 +4,7 @@ Workspace içinden: python src/sim/sim_main.py
 Python ölçüm gönderir, C++ komutunu bekler, ardından bir adım ilerler.
 
 İsteğe bağlı parametreler (verilmeyen YAML'daki değerle kalır):
-  python src/sim/sim_main.py --name deneme1 --altitude 8000 --throttle 0.9
+  python src/sim/sim_main.py --name deneme1 --altitude 8000 --throttle 0.9 --range 20
 """
 import argparse
 import sys
@@ -32,9 +32,12 @@ def read_arguments():
     parser.add_argument("--name", help="Kayıt klasörünün adı (recordings/<name>). Yoksa tarih-saat.")
     parser.add_argument("--altitude", type=float, help="İki uçağın da başlangıç irtifası, MSL metre.")
     parser.add_argument("--throttle", type=float, help="İki uçağın da başlangıç gaz komutu, 0..1.")
+    parser.add_argument("--range", type=float, help="Başlangıç mesafesi, NM; red, blue'nun bu kadar kuzeyine konur.")
     arguments = parser.parse_args()
     if arguments.throttle is not None and not 0.0 <= arguments.throttle <= 1.0:
         parser.error("--throttle 0..1 aralığında olmalı.")
+    if arguments.range is not None and arguments.range <= 0.0:
+        parser.error("--range pozitif olmalı.")
     return arguments
 
 
@@ -54,6 +57,11 @@ def main():
     if arguments.throttle is not None:
         for settings in scenario["agents"].values():
             settings["throttle"] = arguments.throttle
+
+    # Verilen mesafe: red, blue ile aynı boylamda, 1 NM ≈ 1/60 derece enlem kuzeyine konur.
+    if arguments.range is not None:
+        agents = scenario["agents"]
+        agents["red"]["spawn"]["lat"] = agents["blue"]["spawn"]["lat"] + arguments.range / 60.0
 
     simulation = Simulation(scenario, WORKSPACE / "BVRGym")
     network = scenario["connection"]
