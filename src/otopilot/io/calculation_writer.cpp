@@ -1,5 +1,7 @@
 #include "io/calculation_writer.hpp"
 
+#include <optional>
+
 Json CalculationWriter::write(const World& world)
 {
     Json data;
@@ -7,36 +9,39 @@ Json CalculationWriter::write(const World& world)
     return data;
 }
 
-Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& target)
+Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
 {
     // Anahtar adları CSV sütun adı olur; birim adın sonunda (_nm, _kt, _deg).
-    Json j;
-    j["id"] = own.id;
-    j["target_id"] = target.id;
-    j["phase"] = static_cast<int>(own.phase);   // 0 Hold, 1 Fire, 2 Crank, 3 Out, 4 o
+    // Tel biçimi şimdilik eski adlarla: rate_of_closure_kt, enemy_closing_kt, stern_wez_nm.
+    // Değeri olmayan (optional) hesaplar 0 yazılır.
+    const Picture& picture = own.picture;
 
-    // Hesaplanan: World::update (EnemyInfo)
-    j["range_2d_nm"] = own.enemy.range_2d_nm;
-    j["range_3d_nm"] = own.enemy.range_3d_nm;
-    j["bearing_deg"] = own.enemy.bearing_deg;
-    j["ata_deg"] = own.enemy.ata_deg;
-    j["aspect_deg"] = own.enemy.aspect_deg;
-    j["los_north_nm"] = own.enemy.los_nm.north;
-    j["los_east_nm"] = own.enemy.los_nm.east;
-    j["los_down_nm"] = own.enemy.los_nm.down;
-    j["rate_of_closure_kt"] = own.enemy.rate_of_closure_kt;
-    j["enemy_closing_kt"] = own.enemy.enemy_closing_kt;
-    j["enemy_in_my_wez"] = own.enemy.enemy_in_my_wez;
-    j["me_in_enemy_wez"] = own.enemy.me_in_enemy_wez;
-    j["stern_wez_nm"] = own.enemy.stern_wez_nm;
-    j["nez_nm"] = own.enemy.nez_nm;
-    j["mar_nm"] = own.enemy.mar_nm;
-    j["dor_nm"] = own.enemy.dor_nm;
+    Json json;
+    json["id"] = own.id;
+    json["target_id"] = enemy.id;
+    json["phase"] = static_cast<int>(own.phase);   // model/phase.hpp: 0 Hold, 1 Fire, 2 Out, 3 In, 4 Crank, 5 Beam
+
+    json["range_2d_nm"] = picture.range_2d_nm;
+    json["range_3d_nm"] = picture.range_3d_nm;
+    json["bearing_deg"] = picture.bearing_deg;
+    json["ata_deg"] = picture.ata_deg;
+    json["aspect_deg"] = picture.aspect_deg;
+    json["los_north_nm"] = picture.los_nm.north;
+    json["los_east_nm"] = picture.los_nm.east;
+    json["los_down_nm"] = picture.los_nm.down;
+    json["rate_of_closure_kt"] = picture.closure_kt;
+    json["enemy_closing_kt"] = picture.enemy_closure_kt;
+    json["enemy_in_my_wez"] = own.weapons.enemy_in_wez;
+    json["me_in_enemy_wez"] = picture.me_in_enemy_wez;
+    json["stern_wez_nm"] = picture.r_cold_nm;
+    json["nez_nm"] = picture.nez_nm;
+    json["mar_nm"] = picture.mar_nm;
+    json["dor_nm"] = picture.dor_nm;
 
     // Sabit: profil. Görüntüleyici radar açısını ve WEZ'i bunlarla çizer.
-    j["radar_gimbal_deg"] = own.profile.radar_gimbal_deg;   // yarım açı (60 = ±60)
-    j["radar_range_nm"] = own.profile.radar_range_nm;
-    j["wez_min_range_nm"] = own.enemy.my_wez.min_nm;   // ilk füzeye göre, bu step'in WEZ'i
-    j["wez_max_range_nm"] = own.enemy.my_wez.max_nm;   // düşmanın yönüne göre değişir
-    return j;
+    json["radar_gimbal_deg"] = own.profile.radar_gimbal_deg;   // yarım açı (60 = ±60)
+    json["radar_range_nm"] = own.profile.radar_range_nm;
+    json["wez_min_range_nm"] = own.weapons.wez.min_nm;         // main_weapon'a göre, bu step'in WEZ'i
+    json["wez_max_range_nm"] = own.weapons.wez.max_nm;         // düşmanın yönüne göre değişir
+    return json;
 }

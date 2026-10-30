@@ -14,5 +14,5 @@ public:
 
 private:
     // Tek uçağın karşı uçağa göre hesapları ve çizim için profil sabitleri
-    static Json to_json(const Aircraft& own, const Aircraft& target);
+    static Json to_json(const Aircraft& own, const Aircraft& enemy);
 };

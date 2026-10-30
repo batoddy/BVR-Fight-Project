@@ -1,26 +1,35 @@
 # C++ otopilot kaynakları
 
-C++ programı Python simülasyonundan ölçüm alır, ortak hesapları günceller ve iki uçağın komutunu üretir. Giriş `main.cpp`, adımın yöneticisi `Sim`, uçak davranışlarının sahipleri `OtopilotFighter` ile `OtopilotHostile` sınıflarıdır.
+C++ programı Python simülasyonundan ölçüm alır, ortak hesapları günceller ve iki uçağın komutunu üretir. Giriş `main.cpp`, adımın yöneticisi `Sim`, uçak davranışlarının sahipleri `OtopilotFighter` ile `OtopilotHostile` sınıflarıdır (her biri tek switch'li bir durum makinesi). Kod kuralları: [KOD_STANDARTLARI.md](KOD_STANDARTLARI.md).
 
 ```text
 otopilot/
 ├── main.cpp
 ├── CMakeLists.txt
+├── KOD_STANDARTLARI.md
 ├── control/
 │   ├── sim.hpp / sim.cpp
 │   ├── otopilot_fighter.hpp / otopilot_fighter.cpp
 │   ├── otopilot_hostile.hpp / otopilot_hostile.cpp
-│   └── maneuver.hpp / maneuver.cpp
+│   ├── maneuver.hpp / maneuver.cpp
+│   └── conditions.hpp / conditions.cpp    (geçiş koşulları)
 ├── model/
-│   ├── aircraft.hpp / aircraft.cpp
+│   ├── aircraft.hpp
+│   ├── weapons.hpp / weapons.cpp          (füze slotları, atış, WEZ/NEZ/F-pole)
 │   ├── world.hpp / world.cpp
+│   ├── picture.hpp                        (hesaplanan durum resmi)
+│   ├── kinematics.hpp
+│   ├── missile.hpp
+│   ├── flight_command.hpp
+│   ├── phase.hpp
 │   ├── aircraft_profiles.hpp
-│   ├── missile_profiles.hpp
-│   └── orders.hpp
+│   └── missile_profiles.hpp
 ├── calculations/
 │   ├── geometry.hpp / geometry.cpp
+│   ├── turn.hpp / turn.cpp
 │   ├── engagement.hpp / engagement.cpp
-│   └── missile_geometry.hpp / missile_geometry.cpp
+│   ├── missile_geometry.hpp / missile_geometry.cpp
+│   └── r_cold_formulu.md, r_cold_grafikler/
 ├── io/
 │   ├── state_reader.hpp / state_reader.cpp
 │   ├── command_writer.hpp / command_writer.cpp
@@ -29,7 +38,7 @@ otopilot/
 │   ├── connection.hpp / tcp_connection.cpp
 │   └── messages.hpp
 ├── common/
-│   ├── util_functions.hpp
+│   ├── units.hpp / angles.hpp / ned.hpp / geodesy.hpp
 │   └── roles.hpp
 └── third_party/nlohmann/
 ```
@@ -40,20 +49,24 @@ otopilot/
 |---|---|
 | Fighter'ın aşama ve atış kararları | [control/otopilot_fighter.cpp](control/otopilot_fighter.cpp) |
 | Hostile'in karşı senaryosu | [control/otopilot_hostile.cpp](control/otopilot_hostile.cpp) |
+| Geçiş koşulları | [control/conditions.cpp](control/conditions.cpp) |
 | Adımın okuma–hesap–karar–yazma sırası | [control/sim.cpp](control/sim.cpp) |
-| Manevranın yön hedefi üretmesi | [control/maneuver.cpp](control/maneuver.cpp) |
+| Manevraların komut üretmesi ve bitişi | [control/maneuver.cpp](control/maneuver.cpp) |
 | Ortak ölçüm ve füze verileri | [model/aircraft.hpp](model/aircraft.hpp) |
+| Hesaplanan durum: geometri, kaçış, tehdit | [model/picture.hpp](model/picture.hpp) |
+| Füze slotları, atış, kendi WEZ/NEZ/F-pole | [model/weapons.hpp](model/weapons.hpp) |
 | Hesapları ilgili uçak/füze alanlarına koymak | [model/world.cpp](model/world.cpp) |
 | Uçak sabitleri ve slot sırasındaki mühimmat tipleri | [model/aircraft_profiles.hpp](model/aircraft_profiles.hpp) |
-| Füze menzil, hız ve pitbull parametreleri | [model/missile_profiles.hpp](model/missile_profiles.hpp) |
+| Füze menzil, hız, pitbull ve R_cold parametreleri | [model/missile_profiles.hpp](model/missile_profiles.hpp) |
 | Mesafe, bearing, ATA, aspect, LOS ve kapanma | [calculations/geometry.cpp](calculations/geometry.cpp) |
-| WEZ, MAR ve DOR | [calculations/engagement.cpp](calculations/engagement.cpp) |
+| Dönüş süresi, yarıçapı, yer değişimi | [calculations/turn.cpp](calculations/turn.cpp) |
+| WEZ, out planı, R_cold, NEZ, MAR, DOR | [calculations/engagement.cpp](calculations/engagement.cpp) |
 | Füzenin hedefine göre hesapları | [calculations/missile_geometry.cpp](calculations/missile_geometry.cpp) |
 | JSON ölçümünü C++ nesnelerine okumak | [io/state_reader.cpp](io/state_reader.cpp) |
 | Uçuş ve atış komutlarını JSON'a çevirmek | [io/command_writer.cpp](io/command_writer.cpp) |
 | C++ hesabını kayıt/görüntüleyiciye çıkarmak | [io/calculation_writer.cpp](io/calculation_writer.cpp) |
 | TCP çerçeveleme ve adım sırası | [io/tcp_connection.cpp](io/tcp_connection.cpp) |
-| Açı/birim ve koordinat yardımcıları | [common/util_functions.hpp](common/util_functions.hpp) |
+| Birim, açı, NED ve koordinat yardımcıları | [common/](common/) |
 
 ## Derleme
 
@@ -75,7 +88,7 @@ Kurulum, Python'u önce başlatma ve adres ayarları [çalıştırma kılavuzund
 |---|---|
 | İrtifa | ft — `altitude_ft` |
 | Mesafe ve menzil | NM — `range_3d_nm`, `mar_nm`, `radar_range_nm` |
-| Hız ve kapanma | kt — `tas_kt`, `rate_of_closure_kt` |
+| Hız ve kapanma | kt — `tas_kt`, `closure_kt` (kayıtta `rate_of_closure_kt`) |
 | Zaman / açı | saniye / derece — `_s`, `_deg` |
 
 `tas_kt` gerçek hava hızıdır (KTAS); IAS/CAS hesabı yapılmaz. LOS konum
@@ -90,8 +103,8 @@ doğrudan kayda çıkarır. Yeni nesne CSV'leri `alt_ft`, `tas_kt`,
 `vel_north/east/down_kt`, `cmd_alt_ft` alanlarını kullanır.
 
 NM / kt saat verdiği için saniye hesaplarında `3600` çarpanı gerekir.
-Dönüş yarıçapında hız ft/s, yerçekimi ft/s² olmalıdır; sonuç NM'ye çevrilir.
-Dönüşüm yardımcıları `common/util_functions.hpp` içindedir.
+Dönüş yarıçapı m/s ve m/s² ile hesaplanır (`turn::radius_m`); yer değişimi NM'ye çevrilir.
+Dönüşüm yardımcıları `common/units.hpp` içindedir.
 
 ## Geliştirme rehberleri
 
@@ -99,4 +112,4 @@ Dönüşüm yardımcıları `common/util_functions.hpp` içindedir.
 - [Kullanım örnekleri](KULLANIM.md): aşama, manevra, profil ve kayıt alanı ekleme.
 - [Veri referansı](../../docs/veri_info/SIMULASYON_VERI_REFERANSI.md): JSON/CSV alanları, birimler ve kimlikler.
 
-Uçuş hedefleri `FlightCommand` içinde sade veri olarak kalır. JSON ayrıntıları `io` katmanındadır. Taktik durum her uçağın kendi otopilotunda, ortak ölçüm ve hesaplar `World` içindedir.
+Uçuş hedefleri `own.command` (`FlightCommand`) içinde setter'larla yazılır. JSON ayrıntıları `io` katmanındadır. Taktik durum her uçağın kendi otopilotunda, ortak ölçüm ve hesaplar `World` içindedir.

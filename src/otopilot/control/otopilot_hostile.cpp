@@ -1,105 +1,43 @@
-/*
 #include "control/otopilot_hostile.hpp"
 
-#include <cmath>
+#include "control/conditions.hpp"
+#include "model/missile_profiles.hpp"
 
-FlightCommand OtopilotHostile::step(
-    Aircraft& hostile,
-    const World& world,
-    const FlightCommand& current)
+void OtopilotHostile::step(Aircraft& own, const Aircraft& enemy)
 {
-    // Python'un son uyguladığı komutla başla.
-    command_ = current;
-
     switch (state_)
     {
-    case 0:
-        hostile.phase = Phase::Hold;
-        command_ = maneuvers_.hold.compute(hostile, command_);
-
-        if (hostile.enemy.range_2d_nm <= 25.0)
+    case HostileState::Commit:
+        fly(own, maneuvers_.in);
+        if (condition::inside_enemy_mar(own, enemy))
         {
-            state_ = 1;
+            go_to(HostileState::Fire, maneuvers_.fire, own);   // düşman kendi MAR'ına girdi: şimdi at
         }
         break;
 
-    case 1:
-        hostile.phase = Phase::Fire;
-        hostile.fire_missile(FOX3);
-        state_ = 2;
+    case HostileState::Fire:
+        fly(own, maneuvers_.fire);
+        own.weapons.fire(AIM120C);
+        go_to(HostileState::Out, maneuvers_.out, own);
         break;
 
-    case 2:
-        hostile.phase = Phase::Crank;
-        command_ = maneuvers_.crank_right.compute(hostile, command_);
-
-        if(hostile.enemy.is_in_mar)
+    case HostileState::Out:
+        fly(own, maneuvers_.out);
+        if (maneuvers_.out.status(own) == ManeuverStatus::Done)
         {
-            maneuvers_.out.begin(hostile);   
-            state_ = 4;
+            own.command.set_throttle(AFTER_OUT_THROTTLE);
+            go_to(HostileState::HoldAfterOut, maneuvers_.hold, own);
         }
-
-        else if(hostile.last_fired()->target.pitbull)
-        {
-            state_ = 3;
-        }
-
         break;
-    
-    case 3:
-        hostile.phase = Phase::In;
-        command_ = maneuvers_.in.compute(hostile, command_);
-        break;
-    
-    default:
+
+    case HostileState::HoldAfterOut:
+        fly(own, maneuvers_.hold);
         break;
     }
-
-    return command_;
 }
-*/
 
-
-#include "control/otopilot_hostile.hpp"
-
-#include <cmath>
-
-FlightCommand OtopilotHostile::step(
-    Aircraft& hostile,
-    const World& world,
-    const FlightCommand& current)
+void OtopilotHostile::go_to(HostileState next, Maneuver& maneuver, const Aircraft& own)
 {
-    // Mevcut hostile taktiği ek dünya bilgisi kullanmıyor.
-    (void)world;
-    command_ = current;
-    
-    
-    switch (state_)
-    {
-    case 0:
-        hostile.phase = Phase::Hold;
-        command_ = maneuvers_.hold.compute(hostile, command_);
-
-        if (world.fighter.enemy.mar_nm >= hostile.enemy.range_3d_nm)
-        {
-            state_ = 1;
-        }
-        break;
-
-    case 1:
-        hostile.phase = Phase::Fire;
-        hostile.fire_missile(FOX3);
-        state_ = 2;
-        break;
-
-    case 2:
-        hostile.phase = Phase::Hold;
-        command_ = maneuvers_.hold.compute(hostile, command_);
-        break;
-
-    default:
-        break;
-    }
-
-    return command_;
+    state_ = next;
+    maneuver.enter(own);
 }

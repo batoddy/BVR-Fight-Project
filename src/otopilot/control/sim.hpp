@@ -1,13 +1,12 @@
 #pragma once
 
+#include "control/otopilot_fighter.hpp"
 #include "control/otopilot_hostile.hpp"
 #include "io/console_log.hpp"
-#include "control/otopilot_fighter.hpp"
 #include "io/messages.hpp"
 #include "model/world.hpp"
 
-// Ölçümü okur, ortak hesapları günceller,
-// iki otopilotu çalıştırır ve komut mesajını oluşturur.
+// Bir step: ölçümü okur, ortak hesapları günceller, iki otopilotu çalıştırır ve komut mesajını oluşturur.
 class Sim
 {
 public:

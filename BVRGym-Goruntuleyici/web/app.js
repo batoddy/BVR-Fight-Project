@@ -293,7 +293,7 @@ function analysis(){
       zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dor:preferences.overlayDor}}};
 }
 // C++ aircraft.hpp enum class Phase ile aynı sırada.
-const PHASE_NAMES=['HOLD','FIRE','OUT','IN','CRANK','NOTCH'];
+const PHASE_NAMES=['HOLD','FIRE','OUT','IN','CRANK','BEAM'];
 function relativePanel(first,entity){
   el('relative').hidden=first.kind!=='aircraft';
   if(first.kind!=='aircraft')return;

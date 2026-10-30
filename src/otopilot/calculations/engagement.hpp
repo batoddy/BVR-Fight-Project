@@ -1,38 +1,48 @@
 #pragma once
 
+#include <optional>
+
 #include "model/aircraft.hpp"
+#include "model/missile_profiles.hpp"
+#include "model/picture.hpp"
+#include "model/weapons.hpp"
 
-// Füze ve taktik hesapları: WEZ, MAR, DOR. Hiçbir şey saklamaz; fonksiyonlar static.
+// Füze ve taktik hesapları: WEZ, F-pole, out planı, R_cold, NEZ, MAR, DOR. Saf fonksiyonlar.
 //
-// Geometry'den farkı: yalnız konuma değil, uçakların profiline (füze menzili, radar) de bakar.
-// Bu yüzden Kinematics değil, Aircraft alır.
-//   own:   bakan taraf
-//   enemy: karşı taraf
-// own.enemy.range_3d_nm gibi Geometry sonuçları burada çağrılmadan önce doludur (World::update sırası).
-class Engagement
+// geometry'den farkı: yalnız konuma değil, uçak ve füze profillerine de bakar.
+// Hepsi own'un gözünden (own, enemy) alır ve gereken her şeyi iki uçaktan kendisi çeker.
+// Yalnız ölçülen (kinematics) ve sabit (profile) alanları okur; picture ve weapons'a bakmaz.
+//   Saldırı: own'un ana silahı enemy'ye karşı → wez, in_wez, f_pole_nm
+//   Kaçış:   own, enemy'nin ana silahından     → out_plan, r_cold_nm, nez_nm, mar_nm
+// Uçaklar ters verilince düşmanın gözünden hesaplanır: nez_nm(enemy, own) = düşman füzemden kaçamaz.
+namespace engagement
 {
-public:
-    // own'un WEZ'i: ilk füzesine (missiles[0]) göre, bu düşmana karşı.
-    //   min_nm: füzenin iç sınırı
-    //   max_nm: düşman bugünkü rotasını sürdürürse azami menzil; düşman bana geliyorsa
-    //          (own.enemy.rate_of_closure_kt +) uzar, kaçıyorsa kısalır
-    // Füzesi yoksa {0, 0}: hiçbir menzil WEZ'de değil.
-    static Wez wez(const Aircraft& own);
+    // own'un ana silahının WEZ'i.
+    //   max_nm: düşman bugünkü rotasını sürdürürse azami menzil; düşman bana geliyorsa uzar, kaçıyorsa kısalır
+    Wez wez(const Aircraft& own, const Aircraft& enemy);
 
-    // Bu menzil WEZ'in içinde mi: min_nm < range_nm < max_nm
-    static bool in_wez(double range_nm, const Wez& wez);
+    // enemy, own'un WEZ'inde mi: min_nm < menzil < max_nm
+    bool in_wez(const Aircraft& own, const Aircraft& enemy);
 
-    static double f_pole_nm(const Aircraft& own, const Aircraft& enemy);
+    // NM, F-pole: own'un füzesi enemy'ye vardığında iki uçak arasında kalan mesafe. Füze yetişemiyorsa yok.
+    std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);
 
-    static double r_cold_nm(const Aircraft& own, const Aircraft& enemy);
+    // own şimdi out yapsa: enemy'yi kuyruğa alan dönüş, kaçış hızı ve dönüşte enemy'ye yaklaşma.
+    OutPlan out_plan(const Aircraft& own, const Aircraft& enemy);
 
-    static double nez_nm(const Aircraft& own, const Aircraft& enemy);
+    // NM, R_cold: own baştan kaçıyor olsaydı enemy'nin füzesinin yetişebileceği en büyük mesafe.
+    double r_cold_nm(const Aircraft& own, const Aircraft& enemy);
 
-    // NM, Minimum Abort Range
-    static double mar_nm(const Aircraft& own, const Aircraft& enemy);
+    // NM, No Escape Zone: enemy'nin füzesi own'un out dönüşü başladığı an atılırsa, bu mesafenin içinde own kaçamaz.
+    double nez_nm(const Aircraft& own, const Aircraft& enemy);
 
-    static bool is_in_mar(const Aircraft& own, const Aircraft& enemy);
+    // NM, Minimum Abort Range: dönüşün herhangi bir anında atılan füzeden own'un kaçabileceği en kısa mesafe.
+    double mar_nm(const Aircraft& own, const Aircraft& enemy);
 
-    // NM, Desired Out Range
-    static double dor_nm(const Aircraft& own, const Aircraft& enemy);
-};
+    // own, enemy'ye karşı MAR'ının içinde mi: menzil ≤ MAR
+    bool in_mar(const Aircraft& own, const Aircraft& enemy);
+
+    double dr_nm();                  
+    // NM, Desired Out Range: out yaptıktan sonra geri dönüp tekrar angaje olabileceğim (recommit) mesafe.
+    double dor_nm(const Aircraft& own, const Aircraft& enemy);
+}

@@ -22,7 +22,7 @@ agents:
     spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
       lat: 59.2
       long: 18.0
-      alt: 6000
+      alt: 10000
       vel: 300
       heading: 0
 
@@ -35,6 +35,6 @@ agents:
     spawn:
       lat: 60.0
       long: 18.0
-      alt: 6000
+      alt: 10000
       vel: 300
       heading: 180

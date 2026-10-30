@@ -14,6 +14,12 @@ R_cold_güvenli = 1.15 · R_cold
 
 Geçerli aralık: **h = 4–10 km**, **V_kaçış = 570–1000 kt**.
 
+![R_cold modeli](r_cold_grafikler/r_cold_model.png)
+
+![Ölçülen ve model](r_cold_grafikler/r_cold_karsilastirma.png)
+
+Grafikler, veri (`r_cold_olcumler.csv`) ve çizim betiği `r_cold_grafikler/` klasöründedir. Yeniden üretmek için: `python src/otopilot/calculations/r_cold_grafikler/r_cold_grafik.py`
+
 "Vurdu" tanımı, BVRGym'in isabet tanımından geniştir; ayrıntısı aşağıda. Amaç, füzenin kendi güdüm hatası yüzünden ıskaladığı atışlarda da uçağı vurulmuş saymaktır.
 
 ## Neden tablo yerine formül

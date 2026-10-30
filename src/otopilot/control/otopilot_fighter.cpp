@@ -1,118 +1,57 @@
 #include "control/otopilot_fighter.hpp"
 
-#include <cmath>
+#include "control/conditions.hpp"
+#include "model/missile_profiles.hpp"
 
-FlightCommand OtopilotFighter::step(
-    Aircraft& fighter,
-    const World& world,
-    const FlightCommand& current)
+void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
 {
-    // Python'un son uyguladığı komutla başla.
-    command_ = current;
+    (void)enemy;
 
     switch (state_)
     {
-    case 0:
-        fighter.phase = Phase::Hold;
-        command_ = maneuvers_.hold.compute(fighter, command_);
-
-        if (fighter.enemy.is_in_mar)
+    case FighterState::Commit:
+        fly(own, maneuvers_.in);
+        if (condition::in_mar(own))
         {
-            state_ = 1;
-            maneuvers_.out.begin(fighter);
+            go_to(FighterState::Out, maneuvers_.out, own);   // atmadan MAR'a girdim: kaç
+        }
+        else if (condition::enemy_in_my_wez(own) && condition::approaching_mar(own, FIRE_BEFORE_MAR_NM))
+        {
+            go_to(FighterState::Fire, maneuvers_.fire, own);
         }
         break;
 
-    case 1:
-        fighter.phase = Phase::Out;
-        command_ = maneuvers_.out.compute(fighter, command_);
-        if (std::fabs(fighter.enemy.ata_deg) > 177)
+    case FighterState::Fire:
+        fly(own, maneuvers_.fire);
+        own.weapons.fire(AIM120C);
+        go_to(FighterState::Crank, maneuvers_.crank, own);
+        break;
+
+    case FighterState::Crank:
+        fly(own, maneuvers_.crank);
+        if (condition::in_mar(own))
         {
-            state_ = 2;
-            command_.throttle = 0.45;
+            go_to(FighterState::Out, maneuvers_.out, own);
         }
         break;
 
-    case 2:
-        fighter.phase = Phase::Hold;
-        command_ = maneuvers_.hold.compute(fighter, command_);
+    case FighterState::Out:
+        fly(own, maneuvers_.out);
+        if (maneuvers_.out.status(own) == ManeuverStatus::Done)
+        {
+            own.command.set_throttle(AFTER_OUT_THROTTLE);
+            go_to(FighterState::HoldAfterOut, maneuvers_.hold, own);
+        }
         break;
 
-    default:
+    case FighterState::HoldAfterOut:
+        fly(own, maneuvers_.hold);
         break;
     }
-
-    return command_;
 }
 
-
-// #include "control/otopilot_fighter.hpp"
-
-// #include <cmath>
-
-// FlightCommand OtopilotFighter::step(
-//     Aircraft& fighter,
-//     const World& world,
-//     const FlightCommand& current)
-// {
-//     // Python'un son uyguladığı komutla başla.
-//     command_ = current;
-
-//     switch (state_)
-//     {
-//     case 0:
-//         fighter.phase = Phase::Hold;
-//         command_ = maneuvers_.hold.compute(fighter, command_);
-
-//         if (fighter.enemy.range_2d_nm <= 25.0)
-//         {
-//             state_ = 1;
-//         }
-//         break;
-
-//     case 1:
-//         fighter.phase = Phase::Fire;
-//         fighter.fire_missile(FOX3);
-//         state_ = 2;
-//         break;
-
-//     case 2:
-//         fighter.phase = Phase::Crank;
-//         command_ = maneuvers_.crank_right.compute(fighter, command_);
-
-//         if(fighter.enemy.is_in_mar)
-//         {
-//             maneuvers_.out.begin(fighter);   
-//             state_ = 4;
-//         }
-
-//         else if(fighter.last_fired()->target.pitbull)
-//         {
-//             state_ = 3;
-//         }
-
-//         break;
-    
-//     case 3:
-//         fighter.phase = Phase::Notch;
-//         command_ = maneuvers_.notch.compute(fighter, command_);
-
-//         if(fighter.enemy.is_in_mar)
-//         {
-//             maneuvers_.out.begin(fighter);   
-//             state_ = 4;
-//         }
-
-//         break;
-    
-//     case 4:
-//         fighter.phase = Phase::Out;
-//         command_ = maneuvers_.out.compute(fighter, command_);
-//         break;
-    
-//     default:
-//         break;
-//     }
-
-//     return command_;
-// }
+void OtopilotFighter::go_to(FighterState next, Maneuver& maneuver, const Aircraft& own)
+{
+    state_ = next;
+    maneuver.enter(own);
+}

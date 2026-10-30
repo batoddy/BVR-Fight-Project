@@ -10,17 +10,17 @@ static void print_aircraft(const Aircraft& a)
               << "  lat " << std::setprecision(4) << k.lat_deg
               << "  lon " << k.lon_deg
               << "  alt " << std::setprecision(0) << k.altitude_ft << " ft"
-              << "  hdg " << std::setprecision(1) << k.heading_deg_180
+              << "  hdg " << std::setprecision(1) << k.heading_deg
               << "  tas " << std::setprecision(0) << k.tas_kt << " kt"
-              << "  rng " << std::setprecision(1) << a.enemy.range_3d_nm << " NM"
-              << "  brg " << a.enemy.bearing_deg
-              << "  kalan " << a.missiles_left() << '/' << a.missiles.size();
+              << "  rng " << std::setprecision(1) << a.picture.range_3d_nm << " NM"
+              << "  brg " << a.picture.bearing_deg
+              << "  kalan " << a.weapons.missiles_left() << '/' << a.weapons.missiles.size();
 }
 
 // Son atılan füze: slot, tip, Python id'si, kinematik geldi mi, hedefe uzaklık, sonuç. Yalnız bu dosyada.
 static void print_last_missile(const Aircraft& own)
 {
-    const Missile* m = own.last_fired();
+    const Missile* m = own.weapons.last_fired();
     if (m == nullptr)
     {
         return;

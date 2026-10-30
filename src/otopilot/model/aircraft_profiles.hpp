@@ -18,21 +18,24 @@ struct AircraftProfile
 {
     std::string name;
 
+    // Ana silah: WEZ, NEZ, F-pole ve düşmanın bana karşı R_cold/MAR hesabı bununla yapılır (yükten bağımsız).
+    MissileProfile main_weapon;
+
     // Füze yükü: slot sırasıyla tipler. Python yalnız füze SAYISINI verir; tipleri buradan gelir.
     // Python'daki sayı (scenario.yaml ammo) kadar slot bu listenin başından alınır.
     std::vector<MissileProfile> loadout;
 
-    double max_mach = 0;               // birimsiz
-    double max_g = 0;                  // g
+    double max_mach = 0;   // birimsiz; TODO: henüz kullanılmıyor
+    double max_g = 0;      // g;        TODO: henüz kullanılmıyor
 
-    // WEZ burada değil: füzenin özelliği. Menzil missile_profiles.hpp'de, WEZ Engagement::wez'de hesaplanır.
+    // WEZ burada değil: main_weapon'ın menzili missile_profiles.hpp'de, WEZ engagement::wez'de hesaplanır.
 
-    double radar_range_nm = 0;          // NM, algılama menzili
-    double radar_gimbal_deg = 0;  // derece, yarım açı: burundan sağa VE sola tarama açısı (60 = ±60)
+    double radar_range_nm = 0;     // NM, algılama menzili
+    double radar_gimbal_deg = 0;   // derece, yarım açı: burundan sağa VE sola tarama açısı (60 = ±60)
 
-    double out_g = 0.0; // g, yaklaşık out dönüşünde kullanılan yük faktörü
-    std::vector<AltitudeFactor> out_distance_factor; // irtifa artan sırada
-    double out_offset_nm = 0;
+    double out_g = 0.0;                                // g, out dönüşünde kullanılan yük faktörü (out planı ve Out manevrası)
+    std::vector<AltitudeFactor> out_distance_factor;   // irtifa artan sırada; TODO: henüz kullanılmıyor
+    double out_offset_nm = 0;                          // NM, MAR'a eklenen out payı
 };
 
 // Değerlerin kaynağı:
@@ -46,10 +49,10 @@ struct AircraftProfile
 inline const std::map<std::string, AircraftProfile>& aircraft_profiles()
 {
     static const std::map<std::string, AircraftProfile> table = {
-        //                   name               loadout (slot sırasıyla)        mach   g     radar   gimbal  out_g  out alt factors                                   out_offset_nm
-        {"F16",            {"F-16",             {FOX3, FOX3, FOX3, FOX3},       2.05,  9.0,  45,  60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
-        {"Su57",           {"Su-57",            {FOX3, FOX3, FOX3, FOX2, FOX2}, 2.0,   9.0,  55,  60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
-        {"CustomAircraft", {"Ornek ozel ucak",  {FOX1, FOX1, FOX2, FOX2},       1.2,   4.0,  30,  45,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
+        //                   name               main_weapon  loadout (slot sırasıyla)                    mach   g     radar  gimbal  out_g  out alt factors                                   out_offset_nm
+        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C},       2.05,  9.0,  45,    60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
+        {"Su57",           {"Su-57",            AIM120C,     {AIM120C, AIM120C, AIM120C, AIM9X, AIM9X},  2.0,   9.0,  55,    60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
+        {"CustomAircraft", {"Ornek ozel ucak",  AIM7M,       {AIM7M, AIM7M, AIM9X, AIM9X},               1.2,   4.0,  30,    45,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
     };
     return table;
 }
