@@ -15,7 +15,7 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
         {
             go_to(FighterState::Out, maneuvers_.out, own);   // atmadan MAR'a girdim: kaç
         }
-        else if (condition::enemy_in_my_wez(own) && condition::approaching_mar(own, FIRE_BEFORE_MAR_NM))
+        else if (condition::enemy_in_my_wez(own))
         {
             go_to(FighterState::Fire, maneuvers_.fire, own);
         }
@@ -39,7 +39,7 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
         fly(own, maneuvers_.out);
         if (maneuvers_.out.status(own) == ManeuverStatus::Done)
         {
-            own.command.set_throttle(AFTER_OUT_THROTTLE);
+            own.command.set_throttle(DEFAULT_THROTTLE);
             go_to(FighterState::HoldAfterOut, maneuvers_.hold, own);
         }
         break;

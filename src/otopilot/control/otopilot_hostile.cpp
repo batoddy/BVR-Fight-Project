@@ -25,7 +25,7 @@ void OtopilotHostile::step(Aircraft& own, const Aircraft& enemy)
         fly(own, maneuvers_.out);
         if (maneuvers_.out.status(own) == ManeuverStatus::Done)
         {
-            own.command.set_throttle(AFTER_OUT_THROTTLE);
+            own.command.set_throttle(DEFAULT_THROTTLE);
             go_to(HostileState::HoldAfterOut, maneuvers_.hold, own);
         }
         break;

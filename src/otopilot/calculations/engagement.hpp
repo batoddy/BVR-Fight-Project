@@ -17,32 +17,34 @@
 // Uçaklar ters verilince düşmanın gözünden hesaplanır: nez_nm(enemy, own) = düşman füzemden kaçamaz.
 namespace engagement
 {
-    // own'un ana silahının WEZ'i.
-    //   max_nm: düşman bugünkü rotasını sürdürürse azami menzil; düşman bana geliyorsa uzar, kaçıyorsa kısalır
+    /// own'un ana silahının WEZ'i.
+    ///   max_nm: düşman bugünkü rotasını sürdürürse azami menzil; düşman bana geliyorsa uzar, kaçıyorsa kısalır
     Wez wez(const Aircraft& own, const Aircraft& enemy);
 
-    // enemy, own'un WEZ'inde mi: min_nm < menzil < max_nm
+    /// enemy, own'un WEZ'inde mi: min_nm < menzil < max_nm
     bool in_wez(const Aircraft& own, const Aircraft& enemy);
 
-    // NM, F-pole: own'un füzesi enemy'ye vardığında iki uçak arasında kalan mesafe. Füze yetişemiyorsa yok.
+    /// NM, F-pole: own'un füzesi enemy'ye vardığında iki uçak arasında kalan mesafe. Füze yetişemiyorsa yok.
     std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);
 
-    // own şimdi out yapsa: enemy'yi kuyruğa alan dönüş, kaçış hızı ve dönüşte enemy'ye yaklaşma.
+    /// own şimdi out yapsa: enemy'yi kuyruğa alan dönüş, kaçış hızı ve dönüşte enemy'ye yaklaşma.
     OutPlan out_plan(const Aircraft& own, const Aircraft& enemy);
 
-    // NM, R_cold: own baştan kaçıyor olsaydı enemy'nin füzesinin yetişebileceği en büyük mesafe.
+    /// NM, R_cold: own baştan kaçıyor olsaydı enemy'nin füzesinin yetişebileceği en büyük mesafe.
     double r_cold_nm(const Aircraft& own, const Aircraft& enemy);
 
-    // NM, No Escape Zone: enemy'nin füzesi own'un out dönüşü başladığı an atılırsa, bu mesafenin içinde own kaçamaz.
+    /// NM, No Escape Zone: enemy'nin füzesi own'un out dönüşü başladığı an atılırsa, bu mesafenin içinde own kaçamaz.
     double nez_nm(const Aircraft& own, const Aircraft& enemy);
 
-    // NM, Minimum Abort Range: dönüşün herhangi bir anında atılan füzeden own'un kaçabileceği en kısa mesafe.
+    /// NM, Minimum Abort Range: dönüşün herhangi bir anında atılan füzeden own'un kaçabileceği en kısa mesafe.
     double mar_nm(const Aircraft& own, const Aircraft& enemy);
 
-    // own, enemy'ye karşı MAR'ının içinde mi: menzil ≤ MAR
+    /// own, enemy'ye karşı MAR'ının içinde mi: menzil ≤ MAR
     bool in_mar(const Aircraft& own, const Aircraft& enemy);
 
-    double dr_nm();                  
-    // NM, Desired Out Range: out yaptıktan sonra geri dönüp tekrar angaje olabileceğim (recommit) mesafe.
+    /// NM, Decision Range. TODO: tanımı belirlenecek; şimdilik 0 döner.
+    double dr_nm();
+
+    /// NM, Desired Out Range: out yaptıktan sonra geri dönüp tekrar angaje olabileceğim (recommit) mesafe.
     double dor_nm(const Aircraft& own, const Aircraft& enemy);
 }

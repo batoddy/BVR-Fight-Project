@@ -28,7 +28,6 @@ struct ThreatInfo
     int slot = 0;                          // düşmanın füze slotu: enemy.weapons.missiles[slot]
     double range_nm = 0;                   // NM, füze ile aramızdaki 3B mesafe
     double closure_kt = 0;                 // kt, füzenin bana kapanma hızı; + yaklaşıyor
-    std::optional<double> time_to_go_s;    // s, bu kapanma hızıyla bana kalan süre; yaklaşmıyorsa yok
     double bearing_deg = 0;                // derece ±180, benden füzeye yön; 0 kuzey
     double ata_deg = 0;                    // derece ±180, burnuma göre füze; + sağımda
     double aspect_deg = 0;                 // derece ±180, füzenin burnu bana göre; 0 bana dönük
@@ -62,6 +61,6 @@ struct Picture
     double dor_nm = 0;                 // NM, Desired Out Range: out sonrası recommit edebileceğim mesafe
     bool is_in_mar = false;            // range_3d_nm <= mar_nm
 
-    // Bana gelen en acil düşman füzesi (en kısa time_to_go); yoksa yok
+    // Bana gelen en yakın düşman füzesi; yoksa yok
     std::optional<ThreatInfo> threat;
 };

@@ -312,6 +312,19 @@ function relativePanel(first,entity){
   el('calc-me-in-enemy-wez').textContent=yes(calc?.me_in_enemy_wez);
   el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dor').textContent=distance(calc?.dor_m);
   el('calc-stern-wez').textContent=distance(calc?.stern_wez_m);el('calc-nez').textContent=distance(calc?.nez_m);
+  // C++ optional hesapları 0 yazar: F-pole ve tehdit için 0 "yok" demek.
+  const number=(value,digits)=>value.toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
+  el('calc-me-in-mar').textContent=yes(calc?.me_in_mar);
+  el('calc-own-nez').textContent=distance(calc?.own_nez_m);
+  el('calc-enemy-in-my-nez').textContent=yes(calc?.enemy_in_my_nez);
+  el('calc-f-pole').textContent=calc?.f_pole_m>0?distance(calc.f_pole_m):'—';
+  el('calc-out-turn').textContent=Number.isFinite(calc?.out_turn_time_s)
+    ?sideAngleLabel(calc.out_turn_deg)+' · '+number(calc.out_turn_time_s,1)+' s':'—';
+  el('calc-out-radius').textContent=distance(calc?.out_turn_radius_m);
+  el('calc-out-approach').textContent=distance(calc?.out_approach_m);
+  el('calc-out-escape').textContent=Number.isFinite(calc?.out_escape_kt)?number(calc.out_escape_kt,0)+' kt':'—';
+  el('calc-threat').textContent=!Number.isFinite(calc?.threat_range_nm)?'—':calc.threat_range_nm<=0?'Yok'
+    :distance(calc.threat_range_m)+' · M'+number(calc.threat_mach,2)+(calc.threat_pitbull?' · pitbull':'');
 }
 function renderList(){
   if(!buffer.complete)return;

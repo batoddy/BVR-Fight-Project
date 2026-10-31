@@ -7,6 +7,7 @@
 class Connection
 {
 public:
+    /// Python sunucusuna bağlanır (varsayılan 127.0.0.1:6000; adres argümanla değiştirilebilir).
     Connection(int argc, char* argv[]);
     ~Connection();
 
@@ -14,7 +15,10 @@ public:
     Connection(const Connection&) = delete;
     Connection& operator=(const Connection&) = delete;
 
-    bool receive(Message& message);  // Ölçüm al; uçuş bittiyse false döndür.
+    /// Ölçüm al; uçuş bittiyse ("end") false döner.
+    bool receive(Message& message);
+
+    /// Mesajı Python'a gönder.
     void send(const Message& message);
 
 private:

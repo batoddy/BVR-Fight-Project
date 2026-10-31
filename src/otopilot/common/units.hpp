@@ -14,6 +14,7 @@ inline constexpr double PI = 3.14159265358979323846;   // MinGW c++17'de M_PI yo
 inline constexpr double DEG_TO_RAD = PI / 180.0;
 inline constexpr double RAD_TO_DEG = 180.0 / PI;
 
+// Birim dönüşümleri: adları ne yaptıklarını söylüyor (meter_to_nmile: m → NM).
 inline constexpr double meter_to_nmile(double m) { return m * METER_TO_NMILE; }
 inline constexpr double nmile_to_meter(double nm) { return nm * NMILE_TO_METER; }
 inline constexpr double meter_to_feet(double m) { return m / FOOT_TO_METER; }
@@ -25,8 +26,8 @@ inline constexpr double knot_to_mps(double kt) { return nmile_to_meter(kt) / SEC
 inline constexpr double fps_to_knot(double fps) { return mps_to_knot(feet_to_meter(fps)); }
 inline constexpr double knot_to_fps(double kt) { return meter_to_feet(knot_to_mps(kt)); }
 
-// Yol = hız × süre. kt "saatte NM" olduğu için süre saniyeden saate çevrilir.
+/// NM, yol = hız × süre. kt "saatte NM" olduğu için süre saniyeden saate çevrilir.
 inline constexpr double travel_distance_nm(double speed_kt, double time_s) { return speed_kt * time_s / SECONDS_PER_HOUR; }
 
-// Süre = yol / hız, saniye.
+/// s, süre = yol / hız.
 inline constexpr double travel_time_s(double distance_nm, double speed_kt) { return SECONDS_PER_HOUR * distance_nm / speed_kt; }

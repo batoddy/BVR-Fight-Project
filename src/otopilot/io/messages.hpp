@@ -20,7 +20,7 @@ struct Message
     std::uint64_t tick = 0;  // adım numarası
     Json data;
 
-    // Mesajı tek satır JSON'a çevir.
+    /// Mesajı tek satır JSON'a çevir.
     std::string encode() const
     {
         Json value;
@@ -30,7 +30,7 @@ struct Message
         return value.dump() + "\n";
     }
 
-    // Tek satır JSON'u mesaja çevir; biçim yanlışsa hata ver.
+    /// Tek satır JSON'u mesaja çevir; biçim yanlışsa hata ver.
     static Message decode(const std::string& line)
     {
         Json value = Json::parse(line);

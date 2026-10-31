@@ -28,7 +28,6 @@ struct MissileTargetInfo
 {
     double range_nm = 0;                   // NM, füze ile hedef arası 3B mesafe
     double closure_kt = 0;                 // kt, füze ile hedef arası mesafenin azalma hızı; + yaklaşıyor
-    std::optional<double> time_to_go_s;    // s, bu kapanma hızıyla hedefe kalan süre; yaklaşmıyorsa yok
     bool is_pitbull = false;               // füze kendi radarıyla hedefi görüyor mu; bir kez true olunca kalır
 };
 
@@ -53,7 +52,10 @@ struct Missile
 
     MissileTargetInfo target;      // hedefe göre                                  | World::update
 
+    /// Havada mı (state InFlight)
     bool in_flight() const { return state == MissileState::InFlight; }
+    /// Hedefi vurdu mu
     bool hit() const { return outcome == MissileOutcome::Hit; }
+    /// Iskaladı ya da enerjisi bitti mi
     bool lost() const { return outcome == MissileOutcome::Lost; }
 };

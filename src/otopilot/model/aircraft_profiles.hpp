@@ -45,19 +45,19 @@ struct AircraftProfile
 //   İrtifa noktaları 10.000 / 20.000 / 30.000 ft; menziller NM'dir.
 //   Birim geçişinde eski menzil ve offset değerlerinin fiziksel karşılığı korunur.
 //
-// Anahtar: Python'dan gelen type (scenario.yaml). Değerler struct'taki sırayla.
+/// Tip → profil tablosu. Anahtar: Python'dan gelen type (scenario.yaml). Değerler struct'taki sırayla.
 inline const std::map<std::string, AircraftProfile>& aircraft_profiles()
 {
     static const std::map<std::string, AircraftProfile> table = {
         //                   name               main_weapon  loadout (slot sırasıyla)                    mach   g     radar  gimbal  out_g  out alt factors                                   out_offset_nm
-        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C},       2.05,  9.0,  45,    60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
-        {"Su57",           {"Su-57",            AIM120C,     {AIM120C, AIM120C, AIM120C, AIM9X, AIM9X},  2.0,   9.0,  55,    60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
-        {"CustomAircraft", {"Ornek ozel ucak",  AIM7M,       {AIM7M, AIM7M, AIM9X, AIM9X},               1.2,   4.0,  30,    45,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
+        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C},       2.05,  9.0,  200,    60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
+        {"Su57",           {"Su-57",            AIM120C,     {AIM120C, AIM120C, AIM120C, AIM9X, AIM9X},  2.0,   9.0,  200,    60,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
+        {"CustomAircraft", {"Ornek ozel ucak",  AIM7M,       {AIM7M, AIM7M, AIM9X, AIM9X},               1.2,   4.0,  200,    45,     6.0,   {{10000.0, 1.0}, {20000.0, 1.2}, {30000.0, 1.5}}, 0.5}},
     };
     return table;
 }
 
-// Tipin profilini döndür. Tabloda yoksa anlaşılır hatayla dur.
+/// Tipin profilini döndür. Tabloda yoksa anlaşılır hatayla dur.
 inline const AircraftProfile& aircraft_profile(const std::string& type)
 {
     const auto& table = aircraft_profiles();

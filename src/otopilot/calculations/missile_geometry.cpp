@@ -13,15 +13,6 @@ double missile_geometry::closure_kt(const Missile& missile, const Aircraft& targ
     return geometry::closure_kt(missile.kinematics, target.kinematics);
 }
 
-std::optional<double> missile_geometry::time_to_go_s(double range_nm, double closure_kt)
-{
-    if (closure_kt <= 0.0)
-    {
-        return std::nullopt;   // yaklaşmıyor: hedefe hiç varmaz
-    }
-    return travel_time_s(range_nm, closure_kt);
-}
-
 bool missile_geometry::is_pitbull(const Missile& missile, double range_nm)
 {
     const double pitbull_range_nm = missile.profile.pitbull_range_nm;

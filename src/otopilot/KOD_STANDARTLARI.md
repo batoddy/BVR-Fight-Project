@@ -12,7 +12,7 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 | `control/` | Karar ve manevra | `command`, `phase`, atış emri (`weapons.fire`) |
 | `common/` | Birim, açı, vektör, koordinat yardımcıları | — |
 
-- **Hesap fonksiyonları saftır.** Girdiyi yalnız parametrelerden alır. `Aircraft` alabilir, ama yalnız ölçülen (`kinematics`, `weapons.missiles`) ve sabit (`profile`) alanlarını okur, **`picture`'ı okumaz**. Başka bir hesabın sonucu gerekiyorsa onu parametre olarak alır (ör. `nez_nm(r_cold_nm, out)`).
+- **Hesap fonksiyonları saftır.** Girdiyi yalnız parametrelerden alır. `Aircraft` alabilir, ama yalnız ölçülen (`kinematics`, `weapons.missiles`) ve sabit (`profile`) alanlarını okur, **`picture`'ı okumaz**. Başka bir hesabın sonucu gerekiyorsa onu kendisi çağırır (ör. `nez_nm(own, enemy)` içeride `out_plan` ve `r_cold_nm`'i çağırır).
 - **Hesap sırası yalnız `World::update`'te durur.** Hangi hesabın hangisinden önce geldiği orada okunur.
 - **Karar ve manevra kodu hesap yapmaz, `picture`'ı ve `weapons`'ı okur.** Yeni bir değer gerekiyorsa `calculations/`'a fonksiyon, `Picture`'a (kaçış) ya da `Weapons`'a (benim füzem) alan eklenir.
 - **Silah hesapları ana silahtan yapılır.** WEZ, NEZ, F-pole, R_cold ve MAR `profile.main_weapon` ile hesaplanır; füze slotlarından (`weapons.missiles`) profil çekilmez.
@@ -71,7 +71,7 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 ## 7. Manevra ve karar
 
 - **Manevra yaşam döngüsü:** `enter(own)` girişte bir kez çağrılır, `update(own)` her step `own.command`'dan başlayıp komutu döner, `status(own)` bitti mi sorusuna cevap verir.
-- **Kendi içinde biten manevralar** (Out gibi) hedefe ulaşınca `Done` döner. **Sürekli manevralar** (Crank, Beam, Hold, In) hep `Running` döner; onları otopilot bitirir. Bu manevralar karara yardım eden sorgular sunabilir (ör. `Crank::in_position`).
+- **Kendi içinde biten manevralar** (Out gibi) hedefe ulaşınca `Done` döner. **Sürekli manevralar** (Crank, Beam, Hold, In) hep `Running` döner; onları otopilot bitirir. Bu manevralar karara yardım eden sorgular sunabilir (ör. `Crank::in_radar_sight`).
 - **Geçiş koşulları** `control/conditions.hpp` içinde isimli fonksiyonlar olarak durur. Karar kodu bu koşulları çağırır; böylece karar yapısı değişse de (switch → karar ağacı) koşullar aynı kalır.
 - **Otopilot** (`OtopilotFighter`, `OtopilotHostile`) `step` içinde tek switch'tir; her durum bir blok: `fly(own, manevra)` ile uç, sonra çıkış koşullarına bak. Durum yalnız `go_to(durum, manevra, own)` ile değiştirilir (`state_ = ...` elle yazılmaz); böylece yeni manevranın `enter()`'ı atlanmaz.
 
@@ -96,11 +96,36 @@ Hesap ve manevra kodu bir insanın formülü kâğıttan takip eder gibi okuyabi
 - **Seçim `if` ile yazılır**, iç içe ya da uzun `?:` ile değil. Kısa bir durum geçişi (`return in_mar ? Out : Hold;`) kalabilir.
 - **Hız × süre hesapları** `travel_distance_nm(speed_kt, time_s)` ve `travel_time_s(distance_nm, speed_kt)` ile yazılır; formülde `3600` görünmez.
 
-- **`.hpp`:** fonksiyonun ne döndürdüğü, birimi, ne zaman "yok" döndüğü.
-- **`.cpp`:** formül ve türetmesi.
+- **Her bilgi tek yerde:** `.hpp` *ne yaptığını*, `.cpp` *nasıl yaptığını* söyler; aynı cümle iki kez yazılmaz.
+- **`.hpp`, fonksiyonlar:** Doxygen biçimi (`///`), fonksiyon bildiriminin hemen üstünde. Tek satır yeter: ne yaptığı / ne döndürdüğü, birimi, ne zaman "yok" döndüğü. Gerekirse ikinci `///` satırı. `@param` yalnız bilgi veren parametrede (birim, anlam), `own` gibi her yerde aynı olanlarda yazılmaz.
+  ```cpp
+  /// NM, F-pole: own'un füzesi enemy'ye vardığında iki uçak arasında kalan mesafe. Füze yetişemiyorsa yok.
+  std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);
+  ```
+- **`.hpp`, geri kalan her şey düz `//`:** değişken, alan, sabit ve enum değerleri satır sonunda tek satırlık `//` ile; sınıf, struct, enum ve dosya/namespace açıklamaları üstte `//` ile. Bunlara Doxygen yazılmaz.
+- **Taktik dosyaları** (`otopilot_fighter`, `otopilot_hostile`) Doxygen kullanmaz; düz `//`.
+- **Adı her şeyi söyleyen tek satırlık yardımcılar** (ör. `meter_to_nmile`) tek tek açıklanmaz; grubun üstüne bir `//` yeter.
+- **`.cpp`:** formül ve türetmesi, düz `//`.
 - **Alan yorumu:** `birim, anlam | kaynak ya da yazan`.
+- **Bölüm banner'ı:** bir dosyada birden çok sınıf varsa (ör. `maneuver.hpp/.cpp`) her sınıf bir banner'la başlar, düz `//`.
+  - `.hpp`'de yalnız ad ve tek satır özet (fonksiyonları Doxygen anlatır):
+    ```cpp
+    // =============================================================================
+    // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
+    // =============================================================================
+    ```
+  - `.cpp`'de altına fonksiyon listesi de eklenir (içindekiler gibi; formül yorumları uzun olduğu için):
+    ```cpp
+    // =============================================================================
+    // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
+    //
+    //   enter(own)    girişte bir kez: hedef irtifayı kilitler
+    //   update(own)   her step: bearing − 180'e dön, hedef irtifaya in, tam gaz
+    //   status(own)   düşman arkamda kaldıysa Done
+    // =============================================================================
+    ```
 - **Ölü kod:** yorum satırına alınmış kod bırakılmaz; eski hali git'te durur. Planlanan iş `// TODO:` satırıyla belirtilir.
-- **Bilinen ama bilerek dokunulmayan bir mantık hatası** `// NOT:` ile açıklanır.
+- **Bilinen ama bilerek dokunulmayan bir mantık hatası** `// NOT:` ile açıklanır (fonksiyonun doc yorumundaysa `/// NOT:`).
 - Kodu değiştiren, ilgili yorumu aynı değişiklikte günceller.
 
 ## 10. Biçim

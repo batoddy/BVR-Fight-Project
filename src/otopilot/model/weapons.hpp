@@ -33,19 +33,19 @@ struct Weapons
     bool enemy_in_nez = false;         // düşman benim NEZ'imde mi: wez.min_nm < menzil <= nez_nm
     // TODO: m_pole_nm, a_pole_nm
 
-    // Füze at: bu profildeki (ör. AIM120C) ilk atılmamış slot. Bu step launch emri gider.
-    // O profilde füze kalmadıysa ya da emri verilmiş ama henüz uçmamış füze varsa false; havadaki füze engel değil.
+    /// Füze at: bu profildeki (ör. AIM120C) ilk atılmamış slot. Bu step launch emri gider.
+    /// O profilde füze kalmadıysa ya da emri verilmiş ama henüz uçmamış füze varsa false; havadaki füze engel değil.
     bool fire(const MissileProfile& profile);
 
-    // adet: atılmamış füze sayısı
+    /// adet: atılmamış füze sayısı
     int missiles_left() const;
 
-    // target_id'ye doğru hâlâ uçan bir füzem var mı
+    /// target_id'ye doğru hâlâ uçan bir füzem var mı
     bool has_active_missile_against(const std::string& target_id) const;
 
-    // Son atılan füze; hiç atılmadıysa nullptr. İşaretçiyi bu step içinde kullan, saklama.
+    /// Son atılan füze; hiç atılmadıysa nullptr. İşaretçiyi bu step içinde kullan, saklama.
     const Missile* last_fired() const;
 
-    // Havadaki füzelerimden en son atılanı (desteklediğim füze); yoksa nullptr. Bu step içinde kullan.
+    /// Havadaki füzelerimden en son atılanı (desteklediğim füze); yoksa nullptr. Bu step içinde kullan.
     const Missile* active_missile() const;
 };

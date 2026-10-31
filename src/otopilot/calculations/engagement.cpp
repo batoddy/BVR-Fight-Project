@@ -18,24 +18,30 @@ namespace
 
 // WEZ: füzenin etkin menzil aralığı.
 //   iç sınır = füzenin en kısa menzili
-//   dış sınır = füzenin en uzun menzili + füze uçarken düşmanın bana doğru aldığı yol
-//     Düşman bana geliyorsa menzil uzar, benden kaçıyorsa (enemy_closure_kt < 0) kısalır.
+//   dış sınır = Rmax, azami kinematik menzil: füze hedefe enerjisi bitmeden erişir (isabet şart değil)
+//     Rmax = füzenin kendi gittiği yol + füze uçarken düşmanın bana doğru aldığı yol
+//     füzenin kendi yolu = (a + b·ln h) · (1 + k·(benim hızım − referans hız))    h: benim irtifam, km
+//     uçuş süresi        = c + d·ln h
+//     düşmanın aldığı yol = düşmanın bana doğru hızı × uçuş süresi
+//   Düşman bana geliyorsa menzil uzar, benden kaçıyorsa (enemy_closure_kt < 0) kısalır.
+// Katsayılar BVRGym füzesine karşı yapılan erişim taramasından: calculations/wez_formulu.md
 Wez engagement::wez(const Aircraft& own, const Aircraft& enemy)
 {
     const MissileProfile& missile = own.profile.main_weapon;
+    const RmaxFit& fit = missile.r_max;
     const double enemy_closure_kt = geometry::other_closure_kt(own.kinematics, enemy.kinematics);
+
+    const double altitude_km = feet_to_meter(own.kinematics.altitude_ft) / 1000.0;
+    const double ln_altitude = std::log(altitude_km);
+    const double launch_speed_factor = 1.0 + fit.k * (own.kinematics.tas_kt - fit.launch_ref_kt);
+
+    const double missile_path_nm = (fit.a + fit.b * ln_altitude) * launch_speed_factor;
+    const double flight_time_s = fit.c + fit.d * ln_altitude;
+    const double enemy_approach_nm = travel_distance_nm(enemy_closure_kt, flight_time_s);
 
     Wez result;
     result.min_nm = missile.min_range_nm;
-    result.max_nm = missile.max_range_nm;
-
-    if (missile.speed_kt > 0.0)
-    {
-        const double flight_time_s = travel_time_s(missile.max_range_nm, missile.speed_kt);
-        const double enemy_approach_nm = travel_distance_nm(enemy_closure_kt, flight_time_s);
-        result.max_nm = missile.max_range_nm + enemy_approach_nm;
-    }
-
+    result.max_nm = missile_path_nm + enemy_approach_nm;
     return result;
 }
 
@@ -104,15 +110,36 @@ OutPlan engagement::out_plan(const Aircraft& own, const Aircraft& enemy)
 //     x = benim irtifam − 10 km
 //     y = benim kaçış hızım − 700 kt
 // Katsayılar (a, b, c, d, güvenlik) düşmanın ana silahının uyumundan: calculations/r_cold_formulu.md
+//
+// Ne anlatır: düşman füzeyi attığı anda ben kuyruğumu dönmüş, y hızıyla düz kaçıyorsam, füze en fazla
+// R_cold uzaktan atılırsa bana yetişir. Daha uzaktan atılan füze yolda Mach 1'in altına düşer, kaybolur.
+// Füzenin zamana göre nerede olduğunu VERMEZ; yalnız "yetişir / yetişemez" sınırıdır.
+// Füzenin ne zaman nerede olduğu için: missile_flight::glide_... fonksiyonları.
+//
+// Nasıl bulundu: BVRGym'de 36 kaçış senaryosunda (4-10 km, farklı kaçış hızları) her biri için
+// "yetişti / yetişemedi" sınırı ikiye bölme ile ölçüldü; ln(R_cold) bu ölçümlere doğrusal uyduruldu.
+// Geçerli aralık: 4-10 km, 570-1000 kt.
 double engagement::r_cold_nm(const Aircraft& own, const Aircraft& enemy)
 {
+    // Düşmanın ana silahına ait katsayılar (her füze tipinin kendi uyumu olur).
     const RColdFit& fit = enemy.profile.main_weapon.r_cold;
 
+    // x: irtifa farkı, km. Merkez 10 km; x = 0 iken formül 10 km'deki değeri verir.
+    //    Yükseklik arttıkça hava seyrelir, füze daha az yavaşlar, R_cold büyür (b > 0).
     const double altitude_km = feet_to_meter(own.kinematics.altitude_ft) / 1000.0;
-    const double x = altitude_km - 10.0;                 // km
-    const double y = escape_speed_kt(own) - 700.0;       // kt
+    const double x = altitude_km - 10.0;
 
+    // y: kaçış hızı farkı, kt. Merkez 700 kt; y = 0 iken formül 700 kt'deki değeri verir.
+    //    Daha hızlı kaçarsam füzenin kapatması gereken yol uzar, R_cold küçülür (c < 0).
+    const double y = escape_speed_kt(own) - 700.0;
+
+    // Üs: a  → 10 km ve 700 kt'deki ln(R_cold)       (e^2.646 ≈ 14.1 NM)
+    //     b·x → irtifa etkisi
+    //     c·y → kaçış hızı etkisi
+    //     d·x·y → hız etkisinin irtifayla değişimi (alçakta hız daha az fark ettirir)
     const double exponent = fit.a + fit.b * x + fit.c * y + fit.d * x * y;
+
+    // Güvenlik çarpanı (1.1): formül bazı noktalarda gerçeğinden küçük çıkıyordu; kaçış hesabı güvenli tarafta kalsın.
     return fit.safety * std::exp(exponent);
 }
 

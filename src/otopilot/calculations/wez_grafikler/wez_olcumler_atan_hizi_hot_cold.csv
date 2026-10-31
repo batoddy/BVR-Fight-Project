@@ -1,0 +1,7 @@
+grup,aspect,alt_m,hedef_hiz_mps,hedef_gaz,atan_hiz_mps,raero_nm,durum,en_yakin_m,isabet,fuze_kt_en_yakin,fuze_mach_en_yakin,hedef_kt_en_yakin,hedef_ort_kt,hedef_atana_dogru_ort_kt,ucus_s,kosu,gercek_s
+atan_hizi,hot,8000,300,0.6,220,60.0,>60,1323,False,960.09,1.63,806.75,726,726,124.76,1,1.8
+atan_hizi,hot,8000,300,0.6,300,60.0,>60,1265,False,982.33,1.67,806.97,724,724,121.34,1,1.6
+atan_hizi,hot,8000,300,0.6,380,60.0,>60,1230,False,1002.25,1.7,803.29,722,722,118.26,1,1.6
+atan_hizi,cold,8000,300,0.6,220,60.0,>60,91366,False,808.16,1.41,807.84,720,-720,114.34,1,1.5
+atan_hizi,cold,8000,300,0.6,300,60.0,>60,88574,False,813.82,1.42,813.33,724,-724,120.09,1,1.6
+atan_hizi,cold,8000,300,0.6,380,60.0,>60,85980,False,818.34,1.43,818.12,727,-727,124.76,1,1.7

@@ -4,6 +4,11 @@
 #include "model/flight_command.hpp"
 #include "model/phase.hpp"
 
+// =============================================================================
+// ORTAK  —  bütün manevraların arayüzü ve uçurma yardımcısı
+// =============================================================================
+
+// Manevranın durumu.
 enum class ManeuverStatus
 {
     Running,   // sürüyor
@@ -12,23 +17,22 @@ enum class ManeuverStatus
 
 // Bütün manevraların ortak arayüzü. Manevra yalnız "bu durumda nasıl uçarım" sorusunu cevaplar;
 // hangisinin çalışacağını otopilot seçer.
-//
-// Yaşam döngüsü:
-//   enter(own)   manevraya geçilince bir kez: girişe bağlı hedefleri kilitler
-//   update(own)  her step: own.command'dan (Python'un son uyguladığı) başlayıp yeni komutu döner
-//   status(own)  kendi içinde biten manevralar (Out) hedefe varınca Done döner;
-//                sürekli manevralar (Hold, In, Crank, Beam) hep Running döner, onları otopilot bitirir
 class Maneuver
 {
 public:
     virtual ~Maneuver() = default;
 
+    /// Bu manevranın fazı (görüntüleyicide ve CSV'de görünen ad).
     virtual Phase phase() const = 0;
 
+    /// Manevraya geçilince bir kez: girişe bağlı hedefleri kilitler.
     virtual void enter(const Aircraft& own) { (void)own; }
 
+    /// Her step: own.command'dan (Python'un son uyguladığı) başlayıp yeni komutu döner.
     virtual FlightCommand update(const Aircraft& own) = 0;
 
+    /// Kendi içinde biten manevralar (Out) hedefe varınca Done döner;
+    /// sürekli manevralar (Hold, In, Crank, Beam) hep Running döner, onları otopilot bitirir.
     virtual ManeuverStatus status(const Aircraft& own) const
     {
         (void)own;
@@ -36,33 +40,52 @@ public:
     }
 };
 
-// Manevrayı bu step için uçur: own.phase'e manevranın fazını, own.command'a ürettiği komutu yazar.
+/// Manevrayı bu step için uçur: own.phase'e manevranın fazını, own.command'a ürettiği komutu yazar.
 void fly(Aircraft& own, Maneuver& maneuver);
 
-// Şu anki yön ve irtifayla, aynı gazla devam.
+// =============================================================================
+// HOLD  —  şu anki yön ve irtifayla, aynı gazla devam
+// =============================================================================
+
 // NOT: her step ölçülen yön ve irtifayı hedef yapar; irtifa kayarsa düzeltilmez. Girişte kilitlemek ayrı bir karar.
 class Hold : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Hold; }
+
+    /// Yön ve irtifa = şu anki ölçüm, gaz aynı, g sınırı yok.
     FlightCommand update(const Aircraft& own) override;
 };
 
-// Atış anı: komut değişmez. Atış emrini otopilot verir (own.weapons.fire).
+// =============================================================================
+// FIRE  —  atış anı; atış emrini otopilot verir (own.weapons.fire)
+// =============================================================================
+
 class Fire : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Fire; }
+
+    /// Komut değişmez.
     FlightCommand update(const Aircraft& own) override;
 };
 
-// Düşmana kuyruk dön, alçal, tam art yakıcı. Düşman arkada kalınca biter.
+// =============================================================================
+// OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
+// =============================================================================
+
 class Out : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Out; }
+
+    /// Hedef irtifayı kilitler: DESCEND_FT alçal, FLOOR_FT'nin altına inme.
     void enter(const Aircraft& own) override;
+
+    /// Yön = bearing − 180, irtifa = kilitli hedef, tam gaz, out g'si.
     FlightCommand update(const Aircraft& own) override;
+
+    /// Düşman arkamda kaldıysa (|ATA| > DONE_ATA_DEG) Done.
     ManeuverStatus status(const Aircraft& own) const override;
 
 private:
@@ -74,39 +97,51 @@ private:
     double target_altitude_ft_ = 0;                 // ft, enter()'da bir kez hesaplanır, out boyunca sabit
 };
 
-// Düşmana dön (saf takip): yalnız yön değişir.
+// =============================================================================
+// IN  —  düşmana dön (saf takip)
+// =============================================================================
+
 class In : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::In; }
+
+    /// Yön = düşmanın bearing'i; irtifa ve gaz aynı.
     FlightCommand update(const Aircraft& own) override;
 };
+
+// =============================================================================
+// CRANK  —  düşmanı radar gimbal sınırının biraz içinde tutarak yanal kaçış
+// =============================================================================
 
 // Crank yönü, havacılık terimiyle: uçağın döndüğü taraf.
 enum class CrankSide
 {
     Left,    // uçak sola döner, düşman burnun SAĞINDA kalır (hedef ATA +)
-    Right,   // uçak sağa döner, düşman burnun SOLUNDA kalır (hedef ATA -)
+    Right,   // uçak sağa döner, düşman burnun SOLUNDA kalır (hedef ATA −)
 };
 
-// Crank'e girerken hangi taraf: düşman şu an burnumun sağındaysa (ATA ≥ 0) sola crank, solundaysa sağa.
-// Böylece düşman zaten bulunduğu tarafta kalır, uçak gereksiz yere ters tarafa dönmez.
+/// Crank'e girerken hangi taraf: düşman burnumun sağındaysa (ATA ≥ 0) Left, solundaysa Right.
+/// Böylece düşman zaten bulunduğu tarafta kalır, uçak gereksiz yere ters tarafa dönmez.
 CrankSide crank_side_for(const Aircraft& own);
 
-// Crank: düşmanı radar gimbal sınırının biraz içinde tutarak yanal kaçış; menzil kapanmasını yavaşlatır.
-// Yön P kontrolüyle tutulur: düzeltme = kp × (ATA − hedef ATA).
-// Taraf girişte (enter) crank_side_for ile seçilir ve crank boyunca sabit kalır.
+// Menzil kapanmasını yavaşlatır. Yön P kontrolüyle tutulur: düzeltme = kp × (ATA − hedef ATA).
+// Taraf girişte seçilir ve crank boyunca sabit kalır.
 class Crank : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Crank; }
+
+    /// Tarafı seçer (crank_side_for).
     void enter(const Aircraft& own) override;
+
+    /// Yön = şu anki yön + P düzeltmesi (en fazla ±MAX_CORRECTION_DEG); irtifa ve gaz aynı.
     FlightCommand update(const Aircraft& own) override;
 
-    // Düşman hedef ATA'ya tolerance_deg içinde oturdu mu (gimbal sınırında tutuluyor mu)
-    bool in_position(const Aircraft& own, double tolerance_deg = 5.0) const;
+    /// Düşman radarın görüş konisinde mi (|ATA| < gimbal sınırı).
+    bool in_radar_sight(const Aircraft& own) const;
 
-    // Girişte seçilen taraf
+    /// Girişte seçilen taraf.
     CrankSide side() const { return side_; }
 
 private:
@@ -114,30 +149,39 @@ private:
     static constexpr double KP = 1.0;                      // birimsiz: hatanın kaç katı dön
     static constexpr double MAX_CORRECTION_DEG = 180.0;    // derece, tek seferde istenen en büyük dönüş
 
-    // derece ±180, düşmanın burnuma göre tutulacağı açı: Left'te +, Right'ta −
+    /// derece ±180, düşmanın burnuma göre tutulacağı açı: Left'te +, Right'ta −.
     double target_ata_deg(const Aircraft& own) const;
 
     CrankSide side_ = CrankSide::Left;   // enter()'da seçilir
 };
 
-// Beam: düşman uçağa dik uç (3/9 hattı). Füzeye göre olan notch ayrı bir manevra olacak.
-// NOT: taraf kuzeye göre seçiliyor (bearing > 0 ise bearing − 90), uçağın burnuna göre değil;
-// uçak bazen 180°'ye yakın ters tarafa döner. Doğrusu: iki beam yönünden şu anki yöne yakın olanı seçmek.
+// =============================================================================
+// BEAM  —  düşman uçağa dik uç (3/9 hattı)
+// =============================================================================
+
+// Taraf burnuma göre seçilir: düşman sağımdaysa sola, solumdaysa sağa; dönüş hep 90°'den kısa.
+// Füzeye göre olan notch ayrı bir manevra olacak.
 class Beam : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Beam; }
+
+    /// Yön = bearing − 90 (düşman sağımda) ya da bearing + 90 (solumda); irtifa ve gaz aynı.
     FlightCommand update(const Aircraft& own) override;
 };
 
-// Her otopilotun ayrı manevra nesneleri vardır; her biri bir kez oluşur ve kendi durumunu korur.
-// Yeni manevra: sınıfını yukarıya yaz, buraya bir satır ekle.
+// =============================================================================
+// MANEUVERS  —  bir otopilotun manevra nesneleri
+// =============================================================================
+
+// Her biri bir kez oluşur ve kendi durumunu korur.
+// Yeni manevra: sınıfını yukarıya kendi banner'ıyla yaz, buraya bir satır ekle.
 struct Maneuvers
 {
-    Hold hold;
-    Fire fire;
-    Out out;
-    In in;
+    Hold hold;     // rotayı koru
+    Fire fire;     // atış anı
+    Out out;       // kaç
+    In in;         // düşmana dön
     Crank crank;   // taraf girişte seçilir
-    Beam beam;
+    Beam beam;     // düşmana dik uç
 };

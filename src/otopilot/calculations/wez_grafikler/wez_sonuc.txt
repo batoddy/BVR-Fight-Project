@@ -1,0 +1,25 @@
+=== Hot: Raero = (a + b·ln h) + V·(c + d·ln h)/3600   [h km, V kt, Raero NM] ===
+a = -29.595   b = 39.193   (füzenin kendi yolu R_m, NM)
+c = -48.62   d = 95.66   (uçuş süresi t, s)
+     4 km:  R_m =  24.74 NM   t =   84.0 s
+     6 km:  R_m =  40.63 NM   t =  122.8 s
+     8 km:  R_m =  51.90 NM   t =  150.3 s
+    10 km:  R_m =  60.65 NM   t =  171.7 s
+Hata (model − ölçülen): ortalama |hata| 1.46 NM, en büyük fazla tahmin 2.20 NM, en büyük eksik tahmin -2.33 NM
+Ölçülen / model oranı: 0.950 – 1.037
+  -> model × 0.94 ile bütün noktalarda ölçülenin altında kalır (fazla tahmin yok)
+
+=== Atan hızı (8 km, hedef 300 m/s gaz 0.6) ===
+  hot  atan 220 m/s: Raero  79.28 NM   füzenin kendi yolu oranı 0.930
+  hot  atan 300 m/s: Raero  84.38 NM   füzenin kendi yolu oranı 1.000
+  hot  atan 380 m/s: Raero  88.74 NM   füzenin kendi yolu oranı 1.061
+  hot: k = 0.00081 /(m/s)   ->  × (1 + k·(V_atan − 300 m/s))
+  cold atan 220 m/s: Raero   8.57 NM   Raero oranı 0.922
+  cold atan 300 m/s: Raero   9.29 NM   Raero oranı 1.000
+  cold atan 380 m/s: Raero  10.02 NM   Raero oranı 1.079
+  cold: k = 0.00098 /(m/s)   ->  × (1 + k·(V_atan − 300 m/s))
+
+=== R_cold: ln R = a + b·x + c·y + d·x·y  [x = h − 10 km, y = V_kaçış − 700 kt], 28 nokta (V ≥ 550 kt) ===
+eski (koddaki): a=2.646 b=0.1523 c=-0.00201 d=-0.00008   ortalama |hata| 1.60 NM, ölçülen/model 0.718–1.147  -> güvenli çarpan ≥ 1.15
+yeni (erişim) : a=2.454 b=0.1475 c=-0.00321 d=-0.00020   ortalama |hata| 0.40 NM, ölçülen/model 0.915–1.186  -> güvenli çarpan ≥ 1.19
+

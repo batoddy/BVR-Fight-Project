@@ -17,7 +17,6 @@ namespace
                 MissileTargetInfo& info = missile.target;
                 info.range_nm = missile_geometry::range_nm(missile, target);
                 info.closure_kt = missile_geometry::closure_kt(missile, target);
-                info.time_to_go_s = missile_geometry::time_to_go_s(info.range_nm, info.closure_kt);
 
                 // Füze radarını bir kez açınca kapatmaz; hedef sonra uzaklaşsa da pitbull kalır.
                 info.is_pitbull = info.is_pitbull || missile_geometry::is_pitbull(missile, info.range_nm);
@@ -25,26 +24,7 @@ namespace
         }
     }
 
-    // candidate, şu ana kadar seçilen tehditten daha mı acil?
-    //   Kalan süresi kısa olan daha acildir. Yaklaşmayan füzenin (süresi yok) önceliği en sondadır.
-    bool is_more_urgent(const ThreatInfo& candidate, const std::optional<ThreatInfo>& current)
-    {
-        if (!current.has_value())
-        {
-            return true;    // henüz seçilen yok
-        }
-        if (!candidate.time_to_go_s.has_value())
-        {
-            return false;   // aday yaklaşmıyor
-        }
-        if (!current->time_to_go_s.has_value())
-        {
-            return true;    // seçilen yaklaşmıyor, aday yaklaşıyor
-        }
-        return *candidate.time_to_go_s < *current->time_to_go_s;
-    }
-
-    // enemy'nin bana doğru uçan füzelerinden en acil olanı.
+    // enemy'nin bana doğru uçan füzelerinden bana en yakın olanı.
     std::optional<ThreatInfo> find_threat(const Aircraft& own, const Aircraft& enemy)
     {
         std::optional<ThreatInfo> threat;
@@ -59,14 +39,14 @@ namespace
             candidate.slot = missile.slot;
             candidate.range_nm = missile.target.range_nm;
             candidate.closure_kt = missile.target.closure_kt;
-            candidate.time_to_go_s = missile.target.time_to_go_s;
             candidate.bearing_deg = geometry::bearing_deg(own.kinematics, missile.kinematics);
             candidate.ata_deg = geometry::ata_deg(own.kinematics, missile.kinematics);
             candidate.aspect_deg = geometry::aspect_angle_deg(own.kinematics, missile.kinematics);
             candidate.mach = missile.kinematics.mach;
             candidate.is_pitbull = missile.target.is_pitbull;
 
-            if (is_more_urgent(candidate, threat))
+            const bool is_closer = !threat.has_value() || candidate.range_nm < threat->range_nm;
+            if (is_closer)
             {
                 threat = candidate;
             }

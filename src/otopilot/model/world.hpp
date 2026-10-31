@@ -10,6 +10,6 @@ struct World
     Aircraft fighter;        // biz    (roles.hpp FIGHTER_ID)
     Aircraft hostile;        // düşman (roles.hpp HOSTILE_ID)
 
-    // Ölçüm okunduktan sonra her step çağrılır: düşman ataması, füze bilgileri ve picture.
+    /// Ölçüm okunduktan sonra her step çağrılır: düşman ataması, füze bilgileri ve picture.
     void update();
 };

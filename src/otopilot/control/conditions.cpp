@@ -2,6 +2,33 @@
 
 #include <cmath>
 
+namespace
+{
+    constexpr double HOT_MAX_DEG = 30.0;     // derece, bu açıya kadar hot
+    constexpr double FLANK_MAX_DEG = 70.0;   // derece, bu açıya kadar flank
+    constexpr double BEAM_MAX_DEG = 110.0;   // derece, bu açıya kadar beam; ötesi cold
+
+    // Açıyı (±180) sınıfa çevirir; yön değil büyüklük kullanılır.
+    Aspect aspect_of(double angle_deg)
+    {
+        const double size_deg = std::abs(angle_deg);
+
+        if (size_deg <= HOT_MAX_DEG)
+        {
+            return Aspect::Hot;
+        }
+        if (size_deg <= FLANK_MAX_DEG)
+        {
+            return Aspect::Flank;
+        }
+        if (size_deg <= BEAM_MAX_DEG)
+        {
+            return Aspect::Beam;
+        }
+        return Aspect::Cold;
+    }
+}
+
 bool condition::in_mar(const Aircraft& own)
 {
     return own.picture.is_in_mar;
@@ -22,35 +49,14 @@ bool condition::enemy_in_my_nez(const Aircraft& own)
     return own.weapons.enemy_in_nez;
 }
 
-bool condition::enemy_cold(const Aircraft& own)
+Aspect condition::enemy_aspect(const Aircraft& own)
 {
-    return std::abs(own.picture.aspect_deg) > 90.0;
+    return aspect_of(own.picture.aspect_deg);
 }
 
-bool condition::approaching_mar(const Aircraft& own, double margin_nm)
+Aspect condition::my_aspect(const Aircraft& own)
 {
-    return own.picture.range_3d_nm <= own.picture.mar_nm + margin_nm;
-}
-
-bool condition::range_within(const Aircraft& own, double range_nm)
-{
-    return own.picture.range_3d_nm <= range_nm;
-}
-
-bool condition::last_shot_before_mar(const Aircraft& own, double margin_nm)
-{
-    if (!own.weapons.enemy_in_wez)
-    {
-        return false;
-    }
-    if (!own.weapons.f_pole_nm.has_value())
-    {
-        return false;   // füze yetişemiyor
-    }
-
-    const double f_pole_nm = *own.weapons.f_pole_nm;
-    const double latest_f_pole_nm = own.picture.mar_nm + margin_nm;
-    return f_pole_nm <= latest_f_pole_nm;
+    return aspect_of(own.picture.ata_deg);
 }
 
 bool condition::threat_inbound(const Aircraft& own)
@@ -58,23 +64,15 @@ bool condition::threat_inbound(const Aircraft& own)
     return own.picture.threat.has_value();
 }
 
-bool condition::threat_within_s(const Aircraft& own, double limit_s)
+// atış sırasına göre slot değil !
+bool condition::own_missile_pitbull(const Aircraft& own, int fire_order)
 {
-    if (!own.picture.threat.has_value())
+    for (const Missile& missile : own.weapons.missiles)
     {
-        return false;   // gelen füze yok
+        if (missile.fire_order == fire_order)
+        {
+            return missile.target.is_pitbull;
+        }
     }
-
-    const std::optional<double>& time_to_go_s = own.picture.threat->time_to_go_s;
-    if (!time_to_go_s.has_value())
-    {
-        return false;   // füze yaklaşmıyor
-    }
-    return *time_to_go_s < limit_s;
-}
-
-bool condition::own_missile_pitbull(const Aircraft& own)
-{
-    const Missile* missile = own.weapons.active_missile();
-    return missile != nullptr && missile->target.is_pitbull;
+    return false;   // o sırada atılmış füze yok
 }

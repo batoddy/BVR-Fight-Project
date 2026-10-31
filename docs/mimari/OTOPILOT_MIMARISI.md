@@ -104,20 +104,20 @@ return CommandWriter::write(state.tick, world_);
 | `FlightCommand` | yön, irtifa, gaz, isteğe bağlı g sınırı; setter'lar aralığı korur | StateReader, otopilot |
 | `Phase` | kayda çıkan aşama: `0 Hold`, `1 Fire`, `2 Out`, `3 In`, `4 Crank`, `5 Beam` | otopilot (aktif manevradan) |
 
-"Olmayabilen" sayılar `std::optional` tipindedir: füze yaklaşmıyorsa `time_to_go_s`, füze yetişemiyorsa `f_pole_nm`. WEZ, R_cold, NEZ, MAR ve DOR her uçağın profilindeki `main_weapon`'dan hesaplandığı için her zaman vardır. Kayda olmayan değerler 0 olarak yazılır.
+"Olmayabilen" sayılar `std::optional` tipindedir: tehdit (bana gelen füze yoksa `threat`), füze yetişemiyorsa `f_pole_nm`. WEZ, R_cold, NEZ, MAR ve DOR her uçağın profilindeki `main_weapon`'dan hesaplandığı için her zaman vardır. Kayda olmayan değerler 0 olarak yazılır.
 
 ## World hesapları
 
 `World::update()` şu sırayla çalışır:
 
 1. **Düşman ataması.** 1v1'de sabit: blue → red, red → blue. Çok uçaklı yapıya geçilirse yalnız burası değişir.
-2. **Füze bilgileri.** Her uçağın havadaki füzeleri için hedefe göre mesafe, kapanma, `time_to_go_s` ve pitbull hesaplanır. Pitbull bir kez true olunca öyle kalır.
+2. **Füze bilgileri.** Her uçağın havadaki füzeleri için hedefe göre mesafe, kapanma ve pitbull hesaplanır. Pitbull bir kez true olunca öyle kalır.
 3. **Picture.** Her iki uçak için:
    - geometri (`geometry::`)
    - out planı (`engagement::out_plan` → `turn::to_heading`)
    - düşmanın ana silahının (`enemy.profile.main_weapon`) R_cold uyumuyla R_cold, NEZ ve MAR
    - DOR: MAR + düşmanın 180°'lik recommit dönüşü boyunca yaklaştığı yol
-   - tehdit: düşmanın bana gelen füzelerinden `time_to_go_s`'i en kısa olanı
+   - tehdit: düşmanın bana gelen füzelerinden bana en yakın olanı
 4. **Weapons.** Her iki uçak için kendi ana silahıyla (`own.profile.main_weapon`):
    - WEZ ve `enemy_in_wez`
    - F-pole
@@ -146,8 +146,8 @@ Manevra yaşam döngüsü: `enter(own)` girişte bir kez, `update(own)` her step
 | `Fire` | Fire | komutu değiştirmez | sürekli |
 | `Out` | Out | bearing − 180, girişte kilitlenen alçalma, tam gaz, out g'si | \|ATA\| > 177° → Done |
 | `In` | In | yön = bearing | sürekli |
-| `Crank` | Crank | gimbal − 5° hedef ATA'ya P kontrolü; `in_position()` sorgusu. Taraf `enter()`'da `crank_side_for` ile seçilir (`side()` ile okunur): düşman hangi taraftaysa o tarafta kalır | sürekli |
-| `Beam` | Beam | bearing ∓ 90 (taraf kuzeye göre seçiliyor; bilinen hata, kodda NOT olarak yazılı) | sürekli |
+| `Crank` | Crank | gimbal − 5° hedef ATA'ya P kontrolü; `in_radar_sight()` sorgusu (düşman radar konisinde mi, \|ATA\| < gimbal). Taraf `enter()`'da `crank_side_for` ile seçilir (`side()` ile okunur): düşman hangi taraftaysa o tarafta kalır | sürekli |
+| `Beam` | Beam | bearing ∓ 90; taraf burnuma göre seçilir (düşman sağımdaysa sola, solumdaysa sağa), dönüş hep 90°'den kısa | sürekli |
 
 `OtopilotFighter` ve `OtopilotHostile` birer durum makinesidir; ikisi de `step` içinde tek bir switch kullanır. Her durum bir bloktur: önce o durumun manevrası `fly(own, manevra)` ile uçulur (fazı da manevradan alır), sonra çıkış koşullarına bakılır. Geçiş `go_to(yeni_durum, yeni_manevra, own)` ile yapılır; yeni manevranın `enter()`'ı o anda çağrılır, kendisi bir sonraki step'te uçulur. Başlangıç durumunun manevrası (In) `enter()` kullanmaz; başlangıç `enter()` kullanan bir manevraya değişirse ilk step'te çağrılması gerekir. Geçiş koşulları `control/conditions.hpp` içinde isimli fonksiyonlardır; karar yapısı ileride değişse de manevralar ve koşullar aynı kalır.
 
@@ -161,7 +161,7 @@ python src/sim/sim_main.py --name show --range 40 --altitude 6000
 
 | Fighter | Geçiş |
 |---|---|
-| Commit (In) | düşman WEZ'imde ve MAR'a 5 NM kaldı → Fire; atmadan MAR'a girdim → Out |
+| Commit (In) | düşman WEZ'imde → Fire; atmadan MAR'a girdim → Out |
 | Fire | AIM-120C atış emri, crank tarafı seçilir → Crank |
 | Crank | MAR'a girdim → Out |
 | Out | Out bitince gaz 0.45 → HoldAfterOut |
@@ -188,7 +188,7 @@ python src/sim/sim_main.py --name show --range 40 --altitude 6000
 
 Bilinmesi gerekenler:
 - BVRGym füzesi 6 km'de burun buruna, manevra yapmayan hedefi yalnız ~12 NM'ye kadar vurur; daha uzakta tırmanıp dalma (loft) sonrası 0.3–1.9 km ile ıskalar. Dönen hedefi daha yakından da ıskalayabilir.
-- Gelen füzeye karşı "kalan süre" (`time_to_go_s` = mesafe / kapanma) füze yavaşladıkça ve biz döndükçe zıplar. Kaçış payı (`escape_margin_nm`) bunun yerine geçecek.
+- Gelen füzeye karşı "kalan süre" (mesafe / kapanma) füze yavaşladıkça ve biz döndükçe zıpladığı için kaldırıldı. Yerine kaçış payı (`escape_margin_nm`) gelecek.
 
 ## Füze slotları ve atış yaşam döngüsü
 

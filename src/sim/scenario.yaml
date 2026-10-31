@@ -1,6 +1,6 @@
 # Süre: simülasyon saniyesi; sleep: her dış döngü sonunda gerçek saniye.
 world:
-  duration_s: 300
+  duration_s: 600
   sleep_s: 0.0  # 0 = beklemeden; 0.08 = yaklaşık gerçek zaman.
   sim_time_step: 1  # BVRGym adım tekrar sayısı; fizik dt değeri değil.
 
@@ -20,7 +20,7 @@ agents:
     ammo: 4
     throttle: 0.45  # Başlangıç gaz komutu. 
     spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
-      lat: 59.2
+      lat: 58.0
       long: 18.0
       alt: 10000
       vel: 300

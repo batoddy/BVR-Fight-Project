@@ -7,7 +7,7 @@
 class ConsoleLog
 {
 public:
-    // Yeni bir simülasyon saniyesine geçildiyse bir satır yaz; değilse bir şey yapmaz.
+    /// Yeni bir simülasyon saniyesine geçildiyse bir satır yaz; değilse bir şey yapmaz.
     void print(const World& world);
 
 private:

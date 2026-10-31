@@ -70,6 +70,10 @@ Mach koşulu, füzenin artık kaybolduğu anda yapılan yakın geçişlerin isab
 
 Sonucun mesafeye göre tek yönlü olduğu ayrıca kontrol edildi. 4, 8 ve 10 km'de 5–20 NM arası 0.5 NM adımla tarandı. Sınıra kadar her atış isabet, ötesinde her atış ıskalama çıktı; arada karışık bölge yok. Bu nedenle sınır ikiye bölme yöntemiyle bulundu: 0.5–30 NM arası, 0.15 NM hassasiyet.
 
+## Erişim kriteriyle yeniden ölçüm
+
+WEZ taramasında (`wez_formulu.md`) aynı senaryo "isabet değil erişim" kriteriyle yeniden ölçüldü. 36 sonucun hepsi aşağıdaki **Eski R** sütunuyla 0.15 NM içinde aynı çıktı. Bu tablodaki veriler ve formül değiştirilmedi; yeni ölçüm `wez_grafikler/wez_olcumler_ana_cold_v2.csv` dosyasında, karşılaştırma grafiği `wez_grafikler/r_cold_eski_yeni.png`.
+
 ## Ölçülen veri
 
 `Eski R`: yalnız BVRGym isabeti. `Yeni R`: yukarıdaki genişletilmiş tanım; formül bu sütundan çıkarıldı. `En yakın`: yeni sınırdaki atışın hedefe en yakın geçişi.

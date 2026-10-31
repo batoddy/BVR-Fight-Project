@@ -21,7 +21,7 @@ public:
     void step(Aircraft& own, const Aircraft& enemy);
 
 private:
-    static constexpr double AFTER_OUT_THROTTLE = 0.45;   // 0..1, out bitince gaz (askeri güç altı)
+    static constexpr double DEFAULT_THROTTLE = 0.45;   // 0..1, out bitince gaz (askeri güç altı)
 
     // Yeni duruma geç; manevranın enter()'ı geçiş anında bir kez çağrılır.
     void go_to(HostileState next, Maneuver& maneuver, const Aircraft& own);

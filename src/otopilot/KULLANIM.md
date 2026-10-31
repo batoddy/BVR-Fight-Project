@@ -32,14 +32,14 @@ own.weapons.f_pole_nm          // std::optional<double>: füze yetişemiyorsa de
 
 `picture` ve `weapons`'ın hesaplanan alanları yalnız okunur. Yeni bir değer gerekiyorsa `calculations/`'a fonksiyon, `model/picture.hpp` ya da `model/weapons.hpp`'ye alan eklenir ve `World::update` içinde doldurulur.
 
-`optional` kullanımı (yalnız gerçekten olmayabilen değerlerde: tehdit, kalan süre, F-pole):
+`optional` kullanımı (yalnız gerçekten olmayabilen değerlerde: tehdit, F-pole):
 
 ```cpp
 if (const auto f_pole_nm = own.weapons.f_pole_nm)   // değer varsa
 {
     if (*f_pole_nm > 15.0) { ... }                   // * ile değeri al
 }
-const double ttg_s = own.picture.threat ? own.picture.threat->time_to_go_s.value_or(1e9) : 1e9;
+if (own.picture.threat) { ... }                      // bana gelen füze var mı
 ```
 
 ## Yön, irtifa ve gaz hedefi
@@ -96,7 +96,7 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
 
 `Otopilot` iskeleti fazı manevradan alır (`own.phase = manevra.phase()`), yeni duruma geçince manevranın `enter()`'ını çağırır. Yeni manevra bir sonraki step'te uçulur. Bu kodlarda `enter()` çağırmayı ya da fazı elle yazmayı unutma riski yoktur.
 
-Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `enemy_cold`, `range_within`, `last_shot_before_mar`, `threat_inbound`, `threat_within_s`, `own_missile_pitbull`.
+Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `threat_inbound`, `own_missile_pitbull(own, fire_order)` (1: ilk attığım füze, 2: ikinci, ...).
 
 Şu anki fighter ve hostile taktiği şov senaryosudur; akışı ve çalıştırma komutu [OTOPILOT_MIMARISI.md](../../docs/mimari/OTOPILOT_MIMARISI.md)'dedir.
 
@@ -108,10 +108,10 @@ Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar y
 | `fire` | Fire | sürekli (komut değişmez; tek step'lik atış durumu için) |
 | `out` | Out | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
 | `in` | In | sürekli |
-| `crank` | Crank | sürekli; `in_position(own)` düşman gimbal sınırına oturdu mu. Taraf girişte (`enter`) `crank_side_for(own)` ile seçilir, `side()` ile okunur |
+| `crank` | Crank | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) `crank_side_for(own)` ile seçilir, `side()` ile okunur |
 | `beam` | Beam | sürekli |
 
-Sürekli manevraları otopilot bitirir. Karara yardım eden sorgular (`Crank::in_position` gibi) manevranın kendisinde durur.
+Sürekli manevraları otopilot bitirir. Karara yardım eden sorgular (`Crank::in_radar_sight` gibi) manevranın kendisinde durur.
 
 ## Atış ve füzeler
 
@@ -121,10 +121,10 @@ if (own.weapons.fire(AIM120C)) { ... }   // bu step için atış emri oluştu
 const Missile* supporting = own.weapons.active_missile();   // havadaki son füzem; yoksa nullptr
 if (supporting != nullptr && supporting->target.is_pitbull) { ... }
 
-if (own.picture.threat)                               // bana gelen en acil düşman füzesi
+if (own.picture.threat)                               // bana gelen en yakın düşman füzesi
 {
     const ThreatInfo& threat = *own.picture.threat;
-    // threat.range_nm, threat.time_to_go_s (optional), threat.bearing_deg, threat.aspect_deg, threat.is_pitbull
+    // threat.range_nm, threat.bearing_deg, threat.aspect_deg, threat.is_pitbull
 }
 int remaining = own.weapons.missiles_left();
 ```

@@ -7,6 +7,7 @@
 
 #include "calculations/engagement.hpp"
 #include "calculations/geometry.hpp"
+#include "calculations/missile_flight.hpp"
 #include "calculations/missile_geometry.hpp"
 #include "calculations/turn.hpp"
 #include "common/angles.hpp"
@@ -93,10 +94,6 @@ namespace
         other.altitude_ft = meter_to_feet(2.0);
         near(geometry::los_unit(own, other).down, -1, "vertical LOS normalization");
 
-        near(*missile_geometry::time_to_go_s(60, 600), 360, "NM / kt -> seconds");
-        require(!missile_geometry::time_to_go_s(60, 0).has_value(), "zero closure: no time to go");
-        require(!missile_geometry::time_to_go_s(60, -50).has_value(), "receding target: no time to go");
-
         Missile missile;
         missile.profile = AIM120C;
         require(missile_geometry::is_pitbull(missile, AIM120C.pitbull_range_nm - 0.01), "pitbull inside");
@@ -172,11 +169,14 @@ namespace
         const double enemy_closure_kt = geometry::other_closure_kt(fighter.kinematics, hostile.kinematics);
         const double closure_kt = geometry::closure_kt(fighter.kinematics, hostile.kinematics);
 
-        // WEZ: düşman füzenin uçuş süresince yaklaşırsa menzil uzar.
+        // WEZ (Rmax): 10 km'de füzenin kendi yolu + düşmanın uçuş süresince yaklaştığı yol; atış hızı 700 kt.
         const Wez wez = engagement::wez(fighter, hostile);
-        const double flight_time_h = AIM120C.max_range_nm / AIM120C.speed_kt;
-        near(wez.max_nm, AIM120C.max_range_nm + enemy_closure_kt * flight_time_h, "WEZ grows with enemy closure");
-        require(wez.max_nm > AIM120C.max_range_nm, "WEZ longer when the enemy approaches");
+        const RmaxFit& r_max = AIM120C_R_MAX;
+        const double missile_path_nm = (r_max.a + r_max.b * std::log(10.0)) * (1.0 + r_max.k * (700.0 - r_max.launch_ref_kt));
+        const double flight_time_s = r_max.c + r_max.d * std::log(10.0);
+        near(wez.max_nm, missile_path_nm + enemy_closure_kt * flight_time_s / 3600.0, "Rmax formula", 1e-9);
+        require(wez.max_nm > missile_path_nm, "WEZ longer when the enemy approaches");
+        near((r_max.a + r_max.b * std::log(10.0)), 60.65, "Rmax missile path at 10 km and reference speed", 1e-3);
         require(engagement::in_wez(fighter, hostile) == (range_nm > wez.min_nm && range_nm < wez.max_nm), "in WEZ");
 
         // R_cold: 10 km ve 700 kt'de safety · e^a
@@ -203,6 +203,43 @@ namespace
         // Düşman füzeden hızlı kaçıyorsa füze yetişemez: F-pole yok.
         hostile.kinematics.velocity_ned_kt.north = AIM120C.speed_kt + 100;
         require(!engagement::f_pole_nm(fighter, hostile).has_value(), "F-pole when the missile cannot catch the target");
+    }
+
+    void missile_flight_glide()
+    {
+        // 10 km, tepe hızı referans eğrinin tepesine (1447 m/s) denk gelen atış: eğri ölçeksiz okunur.
+        //   Mach 1'e kadar: boost (557.7 + 1447) / 2 × 0.37 = 370.9 m + referans 56085.5 m = 30.48 NM
+        const double altitude_10km_ft = meter_to_feet(10000);
+        const double launch_at_reference_kt = mps_to_knot(1447 - 889.3);
+        near(*missile_flight::glide_max_distance_nm(AIM120C, altitude_10km_ft, launch_at_reference_kt), 30.48,
+             "glide range at reference altitude", 0.01);
+
+        // 6 km, atış 300 m/s: 6 km'nin kendi ölçülmüş tablosunda Mach 1'e 15.5 NM + boost 0.14 NM.
+        const double altitude_6km_ft = meter_to_feet(6000);
+        const double launch_kt = mps_to_knot(300);
+        const double max_nm = *missile_flight::glide_max_distance_nm(AIM120C, altitude_6km_ft, launch_kt);
+        near(max_nm, 15.64, "glide range scaled to 6 km", 15.64 * 0.05);
+
+        // Yol ↔ süre aynı eğriden: biri diğerinin tersi.
+        const double distance_nm = *missile_flight::glide_distance_at_time_nm(AIM120C, altitude_6km_ft, launch_kt, 20);
+        near(*missile_flight::glide_time_at_distance_s(AIM120C, altitude_6km_ft, launch_kt, distance_nm), 20,
+             "glide time/distance inverse", 1e-6);
+        require(*missile_flight::glide_speed_at_time_kt(AIM120C, altitude_6km_ft, launch_kt, 5)
+                > *missile_flight::glide_speed_at_time_kt(AIM120C, altitude_6km_ft, launch_kt, 20), "missile slows down");
+        require(!missile_flight::glide_time_at_distance_s(AIM120C, altitude_6km_ft, launch_kt, max_nm + 0.5).has_value(),
+                "beyond Mach 1 range: no time");
+
+        // Hedef yerinde: yakalama süresi = o mesafeyi alma süresi. Gelen hedef daha çabuk, kaçan daha geç yakalanır.
+        const double range_nm = 8;
+        const double still_s = *missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, range_nm, 0);
+        near(still_s, *missile_flight::glide_time_at_distance_s(AIM120C, altitude_6km_ft, launch_kt, range_nm),
+             "hit time of a still target", 1e-6);
+        require(*missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, range_nm, 500) < still_s,
+                "head-on target is hit sooner");
+        require(*missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, range_nm, -500) > still_s,
+                "fleeing target is hit later");
+        require(!missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, 30, -500).has_value(),
+                "fleeing target out of reach");
     }
 
     void world_threat_selection()
@@ -318,6 +355,7 @@ int main()
         flight_command_setters();
         turn_and_out_plan();
         engagement_values();
+        missile_flight_glide();
         world_threat_selection();
         metric_wire_and_imperial_calculations();
         std::cout << "Unit conversion, geometry, turn, engagement, world and IO checks passed.\n";

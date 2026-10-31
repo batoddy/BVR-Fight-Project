@@ -30,7 +30,7 @@ struct Ecef
 inline constexpr double WGS84_A_NM = meter_to_nmile(6378137.0);   // NM, ekvator yarıçapı
 inline constexpr double WGS84_E2 = 6.69437999014e-3;              // birinci basıklık (eksantriklik) karesi
 
-// Enlem, boylam, irtifa -> ECEF. Kullanım: lla_to_ecef(k.lat_deg, k.lon_deg, k.altitude_ft)
+/// Enlem, boylam, irtifa -> ECEF. Kullanım: lla_to_ecef(k.lat_deg, k.lon_deg, k.altitude_ft)
 inline Ecef lla_to_ecef(double lat_deg, double lon_deg, double altitude_ft)
 {
     const double lat = lat_deg * DEG_TO_RAD;
@@ -48,8 +48,8 @@ inline Ecef lla_to_ecef(double lat_deg, double lon_deg, double altitude_ft)
     return point;
 }
 
-// ECEF -> enlem, boylam, irtifa. Enlemin kapalı formülü yok; tahminle başlayıp
-// birkaç kez düzeltilir. 5 tur milimetre doğruluğu için fazlasıyla yeterli.
+/// ECEF -> enlem, boylam, irtifa. Enlemin kapalı formülü yok; tahminle başlayıp
+/// birkaç kez düzeltilir. 5 tur milimetre doğruluğu için fazlasıyla yeterli.
 inline Lla ecef_to_lla(const Ecef& point)
 {
     const double lon = std::atan2(point.y_nm, point.x_nm);

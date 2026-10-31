@@ -4,11 +4,23 @@
 
 #include "common/angles.hpp"
 
+// ========================================================================================================
+// ORTAK
+//
+//   fly(own, maneuver)   manevrayı bu step için uçurur: own.phase ve own.command'ı yazar
+// ========================================================================================================
+
 void fly(Aircraft& own, Maneuver& maneuver)
 {
     own.phase = maneuver.phase();
     own.command = maneuver.update(own);
 }
+
+// ========================================================================================================
+// HOLD  —  şu anki yön ve irtifayla, aynı gazla devam
+//
+//   update(own)   yön ve irtifa = şu anki ölçüm; g sınırı kaldırılır
+// ========================================================================================================
 
 FlightCommand Hold::update(const Aircraft& own)
 {
@@ -19,10 +31,24 @@ FlightCommand Hold::update(const Aircraft& own)
     return command;
 }
 
+// ========================================================================================================
+// FIRE  —  atış anı; atış emrini otopilot verir (own.weapons.fire)
+//
+//   update(own)   komut değişmez
+// ========================================================================================================
+
 FlightCommand Fire::update(const Aircraft& own)
 {
     return own.command;
 }
+
+// ========================================================================================================
+// OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
+//
+//   enter(own)    girişte bir kez: hedef irtifayı kilitler (DESCEND_FT alçal, FLOOR_FT altına inme)
+//   update(own)   her step: bearing − 180'e dön, hedef irtifaya in, tam gaz, out g'si
+//   status(own)   düşman arkamda kaldıysa (|ATA| > DONE_ATA_DEG) Done
+// ========================================================================================================
 
 // Hedef irtifa, girişte bir kez:
 //   Zaten FLOOR_FT'de ya da altındaysam:           irtifamı koru.
@@ -71,12 +97,28 @@ ManeuverStatus Out::status(const Aircraft& own) const
     return ManeuverStatus::Running;
 }
 
+// ========================================================================================================
+// IN  —  düşmana dön (saf takip)
+//
+//   update(own)   yön = düşmanın bearing'i; irtifa ve gaz aynı
+// ========================================================================================================
+
 FlightCommand In::update(const Aircraft& own)
 {
     FlightCommand command = own.command;   // irtifa ve gaz aynı; yalnız yön değişir
     command.set_heading_deg(own.picture.bearing_deg);
     return command;
 }
+
+// ========================================================================================================
+// CRANK  —  düşmanı radar gimbal sınırının biraz içinde tutarak yanal kaçış
+//
+//   crank_side_for(own)        düşman sağdaysa sola, soldaysa sağa crank
+//   enter(own)                 girişte bir kez: tarafı seçer (crank_side_for)
+//   target_ata_deg(own)        düşmanın burnuma göre tutulacağı açı: ±(gimbal − OFFSET_DEG)
+//   update(own)                her step: P kontrolüyle yönü düzeltir; irtifa ve gaz aynı
+//   in_radar_sight(own)        düşman radarın görüş konisinde mi (|ATA| < gimbal)
+// ========================================================================================================
 
 CrankSide crank_side_for(const Aircraft& own)
 {
@@ -128,23 +170,30 @@ FlightCommand Crank::update(const Aircraft& own)
     return command;
 }
 
-// Yerine oturdu mu: düşmanın ATA'sı hedef ATA'dan en fazla tolerance_deg sapıyor.
-bool Crank::in_position(const Aircraft& own, double tolerance_deg) const
+// Radarın görüş konisinde mi: düşmanın burnuma göre açısı (sağdan ya da soldan) gimbal sınırından küçük.
+bool Crank::in_radar_sight(const Aircraft& own) const
 {
-    const double error_deg = wrap_180(own.picture.ata_deg - target_ata_deg(own));
-    return std::abs(error_deg) <= tolerance_deg;
+    return (std::fabs(own.picture.ata_deg) < own.profile.radar_gimbal_deg);
 }
 
-// Düşmana dik uç: bearing'in 90° yanı.
-// NOT: taraf kuzeye göre seçiliyor; doğrusu şu anki yöne yakın olan tarafı seçmek (maneuver.hpp).
+// ========================================================================================================
+// BEAM  —  düşman uçağa dik uç (3/9 hattı)
+//
+//   update(own)   yön = bearing ∓ 90 (taraf burnuma göre); irtifa ve gaz aynı
+// ========================================================================================================
+
+// Düşmana dik uç: düşman 3 ya da 9 hizamda kalsın.
+//   Düşman sağımdaysa (ATA > 0) sola dönerim: yön = bearing − 90, düşman 3 hizamda.
+//   Düşman solumdaysa sağa dönerim:          yön = bearing + 90, düşman 9 hizamda.
+// Taraf burnuma göre seçildiği için dönüş hep 90°'den kısadır.
 FlightCommand Beam::update(const Aircraft& own)
 {
     const double bearing_deg = own.picture.bearing_deg;
 
-    double beam_heading_deg = bearing_deg + 90.0;   // düşman batı yarısındaysa
-    if (bearing_deg > 0.0)
+    double beam_heading_deg = bearing_deg + 90.0;   // düşman solumda
+    if (own.picture.ata_deg > 0.0)
     {
-        beam_heading_deg = bearing_deg - 90.0;      // düşman doğu yarısındaysa
+        beam_heading_deg = bearing_deg - 90.0;      // düşman sağımda
     }
 
     FlightCommand command = own.command;   // irtifa ve gaz aynı; yalnız yön değişir
