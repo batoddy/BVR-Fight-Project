@@ -47,6 +47,7 @@ main{grid-column:2;grid-row:1}
 
 #record-warning{color:var(--muted);border-left:2px solid var(--muted);padding-left:8px}
 
+.flight-label.missile{font-size:10px;line-height:1.15;min-height:18px;padding:2px 5px;column-gap:6px}
 .flight-label.stale{opacity:.6;border-style:dashed}
 .object-scale-control{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:13px;color:var(--muted)}
 .object-scale-control select{min-width:60px;color:var(--text)}

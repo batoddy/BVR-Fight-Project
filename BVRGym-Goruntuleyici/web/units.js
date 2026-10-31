@@ -100,12 +100,20 @@ export const sideAngleLabel=value=>{
   const rounded=Math.round(value*10)/10,side=rounded>0&&rounded<180?' R':rounded<0&&rounded>-180?' L':'';
   return angleLabel(Math.abs(rounded))+side;
 };
-export function analysisLabel(calc,options,unit='nm'){
+// Kapanma hızı (Vc): aradaki mesafenin azalma hızı, + yaklaşıyoruz. Seçili hız biriminde; Mach anlamsız olduğu için Mach'ta kt.
+export const closureLabel=(mps,unit='mps')=>{
+  if(!Number.isFinite(mps))return '—';
+  const definition=unit==='mach'||!SPEED_UNITS[unit]?SPEED_UNITS.kts:SPEED_UNITS[unit];
+  const value=mps*definition.factor,rounded=Math.round(value*10**definition.labelDigits)/10**definition.labelDigits||0;
+  return (rounded>0?'+':'')+rounded.toLocaleString('tr-TR',{minimumFractionDigits:definition.labelDigits,maximumFractionDigits:definition.labelDigits})+' '+definition.symbol;
+};
+export function analysisLabel(calc,options,unit='nm',speedUnit='kts'){
   if(!calc)return [];
   const parts=[];
   if(options.ata)parts.push('ATA '+sideAngleLabel(calc.ata_deg));
   if(options.bearing)parts.push('BRG '+angleLabel(calc.bearing_deg));
   if(options.range)parts.push('R '+(Number.isFinite(calc.range_3d_m)?distanceLabel(calc.range_3d_m,unit,1):'—'));
   if(options.aspect)parts.push('AA '+angleLabel(calc.aspect_deg));
+  if(options.closure)parts.push('Vc '+closureLabel(calc.rate_of_closure_mps,speedUnit));
   return parts;
 }

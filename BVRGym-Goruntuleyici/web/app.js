@@ -9,7 +9,7 @@ import {Ruler} from './ruler.js';
 const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
   altitudeGuides:true,velocityGuides:true,objectScale:1,trail:true,trailDuration:300,history:true,grid:true,basemap:false,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm',
-  overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true,
+  overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayClosure:true,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true,
   overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDor:true};
 const preferences={...defaults};
 try{
@@ -144,11 +144,11 @@ el('label-mode').value=['all','selected','none'].includes(preferences.labelMode)
 for(const id of ['basemap','altitude-guides','velocity-guides','object-scale','trail','grid','show-history','label-names','label-altitude','label-speed','missile-outcomes','trail-duration','label-mode'])el(id).onchange=viewSettings;
 viewSettings();updateFollow();
 // Sahnede gösterilecek otopilot hesapları: sağ paneldeki seçimler.
-const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar'],
+const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-closure','overlayClosure'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar'],
   ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dor','overlayDor']];
 function overlaySettings(){
   for(const [id,key] of overlayInputs)preferences[key]=el(id).checked;
-  for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect'])el(id).disabled=!preferences.overlayLine;
+  for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect','overlay-closure'])el(id).disabled=!preferences.overlayLine;
   save();
 }
 for(const [id,key] of overlayInputs){el(id).checked=preferences[key];el(id).onchange=overlaySettings;}
@@ -287,7 +287,7 @@ function analysis(){
   const target=entity.calc.target_entity_id?buffer.at(entity.calc.target_entity_id,viewTime):null;
   return {entity,calc:entity.calc,target:target&&allowed(target)?target:null,
     options:{line:preferences.overlayLine,ata:preferences.overlayAta,bearing:preferences.overlayBearing,
-      range:preferences.overlayRange,aspect:preferences.overlayAspect,radar:preferences.overlayRadar,
+      range:preferences.overlayRange,aspect:preferences.overlayAspect,closure:preferences.overlayClosure,radar:preferences.overlayRadar,
       ownWez:preferences.overlayOwnWez,enemyWez:preferences.overlayEnemyWez,
       // Anahtarlar units.js ENEMY_ZONES key'leriyle aynı.
       zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dor:preferences.overlayDor}}};

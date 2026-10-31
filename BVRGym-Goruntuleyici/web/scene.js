@@ -337,7 +337,13 @@ export class Scene {
   }
 
   createWezRing(){
-    const fill=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({transparent:true,side:THREE.DoubleSide,depthWrite:false,fog:false}));
+    // İç kısım düz dolgu değil çapraz çizgili: saydam zeminde beyaz çizgi dokusu, malzeme rengi takım rengine boyar.
+    // NEZ taramasının (createZoneRing) tersi yönde; dış çap boyunca 28 çizgi.
+    const tile=document.createElement('canvas');tile.width=tile.height=32;
+    const pen=tile.getContext('2d');pen.strokeStyle='#fff';pen.lineWidth=4;
+    pen.beginPath();pen.moveTo(-8,-8);pen.lineTo(40,40);pen.moveTo(-8,24);pen.lineTo(8,40);pen.moveTo(24,-8);pen.lineTo(40,8);pen.stroke();
+    const texture=new THREE.CanvasTexture(tile);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(28,28);
+    const fill=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({map:texture,transparent:true,side:THREE.DoubleSide,depthWrite:false,fog:false}));
     const edge=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({transparent:true,fog:false}));
     const group=new THREE.Group();group.add(fill,edge);group.visible=false;this.world.add(group);
     return {group,fill,edge,radii:''};
@@ -416,7 +422,7 @@ export class Scene {
       ring.edge.geometry.dispose();ring.edge.geometry=new THREE.BufferGeometry().setFromPoints(points);
     }
     ring.group.position.copy(point(entity));
-    ring.fill.material.color.setHex(color);ring.fill.material.opacity=active?.22:.08;
+    ring.fill.material.color.setHex(color);ring.fill.material.opacity=active?.5:.2;
     ring.edge.material.color.setHex(color);ring.edge.material.opacity=active?.95:.55;
   }
 
@@ -439,7 +445,7 @@ export class Scene {
       position.setXYZ(0,from.x,from.y,from.z);position.setXYZ(1,to.x,to.y,to.z);position.needsUpdate=true;
       this.targetLine.geometry.computeBoundingSphere();this.targetLine.material.color.setHex(dark?0xa2d4bb:0x2c8062);
       // Çizginin ortası ekran dışındaysa etiketi seçili uçağa doğru, görünen kısma kaydır.
-      const parts=analysisLabel(a.calc,a.options,this.distanceUnit);
+      const parts=analysisLabel(a.calc,a.options,this.distanceUnit,this.speedUnit);
       const inside=p=>p.z>=-1&&p.z<=1&&Math.abs(p.x)<.95&&Math.abs(p.y)<.95;
       const middle=Array.from({length:18},(_,i)=>.5/2**i).map(f=>from.clone().lerp(to,f).project(this.camera)).find(inside);
       if(parts.length&&middle){
@@ -561,7 +567,7 @@ export class Scene {
       record.labelName.textContent=this.labelNames?entity.name:'';record.labelName.hidden=!this.labelNames;
       record.labelSpeedValue.textContent=this.labelSpeed?speedLabel(entity,this.speedUnit):'';record.labelSpeedValue.hidden=!this.labelSpeed;
       record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
-      const isMissile=entity.kind==='missile';
+      const isMissile=entity.kind==='missile';record.label.classList.toggle('missile',isMissile);
       record.labelFlightValue.textContent=isMissile?flightLabel(entity,this.distanceUnit):'';record.labelFlightValue.hidden=!isMissile;
       record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,record.labelName.textContent,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent,isMissile?'atıştan beri '+record.labelFlightValue.textContent:null].filter(Boolean).join(' · ');
       record.label.style.borderColor='#'+colorFor(entity).toString(16);
