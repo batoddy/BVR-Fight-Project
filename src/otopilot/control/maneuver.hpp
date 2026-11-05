@@ -31,17 +31,14 @@ public:
     /// Her step: own.command'dan (Python'un son uyguladığı) başlayıp yeni komutu döner.
     virtual FlightCommand update(const Aircraft& own) = 0;
 
-    /// Kendi içinde biten manevralar (Out) hedefe varınca Done döner;
-    /// sürekli manevralar (Hold, In, Crank, Beam) hep Running döner, onları otopilot bitirir.
+    /// Kendi içinde biten manevralar (Out, Recommit) hedefe varınca Done döner;
+    /// sürekli manevralar (Hold, Commit, Crank, Beam) hep Running döner, onları otopilot bitirir.
     virtual ManeuverStatus status(const Aircraft& own) const
     {
         (void)own;
         return ManeuverStatus::Running;
     }
 };
-
-/// Manevrayı bu step için uçur: own.phase'e manevranın fazını, own.command'a ürettiği komutu yazar.
-void fly(Aircraft& own, Maneuver& maneuver);
 
 // =============================================================================
 // HOLD  —  şu anki yön ve irtifayla, aynı gazla devam
@@ -98,34 +95,70 @@ private:
 };
 
 // =============================================================================
-// IN  —  düşmana dön (saf takip)
+// COMMIT  —  düşmana doğru düz uç (saf takip)
 // =============================================================================
 
-class In : public Maneuver
+class Commit : public Maneuver
 {
 public:
-    Phase phase() const override { return Phase::In; }
+    Phase phase() const override { return Phase::Commit; }
 
     /// Yön = düşmanın bearing'i; irtifa ve gaz aynı.
     FlightCommand update(const Aircraft& own) override;
 };
 
-// =============================================================================
-// CRANK  —  düşmanı radar gimbal sınırının biraz içinde tutarak yanal kaçış
-// =============================================================================
 
-// Crank yönü, havacılık terimiyle: uçağın döndüğü taraf.
-enum class CrankSide
+// Manevra yönü, havacılık terimiyle: uçağın döndüğü taraf (Crank ve Recommit).
+enum class ManeuverSide
 {
-    Left,    // uçak sola döner, düşman burnun SAĞINDA kalır (hedef ATA +)
-    Right,   // uçak sağa döner, düşman burnun SOLUNDA kalır (hedef ATA −)
+    Right,   // uçak sağa döner. Crank: düşman burnun SOLUNDA kalır (ATA −). Recommit: SAĞINDA kalır (ATA +).
+    Left,    // uçak sola döner. Crank: düşman burnun SAĞINDA kalır (ATA +). Recommit: SOLUNDA kalır (ATA −).
 };
 
-/// Crank'e girerken hangi taraf: düşman burnumun sağındaysa (ATA ≥ 0) Left, solundaysa Right.
-/// Böylece düşman zaten bulunduğu tarafta kalır, uçak gereksiz yere ters tarafa dönmez.
-CrankSide crank_side_for(const Aircraft& own);
+// =============================================================================
+// RECOMMIT  —  düşmana dönüp atış açısına gel
+// =============================================================================
 
-// Menzil kapanmasını yavaşlatır. Yön P kontrolüyle tutulur: düzeltme = kp × (ATA − hedef ATA).
+/// Recommit'e girerken hangi taraf, kısa dönüşle: düşman sağımdaysa (ATA ≥ 0) Right, solumdaysa Left.
+ManeuverSide recommit_side_for(const Aircraft& own);
+
+// Taraf girişte seçilir ve recommit boyunca sabit kalır.
+class Recommit : public Maneuver
+{
+public:
+    Phase phase() const override { return Phase::Recommit; }
+
+    /// Tarafı seçer (recommit_side_for).
+    void enter(const Aircraft& own) override;
+
+    /// Yön = bearing ∓ recommit_fire_ata_deg (Right −, Left +) + LOS_RATE_KP × HEADING_LAG_S × LOS hızı; irtifa ve gaz aynı.
+    FlightCommand update(const Aircraft& own) override;
+
+    /// Atış açısına geldiyse (|ATA| ≤ recommit_fire_ata_deg + DONE_TOLERANCE_DEG) Done.
+    ManeuverStatus status(const Aircraft& own) const override;
+
+    /// Girişte seçilen taraf.
+    ManeuverSide side() const { return side_; }
+
+private:
+
+    static constexpr double TURN_INSIDE_DEG = 10.0;   // derece, atış açısına varış payı; uçak hedefin 2–3° gerisinde oturur
+    static constexpr double DONE_TOLERANCE_DEG = 1.0;   // derece, atış açısına varış payı; uçak hedefin 2–3° gerisinde oturur
+    static constexpr double HEADING_LAG_S = 2.0;        // s, yön kontrolünün gecikmesi (flight_control.py TAU_HEAD)
+    static constexpr double LOS_RATE_KP = 1.3;          // birimsiz, gecikme payının çarpanı
+
+    ManeuverSide side_ = ManeuverSide::Left;   // enter()'da seçilir
+};
+
+// =============================================================================
+// CRANK —  düşmanı radar gimbal sınırının biraz içinde tutarak yanal kaçış
+// =============================================================================
+
+/// Crank'e girerken hangi taraf: TA ≥ 0 (düşmanın burnunun sağındayım) ise Left, değilse Right.
+/// Seçimi düşmanın nereye gittiği belirler; düşmanın benim burnuma göre konumu değil.
+ManeuverSide crank_side_for(const Aircraft& own);
+
+// Menzil kapanmasını yavaşlatır.
 // Taraf girişte seçilir ve crank boyunca sabit kalır.
 class Crank : public Maneuver
 {
@@ -135,24 +168,21 @@ public:
     /// Tarafı seçer (crank_side_for).
     void enter(const Aircraft& own) override;
 
-    /// Yön = şu anki yön + P düzeltmesi (en fazla ±MAX_CORRECTION_DEG); irtifa ve gaz aynı.
+    /// Yön = bearing ± (gimbal − OFFSET_DEG) (Right +, Left −) + LOS_RATE_KP × HEADING_LAG_S × LOS hızı; irtifa ve gaz aynı.
     FlightCommand update(const Aircraft& own) override;
 
     /// Düşman radarın görüş konisinde mi (|ATA| < gimbal sınırı).
     bool in_radar_sight(const Aircraft& own) const;
 
     /// Girişte seçilen taraf.
-    CrankSide side() const { return side_; }
+    ManeuverSide side() const { return side_; }
 
 private:
-    static constexpr double OFFSET_DEG = 5.0;              // derece, gimbal sınırından içeri pay
-    static constexpr double KP = 1.0;                      // birimsiz: hatanın kaç katı dön
-    static constexpr double MAX_CORRECTION_DEG = 180.0;    // derece, tek seferde istenen en büyük dönüş
+    static constexpr double OFFSET_DEG = 5.0;           // derece, gimbal sınırından içeri pay
+    static constexpr double HEADING_LAG_S = 2.0;        // s, yön kontrolünün gecikmesi (flight_control.py TAU_HEAD)
+    static constexpr double LOS_RATE_KP = 1.3;          // birimsiz, gecikme payının çarpanı
 
-    /// derece ±180, düşmanın burnuma göre tutulacağı açı: Left'te +, Right'ta −.
-    double target_ata_deg(const Aircraft& own) const;
-
-    CrankSide side_ = CrankSide::Left;   // enter()'da seçilir
+    ManeuverSide side_ = ManeuverSide::Left;   // enter()'da seçilir
 };
 
 // =============================================================================
@@ -174,14 +204,22 @@ public:
 // MANEUVERS  —  bir otopilotun manevra nesneleri
 // =============================================================================
 
-// Her biri bir kez oluşur ve kendi durumunu korur.
+// Her otopilot kendi manevralarını ve son uçurduğu manevrayı tutar.
 // Yeni manevra: sınıfını yukarıya kendi banner'ıyla yaz, buraya bir satır ekle.
-struct Maneuvers
+class Maneuvers
 {
+public:
+    /// Manevra değiştiyse enter()'ı bir kez çağırır; ardından fazı ve uçuş komutunu yazar.
+    void fly(Aircraft& own, Maneuver& maneuver);
+
     Hold hold;     // rotayı koru
     Fire fire;     // atış anı
     Out out;       // kaç
-    In in;         // düşmana dön
+    Commit commit; // düşmana doğru düz uç
+    Recommit recommit;   // taraf girişte seçilir
     Crank crank;   // taraf girişte seçilir
     Beam beam;     // düşmana dik uç
+
+private:
+    Maneuver* active_ = nullptr;   // son uçurulan manevra; ilk fly() da giriş sayılır
 };

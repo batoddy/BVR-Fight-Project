@@ -1,0 +1,5 @@
+time_s,id,target_id,pitbull_missile_slots
+0,blue,red,[]
+0,red,blue,[]
+10,blue,red,[0]
+10,red,blue,[]

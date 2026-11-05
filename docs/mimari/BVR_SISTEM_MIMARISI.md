@@ -98,8 +98,9 @@ Kimlik, görünen ad, takım ve fizik modeli farklı kavramlardır. `blue`/`red`
 - Python ajan listesi esnektir; C++ `World` ve komut yazıcısı iki uçağa göre düzenlenmiştir.
 - Bütün uçak profil etiketleri aynı F-16 fiziğini, bütün füze profil etiketleri AIM-120 altyapısını kullanır.
 - Geometri yerel düz dünya yaklaşımıdır. Görüntüleyicinin WGS84 ECEF/yerel koordinat dönüşümüyle birebir aynı algoritma değildir.
-- WEZ ilk füze slotunun profiline ve hedefin kapanmasına dayanır; kalan uygun füze seçimi veya gerçek bir performans zarfı çözümü değildir.
-- MAR ve DOR henüz uygulanmamıştır; `0` döndürür. Pitbull, profil menziline dayalı ve bir kez doğru olduğunda korunan bir tahmindir.
+- Silah ve kaçış hesapları uçak profilindeki ana silahtan (`main_weapon`) yapılır; füze slotlarındaki mühimmata ya da kalan füze sayısına bakılmaz. WEZ'in dış sınırı BVRGym füzesiyle ölçülmüş bir uyumdur (aspect'e bağlı değil, düşmanın bana doğru hızına bağlı); gerçek bir performans zarfı çözümü değildir.
+- R_cold, NEZ, MAR ve DOR uygulanmıştır ve yine BVRGym taramalarına dayanır. Decision Range (DR), R_cold + notch beklemesi boyunca düşmanın anlık yaklaşması + out payı olarak hesaplanır (varsayılan 15 s ve 0,5 NM); `Picture` ve hesap kaydında `dr_nm` alanına yazılır. Pitbull, profil menziline dayalı ve bir kez doğru olduğunda korunan bir tahmindir.
+- Havadaki düşman füzesine karşı karar yoktur: bana gelen en yakın füze hesaplanır (`picture.threat`) ama mevcut taktikler yalnız MAR'a bakar.
 - Atış için kabul/red ve füze kimliği içeren ayrı ağ cevabı yoktur. C++ eşleştirmesi sonraki ölçüme ve atış sırasına dayanır.
 - Mevcut otopilotlar elle yazılmış aşama dizileridir. Genel amaçlı taktik planlayıcı veya öğrenen karar sistemi olarak tanımlanmaz.
 - Dosya izleme, canlı telemetri protokolü değildir; iki saniyelik sakinlik kesin kayıt tamamlanma işareti değildir.

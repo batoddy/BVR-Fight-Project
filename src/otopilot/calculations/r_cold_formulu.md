@@ -146,11 +146,13 @@ Formülün en çok eksik tahmin ettiği nokta, 10 km'de hızlı başlayıp gaz 0
 
 Ölçülen / formül oranı en fazla 1.14. Formül **1.15** ile çarpıldığında 28 noktanın hepsi güvenli tarafta kalıyor.
 
+Koddaki çarpan **1.1**'dir (`AIM120C_R_COLD.safety`, `model/missile_profiles.hpp`); yani en kötü noktalar yine ~%4 eksik kalabilir. Karar verilmiş bir değer değilse 1.15'e çıkarılabilir.
+
 ## Sınırlar
 
 - **Atan uçak sabitti** (583 kt, gaz 0.45). Daha hızlı ya da daha yüksekten atış R_cold'u büyütür; bu etki formülde yok.
 - **İki uçak aynı irtifadaydı.** h, ortak irtifadır; irtifa farkının etkisi ölçülmedi.
 - **Ölçüm aralığı 4–10 km ve 570–1000 kt.** Bu aralığın dışı tahmindir.
-- **V_kaçış ortalama hızdır.** C++'taki `get_after_out_speed_kt()` anlık TAS döndürür. Out'tan sonra art yakıcıyla hızlanılacağı için bu güvenli taraftadır.
+- **V_kaçış ortalama hızdır.** C++'ta kaçış hızı (`escape_speed_kt`, `engagement.cpp`) anlık TAS'tır. Out'tan sonra art yakıcıyla hızlanılacağı için bu güvenli taraftadır.
 - **"Vurdu" eşiği (1 NM) bir seçimdir.** Düz kaçışta sonucu kabaca eşik kadar kaydırır. Eşik değişirse tarama yeniden yapılmalıdır.
 - **Katsayılar bu BVRGym füzesine ve ayarlarına özgüdür.** Füze modeli, `dive_at`, `target_lost_below_mach` ya da fırlatma hızı değişirse tarama tekrarlanmalıdır.

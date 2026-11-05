@@ -3,19 +3,24 @@
 #include "control/maneuver.hpp"
 #include "model/aircraft.hpp"
 
-// Fighter'ın taktiği: commit → düşman WEZ'ime girince at → crank ile füzeyi destekle →
-// MAR'a girince out → kaçış rotasında kal.
+// Fighter akışı: ilk yaklaşma ve atış → ilk destek → kaçış → yeniden yaklaşma →
+// atış açısına gelince ikinci atış → ikinci destek → son kaçış → rotayı koru.
 enum class FighterState
 {
-    Commit,         // düşmana dön ve yaklaş; düşman WEZ'ime girince at
-    Fire,           // tek step: füze at
-    Crank,          // füzemi destekle; MAR'a girince out
-    Out,            // kaç; düşman arkada kalınca biter
-    HoldAfterOut,   // kaçış rotasını koru
+    Commit = 0,         // Hold: düz uç; 35 NM içinde ilk atışa geç
+    FirstShot,      // Fire: tek step ilk atış emri
+    FirstSupport,   // Crank: DOR'a girince ilk kaçışa geç
+    FirstEscape,    // Out: düşman arkada kalınca yeniden yaklaş
+    Recommit,       // Recommit: atış açısına gelince ikinci atışa geç
+    SecondShot,     // Fire: tek step ikinci atış emri
+    SecondSupport,  // Crank: MAR'a girince son kaçışa geç
+    FinalEscape,    // Out: düşman arkada kalınca rotayı koru
+    Departure,      // Hold: çıkış rotasını koru
+    Hold,
 };
 
 // Durum makinesi. Her step: o durumun manevrası uçulur, sonra çıkış koşullarına bakılır.
-// Geçişte yeni manevranın enter()'ı çağrılır; yeni manevra bir sonraki step'te uçulur.
+// go_to yalnız state'i değiştirir; Maneuvers::fly değişen manevranın enter()'ını ilk kullanımda çağırır.
 class OtopilotFighter
 {
 public:
@@ -24,10 +29,11 @@ public:
 
 private:
     static constexpr double DEFAULT_THROTTLE = 0.45;   // 0..1, out bitince gaz (askeri güç altı)
+    static constexpr double FIRST_SHOT_RANGE_NM = 35.0;   // NM, ilk atışa geçiş menzili
 
-    // Yeni duruma geç; manevranın enter()'ı geçiş anında bir kez çağrılır.
-    void go_to(FighterState next, Maneuver& maneuver, const Aircraft& own);
+    // Yalnız yeni duruma geç; manevra o durumun bloğunda seçilir.
+    void go_to(FighterState next);
 
-    FighterState state_ = FighterState::Commit;   // ilk manevra In: enter()'ı yok
+    FighterState state_ = FighterState::Commit;
     Maneuvers maneuvers_;
 };

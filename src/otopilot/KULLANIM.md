@@ -55,7 +55,7 @@ own.command.set_heading_deg(own.picture.bearing_deg + 30.0)
 
 ## Bir aşamanın geçişini yaz
 
-Durumlar `enum class` ile yazılır. `step` içindeki tek switch'te her durum bir bloktur: önce o durumun manevrası `fly` ile uçulur, sonra çıkış koşullarına bakılır. Geçiş `go_to(yeni_durum, yeni_manevra, own)` ile yapılır; yeni manevranın `enter()`'ı o anda çağrılır, kendisi bir sonraki step'te uçulur:
+Durumlar `enum class` ile yazılır. `step` içindeki tek switch'te her durum bir bloktur: önce o durumun manevrası `maneuvers_.fly` ile uçulur, sonra çıkış koşullarına bakılır. `go_to(yeni_durum)` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; ilk kullanımda ve manevra değiştiğinde `Maneuvers::fly` giriş hazırlığını yapar. Örnek durum makinesi:
 
 ```cpp
 // otopilot_fighter.hpp
@@ -67,36 +67,42 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
     switch (state_)
     {
     case FighterState::Hold:
-        fly(own, maneuvers_.hold);
+        maneuvers_.fly(own, maneuvers_.hold);
         if (condition::enemy_in_my_wez(own) && own.weapons.fire(AIM120C))
         {
-            go_to(FighterState::Crank, maneuvers_.crank, own);   // taraf Crank::enter'da seçilir
+            go_to(FighterState::Crank);   // taraf sonraki step'te, ilk crank kullanımında seçilir
         }
         break;
 
     case FighterState::Crank:
-        fly(own, maneuvers_.crank);
+        maneuvers_.fly(own, maneuvers_.crank);
         if (condition::in_mar(own))
         {
-            go_to(FighterState::Out, maneuvers_.out, own);
+            go_to(FighterState::Out);
         }
         break;
 
     case FighterState::Out:
-        fly(own, maneuvers_.out);
+        maneuvers_.fly(own, maneuvers_.out);
         if (maneuvers_.out.status(own) == ManeuverStatus::Done)
         {
             own.command.set_throttle(0.45);   // geçiş anında komut düzeltmesi
-            go_to(FighterState::Hold, maneuvers_.hold, own);
+            go_to(FighterState::Hold);
         }
         break;
     }
 }
 ```
 
-`Otopilot` iskeleti fazı manevradan alır (`own.phase = manevra.phase()`), yeni duruma geçince manevranın `enter()`'ını çağırır. Yeni manevra bir sonraki step'te uçulur. Bu kodlarda `enter()` çağırmayı ya da fazı elle yazmayı unutma riski yoktur.
+`Maneuvers::fly` fazı manevradan alır (`own.phase = manevra.phase()`) ve komutu yazar. Aynı manevra sürerken `enter()` tekrarlanmaz; araya başka manevra girdikten sonra geri dönülürse yeniden çalışır. Aynı manevrayı kullanan iki state arasında geçiş, yeniden giriş sayılmaz. İlk manevranın girişi de otomatik yapılır.
 
-Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `threat_inbound`, `own_missile_pitbull(own, fire_order)` (1: ilk attığım füze, 2: ikinci, ...).
+Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `in_dor`, `nose_on_target` (|ATA| ≤ 2°), `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `enemy_aspect`, `my_aspect`, `threat_inbound`, `own_missile_pitbull(own, fire_order)` (1: ilk attığım füze, 2: ikinci, ...).
+
+`enemy_aspect(own)` düşmanın burnunun bana göre durumunu (`picture.ta_deg`), `my_aspect(own)` benim burnumun düşmana göre durumunu (`picture.ata_deg`) `Aspect` olarak verir: `Hot` (≤ 30°), `Flank` (≤ 70°), `Beam` (≤ 110°), `Cold` (ötesi). Sağ/sol ayrılmaz; eşikler `conditions.cpp` içindeki sabitlerdedir.
+
+```cpp
+if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden uzaklaşıyor
+```
 
 Şu anki fighter ve hostile taktiği şov senaryosudur; akışı ve çalıştırma komutu [OTOPILOT_MIMARISI.md](../../docs/mimari/OTOPILOT_MIMARISI.md)'dedir.
 
@@ -107,7 +113,7 @@ Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar y
 | `hold` | Hold | sürekli |
 | `fire` | Fire | sürekli (komut değişmez; tek step'lik atış durumu için) |
 | `out` | Out | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
-| `in` | In | sürekli |
+| `commit` | Commit | sürekli |
 | `crank` | Crank | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) `crank_side_for(own)` ile seçilir, `side()` ile okunur |
 | `beam` | Beam | sürekli |
 
@@ -124,7 +130,7 @@ if (supporting != nullptr && supporting->target.is_pitbull) { ... }
 if (own.picture.threat)                               // bana gelen en yakın düşman füzesi
 {
     const ThreatInfo& threat = *own.picture.threat;
-    // threat.range_nm, threat.bearing_deg, threat.aspect_deg, threat.is_pitbull
+    // threat.range_nm, threat.bearing_deg, threat.ta_deg, threat.is_pitbull
 }
 int remaining = own.weapons.missiles_left();
 ```
@@ -149,7 +155,7 @@ double last_fire_time_s_ = -1e9;
 class Offset : public Maneuver
 {
 public:
-    Phase phase() const override { return Phase::In; }
+    Phase phase() const override { return Phase::Commit; }
     FlightCommand update(const Aircraft& own) override;
 
 private:
@@ -168,14 +174,14 @@ FlightCommand Offset::update(const Aircraft& own)
 }
 ```
 
-`Maneuvers` yapısına `Offset offset;` satırını ekle ve bir durumun bloğunda `fly(own, maneuvers_.offset)` ile uçur. Manevra kendi içinde bitiyorsa `status()`'u, girişte bir şey kilitlemesi gerekiyorsa `enter()`'ı uygula. Yeni bir `Phase` değeri dış sözleşmeyi etkiler: `model/phase.hpp` ile görüntüleyicideki `PHASE_NAMES` listesi birlikte güncellenir.
+`Maneuvers` sınıfına `Offset offset;` satırını ekle ve bir durumun bloğunda `maneuvers_.fly(own, maneuvers_.offset)` ile uçur. Manevra kendi içinde bitiyorsa `status()`'u, girişte bir şey kilitlemesi gerekiyorsa `enter()`'ı uygula. Yeni bir `Phase` değeri dış sözleşmeyi etkiler: `model/phase.hpp` ile görüntüleyicideki `PHASE_NAMES` listesi birlikte güncellenir.
 
 ## Profil veya hesap ekle
 
 | İhtiyaç | Düzenlenecek kaynak |
 |---|---|
 | Yeni uçak etiketi / radar / yük | `model/aircraft_profiles.hpp`; YAML `type` ile aynı anahtar |
-| Füze menzil, ortalama hız, pitbull eşiği, R_cold uyumu | `model/missile_profiles.hpp` |
+| Füze menzil, ortalama hız, pitbull eşiği, R_cold ve Rmax (WEZ) uyumu | `model/missile_profiles.hpp` |
 | Saf konum/hız geometrisi | `calculations/geometry.hpp/.cpp` |
 | Dönüş süresi, yarıçapı, yer değişimi | `calculations/turn.hpp/.cpp` |
 | WEZ, out planı, R_cold, NEZ, MAR, DOR | `calculations/engagement.hpp/.cpp` |

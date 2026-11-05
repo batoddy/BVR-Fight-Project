@@ -28,7 +28,7 @@ struct AircraftProfile
     double max_mach = 0;   // birimsiz; TODO: henüz kullanılmıyor
     double max_g = 0;      // g;        TODO: henüz kullanılmıyor
 
-    // WEZ burada değil: main_weapon'ın menzili missile_profiles.hpp'de, WEZ engagement::wez'de hesaplanır.
+    // WEZ burada değil: main_weapon'ın menzili missile_profiles.hpp'de, WEZ engagement::wez_nm'de hesaplanır.
 
     double radar_range_nm = 0;     // NM, algılama menzili
     double radar_gimbal_deg = 0;   // derece, yarım açı: burundan sağa VE sola tarama açısı (60 = ±60)
@@ -36,6 +36,8 @@ struct AircraftProfile
     double out_g = 0.0;                                // g, out dönüşünde kullanılan yük faktörü (out planı ve Out manevrası)
     std::vector<AltitudeFactor> out_distance_factor;   // irtifa artan sırada; TODO: henüz kullanılmıyor
     double out_offset_nm = 0;                          // NM, MAR'a eklenen out payı
+    double dr_notch_time_s = 15.0;                     // s, DR hesabında notch bekleme süresi
+    double recommit_fire_ata_deg = 30.0;               // derece, recommit'te atışın yapıldığı ATA; MRR hesabı bununla yapılır
 };
 
 // Değerlerin kaynağı:

@@ -1,0 +1,9 @@
+time_s,id,target_id,range_3d_nm,a_pole_nm,f_pole_nm,tr_nm,dr_nm
+0,blue,red,3,12.5,8,10,18
+0,red,blue,3,7,6,5,14
+5,blue,red,3,0,-2,-1,18
+5,red,blue,3,0,0,0,14
+10,blue,red,3,0,-2,,
+10,red,blue,3,0,0,0,0
+15,blue,red,3,0,0,0,18
+15,red,blue,3,0,0,0,14

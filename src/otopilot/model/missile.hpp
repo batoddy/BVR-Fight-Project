@@ -51,7 +51,7 @@ struct Missile
     Kinematics kinematics;         // füzenin konumu                               | kinematics
 
     MissileTargetInfo target;      // hedefe göre                                  | World::update
-
+    
     /// Havada mı (state InFlight)
     bool in_flight() const { return state == MissileState::InFlight; }
     /// Hedefi vurdu mu

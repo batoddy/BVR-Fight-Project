@@ -10,7 +10,7 @@ const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
   altitudeGuides:true,velocityGuides:true,objectScale:1,trail:true,trailDuration:300,history:true,grid:true,basemap:false,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm',
   overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayClosure:true,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true,
-  overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDor:true};
+  overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDr:true,overlayDor:true,overlayTr:true};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
@@ -145,7 +145,7 @@ for(const id of ['basemap','altitude-guides','velocity-guides','object-scale','t
 viewSettings();updateFollow();
 // Sahnede gösterilecek otopilot hesapları: sağ paneldeki seçimler.
 const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-closure','overlayClosure'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar'],
-  ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dor','overlayDor']];
+  ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dr','overlayDr'],['overlay-dor','overlayDor'],['overlay-tr','overlayTr']];
 function overlaySettings(){
   for(const [id,key] of overlayInputs)preferences[key]=el(id).checked;
   for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect','overlay-closure'])el(id).disabled=!preferences.overlayLine;
@@ -290,10 +290,10 @@ function analysis(){
       range:preferences.overlayRange,aspect:preferences.overlayAspect,closure:preferences.overlayClosure,radar:preferences.overlayRadar,
       ownWez:preferences.overlayOwnWez,enemyWez:preferences.overlayEnemyWez,
       // Anahtarlar units.js ENEMY_ZONES key'leriyle aynı.
-      zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dor:preferences.overlayDor}}};
+      zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dr:preferences.overlayDr,dor:preferences.overlayDor,tr:preferences.overlayTr}}};
 }
 // C++ aircraft.hpp enum class Phase ile aynı sırada.
-const PHASE_NAMES=['HOLD','FIRE','OUT','IN','CRANK','BEAM'];
+const PHASE_NAMES=['HOLD','FIRE','OUT','COMMIT','CRANK','BEAM','RECOMMIT'];
 function relativePanel(first,entity){
   el('relative').hidden=first.kind!=='aircraft';
   if(first.kind!=='aircraft')return;
@@ -310,19 +310,14 @@ function relativePanel(first,entity){
     ?distance(calc.wez_max_range_m):'—';
   el('calc-enemy-in-my-wez').textContent=yes(calc?.enemy_in_my_wez??calc?.in_wez);
   el('calc-me-in-enemy-wez').textContent=yes(calc?.me_in_enemy_wez);
-  el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dor').textContent=distance(calc?.dor_m);
+  el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dr').textContent=distance(calc?.dr_m);el('calc-dor').textContent=distance(calc?.dor_m);
   el('calc-stern-wez').textContent=distance(calc?.stern_wez_m);el('calc-nez').textContent=distance(calc?.nez_m);
-  // C++ optional hesapları 0 yazar: F-pole ve tehdit için 0 "yok" demek.
+  // Atış tahminlerinde C++ boş optional değerleri 0 olarak kaydeder.
+  for(const [id,key] of [['calc-a-pole','a_pole_m'],['calc-f-pole','f_pole_m'],['calc-tr','tr_m']]){
+    const value=calc?.[key];el(id).textContent=value===0?'Çözüm yok':distance(value);
+  }
+  // C++ optional hesapları 0 yazar: tehdit için 0 "yok" demek.
   const number=(value,digits)=>value.toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
-  el('calc-me-in-mar').textContent=yes(calc?.me_in_mar);
-  el('calc-own-nez').textContent=distance(calc?.own_nez_m);
-  el('calc-enemy-in-my-nez').textContent=yes(calc?.enemy_in_my_nez);
-  el('calc-f-pole').textContent=calc?.f_pole_m>0?distance(calc.f_pole_m):'—';
-  el('calc-out-turn').textContent=Number.isFinite(calc?.out_turn_time_s)
-    ?sideAngleLabel(calc.out_turn_deg)+' · '+number(calc.out_turn_time_s,1)+' s':'—';
-  el('calc-out-radius').textContent=distance(calc?.out_turn_radius_m);
-  el('calc-out-approach').textContent=distance(calc?.out_approach_m);
-  el('calc-out-escape').textContent=Number.isFinite(calc?.out_escape_kt)?number(calc.out_escape_kt,0)+' kt':'—';
   el('calc-threat').textContent=!Number.isFinite(calc?.threat_range_nm)?'—':calc.threat_range_nm<=0?'Yok'
     :distance(calc.threat_range_m)+' · M'+number(calc.threat_mach,2)+(calc.threat_pitbull?' · pitbull':'');
 }

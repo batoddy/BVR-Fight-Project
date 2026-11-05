@@ -7,12 +7,13 @@
 
 #include "calculations/engagement.hpp"
 #include "calculations/geometry.hpp"
-#include "calculations/missile_flight.hpp"
 #include "calculations/missile_geometry.hpp"
 #include "calculations/turn.hpp"
 #include "common/angles.hpp"
 #include "common/geodesy.hpp"
 #include "common/units.hpp"
+#include "control/conditions.hpp"
+#include "control/otopilot_fighter.hpp"
 #include "io/command_writer.hpp"
 #include "io/state_reader.hpp"
 #include "model/flight_command.hpp"
@@ -150,6 +151,136 @@ namespace
         require(out.turn.turn_deg < 0, "enemy on the right: out turns left");
     }
 
+    void maneuver_lifecycle()
+    {
+        class CountingManeuver : public Maneuver
+        {
+        public:
+            int entries = 0;
+            int updates = 0;
+
+            Phase phase() const override { return Phase::Hold; }
+            void enter(const Aircraft&) override { ++entries; }
+            FlightCommand update(const Aircraft& own) override
+            {
+                require(entries > 0, "enter precedes first update");
+                ++updates;
+                return own.command;
+            }
+        };
+
+        Aircraft own;
+        Maneuvers maneuvers, other_pilot;
+        CountingManeuver first, second, other;
+        maneuvers.fly(own, first);
+        maneuvers.fly(own, first);
+        require(first.entries == 1 && first.updates == 2, "continuous maneuver enters once");
+        maneuvers.fly(own, second);
+        require(second.entries == 1, "different object with same phase enters");
+        other_pilot.fly(own, other);
+        maneuvers.fly(own, second);
+        require(second.entries == 1, "other pilot does not change active maneuver");
+        maneuvers.fly(own, first);
+        require(first.entries == 2, "returning to a maneuver enters again");
+
+        own.profile = aircraft_profile("F16");
+        own.kinematics.altitude_ft = 30000;
+        maneuvers.fly(own, maneuvers.out);
+        near(own.command.altitude_ft(), 26700, "first out locks altitude");
+        own.kinematics.altitude_ft = 28000;
+        maneuvers.fly(own, maneuvers.out);
+        near(own.command.altitude_ft(), 26700, "continuous out keeps locked altitude");
+        maneuvers.fly(own, maneuvers.commit);
+        maneuvers.fly(own, maneuvers.out);
+        near(own.command.altitude_ft(), 24700, "second out uses new entry altitude");
+
+        own.picture.ata_deg = 20;
+        own.picture.ta_deg = 20;
+        maneuvers.fly(own, maneuvers.crank);
+        require(maneuvers.crank.side() == ManeuverSide::Left, "first crank chooses side");
+        own.picture.ata_deg = -20;
+        own.picture.ta_deg = -20;
+        maneuvers.fly(own, maneuvers.crank);
+        require(maneuvers.crank.side() == ManeuverSide::Left, "continuous crank keeps side");
+        maneuvers.fly(own, maneuvers.commit);
+        maneuvers.fly(own, maneuvers.crank);
+        require(maneuvers.crank.side() == ManeuverSide::Right, "second crank chooses side again");
+    }
+
+    void fighter_two_shot_flow()
+    {
+        Aircraft own, enemy;
+        own.profile = aircraft_profile("F16");
+        own.kinematics.altitude_ft = 30000;
+        own.command.set_altitude_ft(30000).set_throttle(0.45);
+        own.picture.range_3d_nm = 34;
+        for (int slot = 0; slot < 4; ++slot)
+        {
+            Missile missile;
+            missile.slot = slot;
+            missile.profile = AIM120C;
+            own.weapons.missiles.push_back(missile);
+        }
+
+        OtopilotFighter pilot;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Commit && own.weapons.missiles_left() == 4,
+                "transition selects next state without flying it yet");
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Fire && own.weapons.missiles_left() == 3, "first shot once");
+        own.weapons.missiles[0].python_id = "blue/missile/0";
+        own.weapons.has_launch_order = false;
+
+        own.picture.is_in_mar = true;
+        pilot.step(own, enemy);
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Crank, "first support exits on DOR, not MAR");
+        own.picture.is_in_dor = true;
+        own.picture.is_in_mar = false;
+        pilot.step(own, enemy);
+        own.picture.ata_deg = 150;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Out, "first escape starts");
+        near(own.command.altitude_ft(), 26700, "first escape entry altitude");
+        own.picture.ata_deg = 180;
+        pilot.step(own, enemy);
+        own.picture.ata_deg = 2.1;
+        pilot.step(own, enemy);
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Commit && own.weapons.missiles_left() == 3,
+                "recommit waits for nose alignment");
+        own.picture.ata_deg = -2;
+        require(condition::nose_on_target(own), "negative alignment boundary");
+        pilot.step(own, enemy);
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Fire && own.weapons.missiles_left() == 2, "second shot once");
+        own.weapons.missiles[1].python_id = "blue/missile/1";
+        own.weapons.has_launch_order = false;
+
+        for (int step = 0; step < 3; ++step)
+        {
+            pilot.step(own, enemy);
+        }
+        require(own.phase == Phase::Crank && own.weapons.missiles_left() == 2,
+                "second support stays on DOR and does not repeat fire");
+        own.picture.is_in_mar = true;
+        pilot.step(own, enemy);
+        own.kinematics.altitude_ft = 26000;
+        own.picture.ata_deg = 150;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Out, "second support exits on MAR");
+        near(own.command.altitude_ft(), 22700, "final escape enters with current altitude");
+        own.picture.ata_deg = 180;
+        pilot.step(own, enemy);
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Hold && own.weapons.missiles_left() == 2, "departure after final escape");
+
+        own.picture.ata_deg = 2;
+        require(condition::nose_on_target(own), "positive alignment boundary");
+        own.picture.ata_deg = -2.1;
+        require(!condition::nose_on_target(own), "outside negative alignment boundary");
+    }
+
     void engagement_values()
     {
         // İki F16 (ana silah AIM-120C): fighter 10 km'de 700 kt kuzeye, hostile 20 NM kuzeyde bana doğru 300 kt.
@@ -167,10 +298,9 @@ namespace
 
         const double range_nm = geometry::range_3d_nm(fighter.kinematics, hostile.kinematics);
         const double enemy_closure_kt = geometry::other_closure_kt(fighter.kinematics, hostile.kinematics);
-        const double closure_kt = geometry::closure_kt(fighter.kinematics, hostile.kinematics);
 
         // WEZ (Rmax): 10 km'de füzenin kendi yolu + düşmanın uçuş süresince yaklaştığı yol; atış hızı 700 kt.
-        const Wez wez = engagement::wez(fighter, hostile);
+        const Wez wez = engagement::wez_nm(fighter, hostile);
         const RmaxFit& r_max = AIM120C_R_MAX;
         const double missile_path_nm = (r_max.a + r_max.b * std::log(10.0)) * (1.0 + r_max.k * (700.0 - r_max.launch_ref_kt));
         const double flight_time_s = r_max.c + r_max.d * std::log(10.0);
@@ -183,10 +313,6 @@ namespace
         near(engagement::r_cold_nm(fighter, hostile),
              AIM120C_R_COLD.safety * std::exp(AIM120C_R_COLD.a), "R_cold at reference point");
 
-        // F-pole: füze varana kadar iki uçağın kapattığı mesafe çıkar.
-        const std::optional<double> f_pole = engagement::f_pole_nm(fighter, hostile);
-        near(*f_pole, range_nm - closure_kt * (range_nm / (AIM120C.speed_kt + enemy_closure_kt)), "F-pole");
-
         // NEZ = R_cold + yaklaşma + dönerken kaçamadığım yol; MAR bunun üstüne patlama yarıçapı ve out payı ekler.
         const OutPlan out = engagement::out_plan(fighter, hostile);
         const double nez_nm = engagement::nez_nm(fighter, hostile);
@@ -195,51 +321,47 @@ namespace
         require(engagement::mar_nm(fighter, hostile)
                 >= nez_nm + feet_to_nmile(AIM120C.blast_radius_ft) + fighter.profile.out_offset_nm, "MAR covers NEZ");
 
-        // DOR = MAR + düşmanın 180°'lik recommit dönüşü (π·r / V) boyunca yaklaştığı yol.
+        // DOR = DR + düşmanın 180° recommit dönüşünde yaklaştığı yol + ayrı out payı.
         const double recommit_turn_s = PI * turn::radius_m(700, fighter.profile.out_g) / knot_to_mps(700);
-        near(engagement::dor_nm(fighter, hostile),
-             engagement::mar_nm(fighter, hostile) + enemy_closure_kt * recommit_turn_s / 3600.0, "DOR");
+        const double remaining_nm = engagement::dor_nm(fighter, hostile)
+                                    - travel_distance_nm(enemy_closure_kt, recommit_turn_s);
+        near(remaining_nm, engagement::dr_nm(fighter, hostile) + fighter.profile.out_offset_nm,
+             "DOR leaves DR plus the turn-start offset");
 
-        // Düşman füzeden hızlı kaçıyorsa füze yetişemez: F-pole yok.
-        hostile.kinematics.velocity_ned_kt.north = AIM120C.speed_kt + 100;
-        require(!engagement::f_pole_nm(fighter, hostile).has_value(), "F-pole when the missile cannot catch the target");
+
     }
 
-    void missile_flight_glide()
+    void decision_range()
     {
-        // 10 km, tepe hızı referans eğrinin tepesine (1447 m/s) denk gelen atış: eğri ölçeksiz okunur.
-        //   Mach 1'e kadar: boost (557.7 + 1447) / 2 × 0.37 = 370.9 m + referans 56085.5 m = 30.48 NM
-        const double altitude_10km_ft = meter_to_feet(10000);
-        const double launch_at_reference_kt = mps_to_knot(1447 - 889.3);
-        near(*missile_flight::glide_max_distance_nm(AIM120C, altitude_10km_ft, launch_at_reference_kt), 30.48,
-             "glide range at reference altitude", 0.01);
+        Aircraft own, enemy;
+        own.profile = aircraft_profile("F16");
+        enemy.profile = aircraft_profile("F16");
+        own.kinematics.lat_deg = 59;
+        own.kinematics.lon_deg = 18;
+        own.kinematics.altitude_ft = meter_to_feet(10000);
+        own.kinematics.tas_kt = 700;
+        own.kinematics.velocity_ned_kt.north = 700;
+        enemy.kinematics = place(own.kinematics, 0, 20);
+        enemy.kinematics.tas_kt = 600;
+        enemy.kinematics.velocity_ned_kt.north = -600;
+        own.profile.out_offset_nm = 0.75;
 
-        // 6 km, atış 300 m/s: 6 km'nin kendi ölçülmüş tablosunda Mach 1'e 15.5 NM + boost 0.14 NM.
-        const double altitude_6km_ft = meter_to_feet(6000);
-        const double launch_kt = mps_to_knot(300);
-        const double max_nm = *missile_flight::glide_max_distance_nm(AIM120C, altitude_6km_ft, launch_kt);
-        near(max_nm, 15.64, "glide range scaled to 6 km", 15.64 * 0.05);
+        const double stern_wez_nm = engagement::r_cold_nm(own, enemy);
+        near(own.profile.dr_notch_time_s, 15, "DR default notch duration");
+        // 600 kt, 15 s: düşman 2.5 NM yaklaşır; kendi 700 kt hızımız eklenmez.
+        const double approaching_dr_nm = engagement::dr_nm(own, enemy);
+        near(approaching_dr_nm - stern_wez_nm, 3.0, "DR enemy projection and fixed 0.5 NM margin");
+        own.kinematics.velocity_ned_kt = {0, 700, 0};
+        near(engagement::dr_nm(own, enemy), approaching_dr_nm, "DR excludes own closure component");
 
-        // Yol ↔ süre aynı eğriden: biri diğerinin tersi.
-        const double distance_nm = *missile_flight::glide_distance_at_time_nm(AIM120C, altitude_6km_ft, launch_kt, 20);
-        near(*missile_flight::glide_time_at_distance_s(AIM120C, altitude_6km_ft, launch_kt, distance_nm), 20,
-             "glide time/distance inverse", 1e-6);
-        require(*missile_flight::glide_speed_at_time_kt(AIM120C, altitude_6km_ft, launch_kt, 5)
-                > *missile_flight::glide_speed_at_time_kt(AIM120C, altitude_6km_ft, launch_kt, 20), "missile slows down");
-        require(!missile_flight::glide_time_at_distance_s(AIM120C, altitude_6km_ft, launch_kt, max_nm + 0.5).has_value(),
-                "beyond Mach 1 range: no time");
-
-        // Hedef yerinde: yakalama süresi = o mesafeyi alma süresi. Gelen hedef daha çabuk, kaçan daha geç yakalanır.
-        const double range_nm = 8;
-        const double still_s = *missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, range_nm, 0);
-        near(still_s, *missile_flight::glide_time_at_distance_s(AIM120C, altitude_6km_ft, launch_kt, range_nm),
-             "hit time of a still target", 1e-6);
-        require(*missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, range_nm, 500) < still_s,
-                "head-on target is hit sooner");
-        require(*missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, range_nm, -500) > still_s,
-                "fleeing target is hit later");
-        require(!missile_flight::glide_time_to_hit_s(AIM120C, altitude_6km_ft, launch_kt, 30, -500).has_value(),
-                "fleeing target out of reach");
+        // Aynı 600 kt TAS ile yatayda dik uçan düşmanın yaklaşma katkısı sıfırdır.
+        enemy.kinematics.velocity_ned_kt = {0, 600, 0};
+        near(engagement::dr_nm(own, enemy) - stern_wez_nm, 0.5, "DR uses projection instead of TAS");
+        enemy.kinematics.velocity_ned_kt = {600, 0, 0};
+        near(engagement::dr_nm(own, enemy) - stern_wez_nm, -2.0, "DR preserves receding velocity sign");
+        enemy.kinematics.velocity_ned_kt = {-600, 0, 0};
+        own.profile.dr_notch_time_s = 30;
+        near(engagement::dr_nm(own, enemy) - stern_wez_nm, 5.5, "DR configurable notch duration");
     }
 
     void world_threat_selection()
@@ -278,12 +400,16 @@ namespace
         require(!world.hostile.picture.threat.has_value(), "no missile against hostile");
         // Silah ve kaçış hesapları main_weapon'dan; füze slotu olmasa da hesaplanır.
         require(world.hostile.picture.mar_nm > 0, "MAR from main weapon without missile slots");
+        near(world.fighter.picture.dr_nm, engagement::dr_nm(world.fighter, world.hostile), "fighter DR computed");
+        near(world.hostile.picture.dr_nm, engagement::dr_nm(world.hostile, world.fighter), "hostile DR computed");
         near(world.fighter.weapons.wez.min_nm, AIM120C.min_range_nm, "WEZ from main weapon without missile slots");
 
         // hostile'ın NEZ'i = fighter'ın kendi kaçış hesabındaki NEZ (aynı füze, aynı out planı); simetri.
         near(world.hostile.weapons.nez_nm, world.fighter.picture.nez_nm, "weapon NEZ mirrors enemy escape NEZ", 1e-9);
         near(world.fighter.weapons.nez_nm, world.hostile.picture.nez_nm, "weapon NEZ mirrors enemy escape NEZ (other side)", 1e-9);
-        require(world.hostile.weapons.f_pole_nm.has_value(), "F-pole computed");
+        require(world.hostile.weapons.f_pole_nm == engagement::f_pole_nm(world.hostile, world.fighter), "F-pole computed");
+        require(world.fighter.weapons.a_pole_nm == engagement::a_pole_nm(world.fighter, world.hostile), "A-pole computed");
+        require(world.fighter.weapons.tr_nm == engagement::tr_nm(world.fighter, world.hostile), "TR computed");
         require(world.fighter.picture.me_in_enemy_wez == world.hostile.weapons.enemy_in_wez, "me_in_enemy_wez copied");
         const double range_nm = world.hostile.picture.range_3d_nm;
         require(world.hostile.weapons.enemy_in_nez == (range_nm <= world.hostile.weapons.nez_nm), "enemy in NEZ");
@@ -319,6 +445,15 @@ namespace
 
         world.fighter.picture.range_3d_nm = 12;
         world.fighter.picture.closure_kt = 500;
+        world.fighter.picture.dr_nm = 23.25;
+        world.fighter.weapons.a_pole_nm = 18;
+        world.fighter.weapons.f_pole_nm = 15;
+        world.fighter.weapons.tr_nm = 30;
+        ThreatInfo threat;
+        threat.range_nm = 9;
+        threat.mach = 2.5;
+        threat.is_pitbull = true;
+        world.fighter.picture.threat = threat;
         world.fighter.command.set_g_limit(6.0);
         const Message message = CommandWriter::write(1, world);
         const Json& fighter_command = message.data.at("aircraft").at(0);
@@ -329,6 +464,20 @@ namespace
         const Json& calc = message.data.at("calculations").at("aircraft").at(0);
         near(calc.at("range_3d_nm").get<double>(), 12, "calculation NM field");
         near(calc.at("rate_of_closure_kt").get<double>(), 500, "calculation kt field (wire name)");
+        near(calc.at("dr_nm").get<double>(), 23.25, "DR exported in NM");
+        near(calc.at("a_pole_nm").get<double>(), 18, "A-pole exported in NM");
+        near(calc.at("f_pole_nm").get<double>(), 15, "F-pole exported in NM");
+        near(calc.at("tr_nm").get<double>(), 30, "TR exported in NM");
+        const Json& empty_calc = message.data.at("calculations").at("aircraft").at(1);
+        near(empty_calc.at("a_pole_nm").get<double>(), 0, "absent A-pole converted only at wire boundary");
+        near(empty_calc.at("f_pole_nm").get<double>(), 0, "absent F-pole converted only at wire boundary");
+        near(empty_calc.at("tr_nm").get<double>(), 0, "absent TR converted only at wire boundary");
+        near(calc.at("threat_range_nm").get<double>(), 9, "threat range exported in NM");
+        near(calc.at("threat_mach").get<double>(), 2.5, "threat mach exported");
+        require(calc.at("threat_pitbull").get<int>() == 1, "threat pitbull exported as number");
+        near(empty_calc.at("threat_range_nm").get<double>(), 0, "absent threat exported as 0");
+        near(empty_calc.at("threat_mach").get<double>(), 0, "absent threat mach exported as 0");
+        require(empty_calc.at("threat_pitbull").get<int>() == 0, "absent threat not pitbull");
         require(!calc.contains("range_3d_m"), "no metric calculation label for NM value");
 
         require(world.fighter.weapons.fire(AIM120C), "launch test missile");
@@ -343,6 +492,10 @@ namespace
         require(world.fighter.weapons.active_missile() == &missile, "active missile");
         near(missile.kinematics.altitude_ft, 10000, "missile reader altitude");
         near(missile.kinematics.tas_kt, mps_to_knot(300), "missile reader TAS");
+        world.fighter.weapons.missiles[0].target.is_pitbull = true;
+        const Json pitbull_calc = CommandWriter::write(2, world).data.at("calculations").at("aircraft");
+        require(pitbull_calc[0].at("pitbull_missile_slots").get<std::string>() == "[0]", "pitbull slot exported");
+        require(pitbull_calc[1].at("pitbull_missile_slots").get<std::string>() == "[]", "pitbull belongs to carrier");
     }
 }
 
@@ -354,8 +507,10 @@ int main()
         geometry_and_missile_time();
         flight_command_setters();
         turn_and_out_plan();
+        maneuver_lifecycle();
+        fighter_two_shot_flow();
         engagement_values();
-        missile_flight_glide();
+        decision_range();
         world_threat_selection();
         metric_wire_and_imperial_calculations();
         std::cout << "Unit conversion, geometry, turn, engagement, world and IO checks passed.\n";

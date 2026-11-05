@@ -42,7 +42,7 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 
 ## 4. "Değer yok"
 
-- Olmayabilen **sayı** → `std::optional<double>`. Kullanım: `if (const auto ttg = ...) { *ttg }`, `value_or(...)`, `has_value()`.
+- Olmayabilen **sayı** → `std::optional<double>`. Kullanım: `if (const auto f_pole_nm = ...) { *f_pole_nm }`, `value_or(...)`, `has_value()`.
 - Olmayabilen **nesne** → `const T*` (`nullptr` = yok). Zincirli `a()->b` yazılmaz; önce kontrol edilir.
 - Sentinel değer (`-1`, `0` "yok" anlamında) kullanılmaz. Tel (JSON/CSV) biçimi gerektiriyorsa dönüşüm yalnız `io/` içinde yapılır.
 - Vector'e indeksle erişmeden önce boyutu kontrol edilir.
@@ -70,10 +70,10 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 
 ## 7. Manevra ve karar
 
-- **Manevra yaşam döngüsü:** `enter(own)` girişte bir kez çağrılır, `update(own)` her step `own.command`'dan başlayıp komutu döner, `status(own)` bitti mi sorusuna cevap verir.
-- **Kendi içinde biten manevralar** (Out gibi) hedefe ulaşınca `Done` döner. **Sürekli manevralar** (Crank, Beam, Hold, In) hep `Running` döner; onları otopilot bitirir. Bu manevralar karara yardım eden sorgular sunabilir (ör. `Crank::in_radar_sight`).
+- **Manevra yaşam döngüsü:** Her otopilotun `Maneuvers` nesnesi son uçurulan manevrayı tutar. `maneuvers_.fly(own, manevra)` ilk kullanımda veya manevra nesnesi değiştiğinde `enter(own)` çağırır. Aynı manevra sürerken tekrarlamaz; araya başka manevra girdikten sonra geri dönülürse yeniden çağırır. `update(own)` her step `own.command`'dan başlayıp komutu döner, `status(own)` bitti mi sorusuna cevap verir. State değişse bile aynı manevra kesintisiz sürüyorsa yeniden giriş yapılmaz.
+- **Kendi içinde biten manevralar** (Out gibi) hedefe ulaşınca `Done` döner. **Sürekli manevralar** (Crank, Beam, Hold, Commit, Recommit) hep `Running` döner; onları otopilot bitirir. Bu manevralar karara yardım eden sorgular sunabilir (ör. `Crank::in_radar_sight`).
 - **Geçiş koşulları** `control/conditions.hpp` içinde isimli fonksiyonlar olarak durur. Karar kodu bu koşulları çağırır; böylece karar yapısı değişse de (switch → karar ağacı) koşullar aynı kalır.
-- **Otopilot** (`OtopilotFighter`, `OtopilotHostile`) `step` içinde tek switch'tir; her durum bir blok: `fly(own, manevra)` ile uç, sonra çıkış koşullarına bak. Durum yalnız `go_to(durum, manevra, own)` ile değiştirilir (`state_ = ...` elle yazılmaz); böylece yeni manevranın `enter()`'ı atlanmaz.
+- **Otopilot** (`OtopilotFighter`, `OtopilotHostile`) `step` içinde tek switch'tir; her durum bir blok: `maneuvers_.fly(own, manevra)` ile uç, sonra çıkış koşullarına bak. Durum yalnız `go_to(durum)` ile değiştirilir (`state_ = ...` elle yazılmaz); `go_to` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; `enter()` ve komut üretimi ilk `fly()` çağrısında yapılır. Aynı manevrayı kullanan farklı statelerin çıkış koşulları bağımsızdır.
 
 ## 8. Dosya düzeni
 

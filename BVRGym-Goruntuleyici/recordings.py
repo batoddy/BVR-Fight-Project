@@ -316,7 +316,12 @@ def read_calculations(directory):
                 values = {}
                 for key, raw in row.items():
                     raw = (raw or '').strip()
-                    if key.endswith('_id'):
+                    if key == 'pitbull_missile_slots':
+                        slots = json.loads(raw or '[]')
+                        if not isinstance(slots, list) or any(type(slot) is not int or slot < 0 for slot in slots):
+                            raise ValueError('pitbull_missile_slots geçersiz')
+                        values[key] = slots
+                    elif key.endswith('_id'):
                         values[key] = raw or None
                     elif not raw:
                         values[key] = None
@@ -351,6 +356,11 @@ def attach_calculations(samples, calculations):
                 if row['kind'] == 'aircraft' and row.get('agent_key')}
     matched = 0
     for row in samples:
+        if row['kind'] == 'missile':
+            values = calculations.get(row.get('carrier_key'), {}).get(row['sim_time_s'])
+            if values is not None and 'pitbull_missile_slots' in values:
+                row['is_pitbull'] = str(row.get('ammo_id')) in {str(slot) for slot in values['pitbull_missile_slots']}
+            continue
         values = calculations.get(row.get('agent_key'), {}).get(row['sim_time_s']) if row['kind'] == 'aircraft' else None
         if values is None:
             continue

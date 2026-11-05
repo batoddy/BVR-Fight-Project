@@ -81,7 +81,7 @@ export class Scene {
       new THREE.LineBasicMaterial({color:0xa2d4bb,transparent:true,opacity:.95,fog:false}));
     this.radarFan=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineDashedMaterial({color:0x83b9d2,transparent:true,opacity:.7,fog:false}));
     this.targetLine.visible=this.radarFan.visible=false;this.world.add(this.targetLine,this.radarFan);
-    // WEZ: uçağın etrafında, kendi irtifasında yatay min–max halkası. own: seçili uçak, enemy: hedefi.
+    // WEZ: uçağın etrafında, kendi irtifasında yatay dış sınır. own: seçili uçak, enemy: hedefi.
     this.wezRings={own:this.createWezRing(),enemy:this.createWezRing()};
     // Düşman merkezli bölgeler (units.js ENEMY_ZONES): her biri tek çizgi çember ve kuzey ucunda etiket.
     this.zoneRings={};for(const zone of ENEMY_ZONES)this.zoneRings[zone.key]=this.createZoneRing(zone);
@@ -212,7 +212,8 @@ export class Scene {
     const label=document.createElement('button');label.className='flight-label';label.onclick=()=>this.onSelect(entity.id);label.ondblclick=event=>{event.preventDefault();this.onFocus?.(entity.id);};this.labels.append(label);
     const labelName=document.createElement('span'),labelSpeedValue=document.createElement('span'),labelAltitudeValue=document.createElement('span'),labelFlightValue=document.createElement('span');
     labelName.className='flight-label-name';labelSpeedValue.className='flight-label-speed';labelAltitudeValue.className='flight-label-altitude';labelFlightValue.className='flight-label-flight';label.append(labelName,labelSpeedValue,labelAltitudeValue,labelFlightValue);
-    const record={model,trail,shadowTrail,stem,ring,velocityArrow,altitudeTrace,altitudeCurtain,label,labelName,labelSpeedValue,labelAltitudeValue,labelFlightValue};this.models.set(entity.id,record);
+    const labelPitbull=document.createElement('span');labelPitbull.className='flight-label-pitbull';labelPitbull.textContent='PB';labelPitbull.title='Pitbull · füzenin kendi radarı aktif';labelPitbull.hidden=true;label.append(labelPitbull);
+    const record={model,trail,shadowTrail,stem,ring,velocityArrow,altitudeTrace,altitudeCurtain,label,labelName,labelSpeedValue,labelAltitudeValue,labelFlightValue,labelPitbull};this.models.set(entity.id,record);
     return record;
   }
 
@@ -337,16 +338,9 @@ export class Scene {
   }
 
   createWezRing(){
-    // İç kısım düz dolgu değil çapraz çizgili: saydam zeminde beyaz çizgi dokusu, malzeme rengi takım rengine boyar.
-    // NEZ taramasının (createZoneRing) tersi yönde; dış çap boyunca 28 çizgi.
-    const tile=document.createElement('canvas');tile.width=tile.height=32;
-    const pen=tile.getContext('2d');pen.strokeStyle='#fff';pen.lineWidth=4;
-    pen.beginPath();pen.moveTo(-8,-8);pen.lineTo(40,40);pen.moveTo(-8,24);pen.lineTo(8,40);pen.moveTo(24,-8);pen.lineTo(40,8);pen.stroke();
-    const texture=new THREE.CanvasTexture(tile);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(28,28);
-    const fill=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial({map:texture,transparent:true,side:THREE.DoubleSide,depthWrite:false,fog:false}));
-    const edge=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({transparent:true,fog:false}));
-    const group=new THREE.Group();group.add(fill,edge);group.visible=false;this.world.add(group);
-    return {group,fill,edge,radii:''};
+    const edge=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineDashedMaterial({transparent:true,fog:false}));
+    const group=new THREE.Group();group.add(edge);group.visible=false;this.world.add(group);
+    return {group,edge,radius:''};
   }
 
   // zone.style: 'line' düz, 'dash' kesikli çizgi, 'hatch' içi taralı daire + çizgi (units.js ENEMY_ZONES).
@@ -401,28 +395,24 @@ export class Scene {
     ring.label.style.transform=`translate(${x}px,${y}px) translate(-50%,-100%)`;
   }
 
-  // Halkayı min–max yarıçapla çiz; yarıçap değişmedikçe geometri yeniden kurulmaz.
+  // Yalnızca azami menzilin dış sınırını kesikli çiz; yarıçap değişmedikçe geometri yeniden kurulmaz.
   // active: karşı uçak bu WEZ'in içinde; halka belirginleşir.
-  drawWezRing(ring,entity,minM,maxM,color,active){
-    ring.group.visible=maxM>minM&&maxM>0;
+  drawWezRing(ring,entity,maxM,color,active){
+    ring.group.visible=maxM>0;
     if(!ring.group.visible)return;
-    const radii=Math.round(minM)+':'+Math.round(maxM);
-    if(ring.radii!==radii){
-      ring.radii=radii;
-      const fill=new THREE.RingGeometry(Math.max(minM,.1),maxM,160,1);fill.rotateX(-Math.PI/2);
-      ring.fill.geometry.dispose();ring.fill.geometry=fill;
+    const radius=String(Math.round(maxM));
+    if(ring.radius!==radius){
+      ring.radius=radius;
       const points=[];
-      for(const radius of [minM,maxM]){
-        if(radius<=0)continue;
-        for(let i=0;i<160;i++){
-          const a=i/160*Math.PI*2,b=(i+1)/160*Math.PI*2;
-          points.push(new THREE.Vector3(Math.sin(a)*radius,0,Math.cos(a)*radius),new THREE.Vector3(Math.sin(b)*radius,0,Math.cos(b)*radius));
-        }
+      for(let i=0;i<=160;i++){
+        const a=i/160*Math.PI*2;
+        points.push(new THREE.Vector3(Math.sin(a)*maxM,0,Math.cos(a)*maxM));
       }
       ring.edge.geometry.dispose();ring.edge.geometry=new THREE.BufferGeometry().setFromPoints(points);
+      ring.edge.computeLineDistances();
+      ring.edge.material.dashSize=maxM/14;ring.edge.material.gapSize=maxM/22;
     }
     ring.group.position.copy(point(entity));
-    ring.fill.material.color.setHex(color);ring.fill.material.opacity=active?.5:.2;
     ring.edge.material.color.setHex(color);ring.edge.material.opacity=active?.95:.55;
   }
 
@@ -471,9 +461,9 @@ export class Scene {
     }
     // Dost WEZ: seçili uçağın kendi hesabı. Düşman WEZ: hedefin kendi hesabı (onun satırı).
     const own=a?.options.ownWez?a.calc:null,enemy=a?.options.enemyWez&&a.target?a.target.calc:null;
-    if(own)this.drawWezRing(this.wezRings.own,a.entity,own.wez_min_range_m,own.wez_max_range_m,colorFor(a.entity),Boolean(own.enemy_in_my_wez));
+    if(own)this.drawWezRing(this.wezRings.own,a.entity,own.wez_max_range_m,colorFor(a.entity),Boolean(own.enemy_in_my_wez));
     else this.wezRings.own.group.visible=false;
-    if(enemy)this.drawWezRing(this.wezRings.enemy,a.target,enemy.wez_min_range_m,enemy.wez_max_range_m,colorFor(a.target),Boolean(enemy.enemy_in_my_wez));
+    if(enemy)this.drawWezRing(this.wezRings.enemy,a.target,enemy.wez_max_range_m,colorFor(a.target),Boolean(enemy.enemy_in_my_wez));
     else this.wezRings.enemy.group.visible=false;
     // Düşman merkezli bölgeler: yarıçap seçili uçağın hesabı (onun satırı), çember hedefin etrafında.
     for(const zone of ENEMY_ZONES){
@@ -562,14 +552,16 @@ export class Scene {
       record.ring.position.set(position.x,4,position.z);
       record.ring.scale.setScalar(guideLength(visualLength('aircraft',this.objectScale),.6,this.metersPerPixel(this.camera.position.distanceTo(record.ring.position),rect.height),6));
       const projected=position.clone().project(this.camera);
-      const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed)&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
+      const isMissile=entity.kind==='missile',pitbull=isMissile&&entity.is_pitbull===true;
+      const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed||pitbull)&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
       record.label.hidden=!visible;record.label.classList.toggle('selected',isSelected);record.label.classList.toggle('stale',Boolean(entity.measurement_ended));
       record.labelName.textContent=this.labelNames?entity.name:'';record.labelName.hidden=!this.labelNames;
       record.labelSpeedValue.textContent=this.labelSpeed?speedLabel(entity,this.speedUnit):'';record.labelSpeedValue.hidden=!this.labelSpeed;
       record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
-      const isMissile=entity.kind==='missile';record.label.classList.toggle('missile',isMissile);
-      record.labelFlightValue.textContent=isMissile?flightLabel(entity,this.distanceUnit):'';record.labelFlightValue.hidden=!isMissile;
-      record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,record.labelName.textContent,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent,isMissile?'atıştan beri '+record.labelFlightValue.textContent:null].filter(Boolean).join(' · ');
+      record.label.classList.toggle('missile',isMissile);
+      record.labelPitbull.hidden=!pitbull;
+      record.labelFlightValue.textContent=isMissile?flightLabel(entity,this.distanceUnit):'';record.labelFlightValue.hidden=!isMissile||!isSelected;
+      record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,entity.name,pitbull?'PB · Pitbull · füzenin kendi radarı aktif':null,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent,isMissile?'atıştan beri '+record.labelFlightValue.textContent:null].filter(Boolean).join(' · ');
       record.label.style.borderColor='#'+colorFor(entity).toString(16);
       const labelOffset=Math.max(26,modelLength/metersPerPixel/2+8);
       if(visible){

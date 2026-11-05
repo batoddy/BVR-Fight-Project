@@ -24,10 +24,10 @@ namespace geometry
     ///   0 tam önümde, + sağımda, - solumda, ±180 arkamda. ATA = bearing - heading
     double ata_deg(const Kinematics& own, const Kinematics& other);
 
-    /// derece ±180, aspect (burun referanslı): other'ın burnu ile other'dan own'a bakış arasındaki açı
+    /// derece ±180, Target Aspect (burun referanslı): other'ın burnu ile other'dan own'a bakış arasındaki açı
     ///   0 hot (burnu bize dönük), ±90 beam, 180 cold (kuyruğu bize dönük)
-    ///   + own other'ın sağında, - solunda. Aspect = bearing(other -> own) - other heading
-    double aspect_angle_deg(const Kinematics& own, const Kinematics& other);
+    ///   + own other'ın sağında, - solunda. TA = bearing(other -> own) - other heading
+    double ta_deg(const Kinematics& own, const Kinematics& other);
 
     /// NM, LOS (line of sight) vektörü: own'dan other'a kuzey, doğu, aşağı. Uzunluğu range_3d_nm.
     Ned los_nm(const Kinematics& own, const Kinematics& other);
@@ -41,4 +41,10 @@ namespace geometry
 
     /// kt, yalnız other'ın own'a doğru hızı; + bana geliyor. WEZ hesabı bunu kullanır.
     double other_closure_kt(const Kinematics& own, const Kinematics& other);
+
+    /// derece/s, LOS değişim hızı: own'dan other'a bearing'in değişimi, yatay düzlemde; + saat yönünde.
+    /// Aynı noktadalarsa 0.
+    double los_rate_deg_s(const Kinematics& own, const Kinematics& other);
+
+    double my_closure_w_crank_kt(const Kinematics& own, double radar_angle);
 }

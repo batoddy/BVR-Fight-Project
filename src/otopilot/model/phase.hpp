@@ -7,7 +7,8 @@ enum class Phase
     Hold = 0,    // rotayı koru
     Fire = 1,    // füze atışı
     Out = 2,     // düşmana kuyruk dön, kaç
-    In = 3,      // düşmana dön
+    Commit = 3,  // düşmana doğru düz uç
     Crank = 4,   // düşmanı radar sınırında tutarak dön
     Beam = 5,    // düşman uçağa dik uç (3/9 hattı)
+    Recommit = 6
 };

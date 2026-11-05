@@ -41,7 +41,7 @@ namespace
             candidate.closure_kt = missile.target.closure_kt;
             candidate.bearing_deg = geometry::bearing_deg(own.kinematics, missile.kinematics);
             candidate.ata_deg = geometry::ata_deg(own.kinematics, missile.kinematics);
-            candidate.aspect_deg = geometry::aspect_angle_deg(own.kinematics, missile.kinematics);
+            candidate.ta_deg = geometry::ta_deg(own.kinematics, missile.kinematics);
             candidate.mach = missile.kinematics.mach;
             candidate.is_pitbull = missile.target.is_pitbull;
 
@@ -65,11 +65,12 @@ namespace
         picture.range_3d_nm = geometry::range_3d_nm(own_k, enemy_k);
         picture.bearing_deg = geometry::bearing_deg(own_k, enemy_k);
         picture.ata_deg = geometry::ata_deg(own_k, enemy_k);
-        picture.aspect_deg = geometry::aspect_angle_deg(own_k, enemy_k);
+        picture.ta_deg = geometry::ta_deg(own_k, enemy_k);
         picture.los_nm = geometry::los_nm(own_k, enemy_k);
         picture.los_unit = geometry::los_unit(own_k, enemy_k);
         picture.closure_kt = geometry::closure_kt(own_k, enemy_k);
         picture.enemy_closure_kt = geometry::other_closure_kt(own_k, enemy_k);
+        picture.los_rate_deg_s = geometry::los_rate_deg_s(own_k, enemy_k);
 
         // Kaçış: düşmanın ana silahından.
         picture.out = engagement::out_plan(own, enemy);
@@ -77,7 +78,10 @@ namespace
         picture.nez_nm = engagement::nez_nm(own, enemy);
         picture.mar_nm = engagement::mar_nm(own, enemy);
         picture.is_in_mar = engagement::in_mar(own, enemy);
+        picture.dr_nm = engagement::dr_nm(own, enemy);
         picture.dor_nm = engagement::dor_nm(own, enemy);
+        picture.is_in_dor = engagement::in_dor(own, enemy);
+        
 
         picture.threat = find_threat(own, enemy);
     }
@@ -88,9 +92,11 @@ namespace
         const Picture& picture = own.picture;
         Weapons& weapons = own.weapons;
 
-        weapons.wez = engagement::wez(own, enemy);
+        weapons.wez = engagement::wez_nm(own, enemy);
         weapons.enemy_in_wez = engagement::in_wez(own, enemy);
+        weapons.a_pole_nm = engagement::a_pole_nm(own, enemy);
         weapons.f_pole_nm = engagement::f_pole_nm(own, enemy);
+        weapons.tr_nm = engagement::tr_nm(own, enemy);
 
         // NEZ: düşman benden out yapsa füzemden kaçamayacağı mesafe = düşmanın gözünden kaçış NEZ'i (uçaklar ters).
         weapons.nez_nm = engagement::nez_nm(enemy, own);

@@ -18,6 +18,12 @@ namespace condition
     /// Düşmana menzilim MAR'ımın içinde: şimdi out yapmazsam kaçamayabilirim.
     bool in_mar(const Aircraft& own);
 
+    /// Düşmana menzilim DOR'ımın içinde.
+    bool in_dor(const Aircraft& own);
+
+    /// Burnum hedefe dönük: |ATA| en fazla 2°.
+    bool nose_on_target(const Aircraft& own);
+
     /// Ben düşmanın MAR'ının içindeyim: düşmanın kendi hesabına göre out yapması gereken mesafe.
     bool inside_enemy_mar(const Aircraft& own, const Aircraft& enemy);
 
@@ -27,7 +33,7 @@ namespace condition
     /// Düşman benim NEZ'imde: şimdi atarsam out yapsa da kaçamaz.
     bool enemy_in_my_nez(const Aircraft& own);
 
-    /// Düşmanın bakışı: düşmanın burnu bana göre nasıl (picture.aspect_deg).
+    /// Düşmanın bakışı: düşmanın burnu bana göre nasıl (picture.ta_deg).
     Aspect enemy_aspect(const Aircraft& own);
 
     /// Benim bakışım: benim burnum düşmana göre nasıl (picture.ata_deg).

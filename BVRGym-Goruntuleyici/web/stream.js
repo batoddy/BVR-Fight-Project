@@ -55,6 +55,8 @@ export class SampleBuffer {
       // İlk örnek zamanı (füzede atış anı) ve o andan beri gidilen yol, m:
       // yol = önceki yol + √(Δdoğu² + Δkuzey² + Δirtifa²)
       const samples=track.samples,before=samples.at(-2);
+      // Radar açıldıktan sonra kapanmaz; hesapsız son ölçüm rozeti silmesin.
+      if(item.kind==='missile'&&before?.is_pitbull===true)item.is_pitbull=true;
       item.start_s=samples[0].sim_time_s;
       item.path_m=before?before.path_m+Math.hypot(item.east_m-before.east_m,item.north_m-before.north_m,item.altitude_m-before.altitude_m):0;
       this.cursor=item.sequence;

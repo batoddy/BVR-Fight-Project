@@ -42,15 +42,17 @@ Kısayollar metin alanı düzenlerken veya menü açıkken ilgili girişe öncel
 
 Sol panelde uçaklar takım ve adla filtrelenir. Göz düğmesi uçağı ve bağlı mühimmatını gizler. Envanterde uçaktaki, havadaki ve kaydı biten mühimmat ayrı görünür; uçuş ölçümü olmayan slot sahnede hayali bir füze oluşturmaz.
 
+Füze etiketleri iki satırda ad, hız ve irtifayı gösterir; uzun adlar kısaltılır. Füze seçilince atıştan beri geçen süre ve gidilen yol da açılır. Yeşil **PB** rozeti, otopilotun kaydettiği pitbull durumunu gösterir. Bu bilgi yeni `calculations.csv` kayıtlarındaki `pitbull_missile_slots` alanından okunur; alanı içermeyen eski kayıtlarda rozet gösterilmez.
+
 **Nesne ölçeği** `1×`, `25×`, `50×`, `100×` seçeneklerine sahiptir. `1×` gerçek model boyunu kullanır; diğer ölçeklerde füzeler görünürlük için ek `3.75×` büyütülür. Dünya mesafeleri ve hesaplanan menziller değişmez. Tanınmayan model genel geometriyle gösterilir.
 
 ## Analiz ve bilgi paneli
 
 Seçili uçağın ölçülen irtifa, yönelim, TAS/Mach, yük faktörü ve gaz komutu sağ panelde görünür. Hava hızı ölçümü yoksa konumdan türetilen hız, Mach ölçümü yoksa ISA tahmini ayrı adlandırılır. Gaz, ölçülen motor çıkışı değil kayıttaki hedef komuttur.
 
-C++ kullanılan oturumda `calculations.csv` varsa panel aşama, ATA, bearing, yatay/3B mesafe, aspect, WEZ ve karşılıklı WEZ durumlarını gösterir. MAR/DOR mevcut modelde `0` döner. Son snapshot gibi hesabın bulunmadığı anlarda arayüz bu eksikliği belirtir.
+C++ kullanılan oturumda `calculations.csv` varsa panel aşama, ATA, bearing, yatay/3B mesafe, aspect, WEZ ve karşılıklı WEZ durumlarını; R_cold (Stern WEZ), NEZ, MAR, DR ve DOR menzillerini gösterir. A-pole, F-pole ve TR, kendi ana silahıyla şimdi atış için C++ tarafından kaydedilen tahminlerdir; havada füze bulunması gerekmez. Bu üç tahminde C++'ın boş sonuç için yazdığı `0`, **Çözüm yok** olarak gösterilir. Seçilen NM/km birimi bütün bu mesafelere uygulanır. Eski kayıtlarda bulunmayan alanlar **—** kalır. Son snapshot gibi hesabın bulunmadığı anlarda arayüz bu eksikliği belirtir.
 
-**Sahnede göster** bölümünden hedef çizgisi, ATA/bearing/range/aspect etiketi, radar açısı ve iki uçağın WEZ halkaları seçilir. Füze seçiliyse analiz taşıyıcısının, seçim yoksa uygun dost uçağın bakışından yürür. Bu çizimler C++ hesabını gösterir; yeni bir radar veya menzil çözümü yapmaz.
+**Sahnede göster** bölümünden hedef çizgisi, ATA/bearing/range/aspect etiketi, radar açısı ve iki uçağın WEZ halkaları seçilir. Düşman çevresindeki Stern WEZ, NEZ, MAR, DR, DOR ve TR halkaları ayrı ayrı açılıp kapatılabilir; seçimler iki görünümde de uygulanır ve tarayıcıda saklanır. TR, seçili uçağın kaydedilmiş TR mesafesini hedef merkezli pembe bir halka olarak gösterir; değer eksik, sıfır veya negatifse halka çizilmez. Füze seçiliyse analiz taşıyıcısının, seçim yoksa uygun dost uçağın bakışından yürür. Bu çizimler C++ hesabını gösterir; yeni bir radar veya menzil çözümü yapmaz.
 
 ## Görünüm tercihleri
 

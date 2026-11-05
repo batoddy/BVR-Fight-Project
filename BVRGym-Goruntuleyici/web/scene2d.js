@@ -117,22 +117,16 @@ export class Scene {
       for(let i=1;i<=64;i++)ctx.lineTo(...at(gimbal-2*gimbal*i/64));
       ctx.stroke();ctx.restore();
     }
-    // WEZ: uçağın etrafında min–max halkası, içi çapraz çizgili; karşı uçak içindeyse belirginleşir. 3D ile aynı.
+    // WEZ: yalnızca azami menzilin kesikli dış sınırı; karşı uçak içindeyse belirginleşir. 3D ile aynı.
     const wezRing=(entity,calc)=>{
-      const minM=calc?.wez_min_range_m,maxM=calc?.wez_max_range_m;
-      if(!(maxM>minM&&maxM>0))return;
+      const maxM=calc?.wez_max_range_m;
+      if(!(maxM>0))return;
       const p=this.point(entity),color=entity.team==='red'?this.colors.red:this.colors.blue,active=Boolean(calc.enemy_in_my_wez);
       const outer=maxM*this.scale;
-      ctx.save();ctx.beginPath();ctx.arc(p.x,p.y,outer,0,Math.PI*2);ctx.arc(p.x,p.y,Math.max(0,minM)*this.scale,0,Math.PI*2,true);
-      // Çizgiler: halkaya kırpılmış 45° çizgiler, ekranda 10 px aralık; en fazla ~400 çizgi (NEZ taramasının tersi yönde).
-      ctx.save();ctx.clip('evenodd');ctx.strokeStyle=color;ctx.globalAlpha=active?.45:.18;ctx.lineWidth=1;
-      const spacing=Math.max(10,4*outer/400);
-      ctx.beginPath();
-      for(let k=-2*outer;k<=2*outer;k+=spacing){ctx.moveTo(p.x+k-outer,p.y-outer);ctx.lineTo(p.x+k+outer,p.y+outer);}
-      ctx.stroke();ctx.restore();
+      ctx.save();
       ctx.globalAlpha=active?.95:.55;ctx.strokeStyle=color;ctx.lineWidth=1.2;
-      ctx.beginPath();ctx.arc(p.x,p.y,maxM*this.scale,0,Math.PI*2);ctx.stroke();
-      if(minM>0){ctx.beginPath();ctx.arc(p.x,p.y,minM*this.scale,0,Math.PI*2);ctx.stroke();}
+      ctx.setLineDash([12,7]);
+      ctx.beginPath();ctx.arc(p.x,p.y,outer,0,Math.PI*2);ctx.stroke();
       ctx.restore();
     };
     if(analysis?.options.ownWez)wezRing(analysis.entity,analysis.calc);
@@ -193,14 +187,16 @@ export class Scene {
       }
       if(this.labelMode!=='none'&&(this.labelMode!=='selected'||entity.id===selected)){
         const name=this.labelNames?entity.name:'',speed=this.labelSpeed?speedLabel(entity,this.speedUnit):'',altitude=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';
-        const flight=entity.kind==='missile'?flightLabel(entity,this.distanceUnit):'';
-        if(!name&&!speed&&!altitude)continue;
+        const isMissile=entity.kind==='missile',pitbull=isMissile&&entity.is_pitbull===true;
+        const flight=isMissile&&entity.id===selected?flightLabel(entity,this.distanceUnit):'';
+        if(!name&&!speed&&!altitude&&!pitbull)continue;
         // Füze etiketi uçağınkinden küçük: yazı 10 px, satırlar daha sık.
         const fontPx=entity.kind==='missile'?10:12,rowPx=entity.kind==='missile'?12:15;
-        ctx.font=`600 ${fontPx}px "Segoe UI",sans-serif`;const nameWidth=Math.min(90,ctx.measureText(name).width);
+        ctx.font=`600 ${fontPx}px "Segoe UI",sans-serif`;const nameWidth=Math.min(isMissile&&entity.id!==selected?64:90,ctx.measureText(name).width);
         ctx.font=`${fontPx}px "Segoe UI",sans-serif`;const speedWidth=ctx.measureText(speed).width,altitudeWidth=ctx.measureText(altitude).width,flightWidth=ctx.measureText(flight).width;
-        const topHeight=name||speed?rowPx+2:0,altitudeHeight=altitude?rowPx:0,labelHeight=topHeight+altitudeHeight+(flight?rowPx:0)+6;
-        const labelWidth=Math.min(this.width-16,Math.max(nameWidth+speedWidth+(name&&speed?10:0),altitudeWidth,flightWidth)+12);
+        const topHeight=name||speed||pitbull?rowPx+2:0,altitudeHeight=altitude?rowPx:0,labelHeight=topHeight+altitudeHeight+(flight?rowPx:0)+6;
+        const badgeWidth=pitbull?24:0;
+        const labelWidth=Math.min(this.width-16,Math.max(nameWidth+speedWidth+(name&&speed?6:0)+badgeWidth,altitudeWidth,flightWidth)+10);
         const labelOffset=Math.max(26,pixels/2+8);
         const arrowPointsRight=velocity&&velocity.east>.25*Math.hypot(velocity.east,velocity.north);
         const labelX=Math.max(8,Math.min(this.width-labelWidth-8,p.x+(arrowPointsRight?-labelWidth-labelOffset:labelOffset)));
@@ -216,11 +212,17 @@ export class Scene {
         ctx.beginPath();ctx.roundRect(labelX,labelY,labelWidth,labelHeight,3);ctx.fill();ctx.stroke();
         ctx.fillStyle=this.colors.text;
         const baseline=rowPx-2;
-        if(name){ctx.font=`600 ${fontPx}px "Segoe UI",sans-serif`;ctx.fillText(name,labelX+6,labelY+baseline+2,Math.max(1,labelWidth-12-speedWidth-(speed?10:0)));}
+        if(name){ctx.font=`600 ${fontPx}px "Segoe UI",sans-serif`;let text=name;while(text.length>1&&ctx.measureText(text).width>nameWidth)text=text.slice(0,-2)+'…';ctx.fillText(text,labelX+5,labelY+baseline+2,Math.max(1,labelWidth-10-speedWidth-(speed?6:0)-badgeWidth));}
         ctx.font=`${fontPx}px "Segoe UI",sans-serif`;
-        if(speed){ctx.textAlign=name?'right':'center';ctx.fillText(speed,name?labelX+labelWidth-6:labelX+labelWidth/2,labelY+baseline+2);}
+        if(speed){ctx.textAlign=name?'right':'center';ctx.fillText(speed,name?labelX+labelWidth-5-badgeWidth:labelX+(labelWidth-badgeWidth)/2,labelY+baseline+2);}
         if(altitude){ctx.textAlign='center';ctx.fillText(altitude,labelX+labelWidth/2,labelY+topHeight+baseline);}
         if(flight){ctx.textAlign='center';ctx.fillText(flight,labelX+labelWidth/2,labelY+topHeight+altitudeHeight+baseline);}
+        if(pitbull){
+          const dark=document.documentElement.dataset.theme==='dark',x=labelX+labelWidth-23,y=labelY+3;
+          ctx.fillStyle=dark?'#143d2b':'#dcfce7';ctx.strokeStyle=dark?'#4ade80':'#15803d';ctx.lineWidth=1;
+          ctx.beginPath();ctx.roundRect(x,y,19,14,3);ctx.fill();ctx.stroke();
+          ctx.font='700 9px "Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillStyle=dark?'#86efac':'#166534';ctx.fillText('PB',x+9.5,y+10);
+        }
         ctx.restore();
       }
     }

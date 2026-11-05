@@ -29,7 +29,9 @@ otopilot/
 │   ├── turn.hpp / turn.cpp
 │   ├── engagement.hpp / engagement.cpp
 │   ├── missile_geometry.hpp / missile_geometry.cpp
-│   └── r_cold_formulu.md, r_cold_grafikler/
+│   ├── r_cold_formulu.md, r_cold_grafikler/      (R_cold uyumu ve ölçümü)
+│   ├── wez_formulu.md, wez_grafikler/            (WEZ dış sınırı Rmax uyumu ve ölçümü)
+│   └── fuze_ucus_tablosu.md                      (füze uçuş modeli)
 ├── io/
 │   ├── state_reader.hpp / state_reader.cpp
 │   ├── command_writer.hpp / command_writer.cpp
@@ -40,6 +42,8 @@ otopilot/
 ├── common/
 │   ├── units.hpp / angles.hpp / ned.hpp / geodesy.hpp
 │   └── roles.hpp
+├── tests/
+│   └── units_test.cpp
 └── third_party/nlohmann/
 ```
 
@@ -57,7 +61,7 @@ otopilot/
 | Füze slotları, atış, kendi WEZ/NEZ/F-pole | [model/weapons.hpp](model/weapons.hpp) |
 | Hesapları ilgili uçak/füze alanlarına koymak | [model/world.cpp](model/world.cpp) |
 | Uçak sabitleri ve slot sırasındaki mühimmat tipleri | [model/aircraft_profiles.hpp](model/aircraft_profiles.hpp) |
-| Füze menzil, hız, pitbull ve R_cold parametreleri | [model/missile_profiles.hpp](model/missile_profiles.hpp) |
+| Füze menzil, hız, pitbull, R_cold ve Rmax (WEZ) parametreleri | [model/missile_profiles.hpp](model/missile_profiles.hpp) |
 | Mesafe, bearing, ATA, aspect, LOS ve kapanma | [calculations/geometry.cpp](calculations/geometry.cpp) |
 | Dönüş süresi, yarıçapı, yer değişimi | [calculations/turn.cpp](calculations/turn.cpp) |
 | WEZ, out planı, R_cold, NEZ, MAR, DOR | [calculations/engagement.cpp](calculations/engagement.cpp) |

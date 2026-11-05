@@ -28,10 +28,12 @@ struct Weapons
     // Ana silahımın (profile.main_weapon) düşmana karşı durumu | World::update
     Wez wez;                           // benim WEZ'im
     double nez_nm = 0;                 // NM, benim NEZ'im: düşman şimdi out yapsa füzemden kaçamayacağı mesafe
-    std::optional<double> f_pole_nm;   // NM, füzem vurduğunda aramızda kalacak mesafe; füze yetişemiyorsa yok
+    std::optional<double> a_pole_nm;   // NM, A-pole; çözüm yoksa değer yok
+    std::optional<double> f_pole_nm;   // NM, F-pole; çözüm yoksa değer yok
+    std::optional<double> tr_nm;       // NM, TR; çözüm yoksa değer yok
     bool enemy_in_wez = false;         // düşman benim WEZ'imde mi
     bool enemy_in_nez = false;         // düşman benim NEZ'imde mi: wez.min_nm < menzil <= nez_nm
-    // TODO: m_pole_nm, a_pole_nm
+    // TODO: m_pole_nm
 
     /// Füze at: bu profildeki (ör. AIM120C) ilk atılmamış slot. Bu step launch emri gider.
     /// O profilde füze kalmadıysa ya da emri verilmiş ama henüz uçmamış füze varsa false; havadaki füze engel değil.

@@ -143,12 +143,23 @@ Hazır mühimmat yalnız CSV başlığıyla kalır. Uçan füze kayıt alır; bi
 | Mesafe / açı | `range_2d_nm`, `range_3d_nm`, `bearing_deg`, `ata_deg`, `aspect_deg` |
 | Görüş hattı | `los_north_nm`, `los_east_nm`, `los_down_nm` |
 | Kapanma | `rate_of_closure_kt`, `enemy_closing_kt` |
-| Angajman | `enemy_in_my_wez`, `me_in_enemy_wez`, `mar_nm`, `dor_nm` |
+| Angajman | `enemy_in_my_wez`, `me_in_enemy_wez`, `stern_wez_nm`, `nez_nm`, `mar_nm`, `dr_nm`, `dor_nm` |
+| Atış tahmini | `a_pole_nm`, `f_pole_nm`, `tr_nm` |
 | Profil / çizim | `radar_gimbal_deg`, `radar_range_nm`, `wez_min_range_nm`, `wez_max_range_nm` |
 
-Boolean değerler CSV'de `1/0` olarak yazılır. Alan kümesi ilk mesajdan sonra değiştirilemez. `phase`: `0 Hold`, `1 Fire`, `2 Out`, `3 In`, `4 Crank`, `5 Notch`.
+Boolean değerler CSV'de `1/0` olarak yazılır. Alan kümesi ilk mesajdan sonra değiştirilemez. `phase`: `0 Hold`, `1 Fire`, `2 Out`, `3 Commit`, `4 Crank`, `5 Beam`, `6 Recommit`.
 
-Pozitif ATA sağ taraf, pozitif kapanma yaklaşma anlamındadır. Radar gimbal değeri yarım açıdır: `60`, sağa ve sola 60° demektir. MAR/DOR'un mevcut `0` değerleri uygulanmış bir angajman çözümü değildir. WEZ ilk slotun profiline dayanır. Füzenin `target` hesapları bu uçak satırlarına ayrı füze ölçümü olarak aktarılmaz.
+Pozitif ATA sağ taraf, pozitif kapanma yaklaşma anlamındadır. Radar gimbal değeri yarım açıdır: `60`, sağa ve sola 60° demektir.
+
+Angajman alanlarının yönü ve adı:
+
+- `a_pole_nm`, `f_pole_nm`, `tr_nm`: kendi ana silahımla **şimdi atış** için ölçülmüş füze uçuş tablosundan tahminlerdir; havada füze gerekmez. A/F-pole iki uçağın yakınlaşmasına göre değişir ve `weapons` içinde tutulur. TR, tablodan aktifleşmede DOR eşitliğinin çözümüdür; alt sınıra kırpılmaz. Bütün ana silahlar Fox3 gibi ele alınır. Tablo çözüm vermezse sonuç C++ içinde boştur, JSON/CSV'de `0` yazılır. Ayrıntı: [formüller](../../src/otopilot/calculations/pole_tr_formulleri.md).
+
+- `enemy_in_my_wez`, `wez_min_range_nm`, `wez_max_range_nm`: **benim** ana silahımın (`profile.main_weapon`) düşmana karşı WEZ'i; füze slotlarına ya da kalan füze sayısına bakılmaz. `wez_max_range_nm` düşmanın bana doğru hızına göre her step değişir.
+- `me_in_enemy_wez`, `stern_wez_nm`, `nez_nm`, `mar_nm`, `dr_nm`, `dor_nm`: **düşmanın** ana silahına karşı kaçış hesapları. `stern_wez_nm` kodda `r_cold_nm`'dir (kaçarken düşman füzesinin yetişebileceği en büyük mesafe); sütun adı eski kaldı. `dr_nm` = R_cold + notch beklemesi süresindeki anlık düşman yaklaşması + ortak out payı (varsayılan 15 s ve 0,5 NM).
+- Bu alanlar hesaplanmış değerlerdir; BVRGym'in ölçtüğü bir şey değildir. Katsayılar BVRGym füzesiyle yapılan taramalardan gelir (`src/otopilot/calculations/*_formulu.md`).
+
+Füzenin `target` hesapları bu uçak satırlarına ayrı füze ölçümü olarak aktarılmaz.
 
 Görüntüleyici hesapları uçak anahtarı ve **tam eşit `time_s`** ile ölçüme bağlar; en yakın zamanı seçmez. Eşleşmeyen hesap uyarıyla atlanır. Oynatma sırasında `calc`, bir sonraki ölçüme kadar önceki örneğin hesabı olarak tutulur; geometrisi yeniden hesaplanmaz. Son ölçüm için hesap olmayabilir.
 

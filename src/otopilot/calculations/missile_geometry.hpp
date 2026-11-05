@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "model/aircraft.hpp"
 #include "model/missile.hpp"
 
@@ -17,4 +19,13 @@ namespace missile_geometry
 
     /// Füze pitbull mı: hedefe pitbull_range_nm'den yakın. pitbull_range_nm 0 ise (Fox1, Fox2 tipleri) hep false.
     bool is_pitbull(const Missile& missile, double range_nm);
+
+    /// kt, füzenin boost bitişinden t_s saniye sonraki hızı
+    double velocity_at_time(const MissileProfile& missile_profile, double t_s);
+
+    /// NM, füzenin boost bitişinden t_s saniyede aldığı yol
+    double distance_at_time(const MissileProfile& missile_profile, double t_s);
+
+    /// s, füzenin boost bitişinden distance_nm yol alması için gereken süre; füze o yola erişemezse veya yol negatifse std::nullopt
+    std::optional<double> time_at_distance(const MissileProfile& missile_profile, double distance_nm);
 }

@@ -47,6 +47,23 @@ Ned geometry::los_unit(const Kinematics& own, const Kinematics& other)
     return los;
 }
 
+// los değişim hızı = v_dik / range
+double geometry::los_rate_deg_s(const Kinematics& own, const Kinematics& other)
+{
+    const double range_nm = range_2d_nm(own, other);
+    if (range_nm < meter_to_nmile(1.0))
+    {
+        return 0.0;   // aynı noktadalar: yön tanımsız
+    }
+
+    const Ned los = los_nm(own, other);
+    const double v_north_kt = other.velocity_ned_kt.north - own.velocity_ned_kt.north;
+    const double v_east_kt = other.velocity_ned_kt.east - own.velocity_ned_kt.east;
+
+    const double v_dik_kt = (los.north * v_east_kt - los.east * v_north_kt) / range_nm;
+    return v_dik_kt / range_nm / SECONDS_PER_HOUR * RAD_TO_DEG;
+}
+
 // Yatay mesafe, Pisagor: √(kuzey² + doğu²)
 double geometry::range_2d_nm(const Kinematics& own, const Kinematics& other)
 {
@@ -76,7 +93,7 @@ double geometry::ata_deg(const Kinematics& own, const Kinematics& other)
     return wrap_180(bearing_deg(own, other) - own.heading_deg);
 }
 
-double geometry::aspect_angle_deg(const Kinematics& own, const Kinematics& other)
+double geometry::ta_deg(const Kinematics& own, const Kinematics& other)
 {
     // other'ın gözünden ATA: other'dan bana bearing − other'ın burun yönü. 0: burnu bana dönük (hot).
     const double other_to_own_bearing_deg = bearing_deg(other, own);
@@ -94,4 +111,10 @@ double geometry::other_closure_kt(const Kinematics& own, const Kinematics& other
 {
     const Ned unit = los_unit(own, other);
     return -dot(other.velocity_ned_kt, unit);   // other LOS'un tersine gidiyorsa bana geliyor: +
+}
+
+
+double geometry::my_closure_w_crank_kt(const Kinematics& own, double radar_angle)
+{
+    return own.tas_kt * std::sin(radar_angle * DEG_TO_RAD);
 }

@@ -10,7 +10,7 @@ Kod kuralları (katmanlar, isimlendirme, birimler, "değer yok" durumu): [KOD_ST
 |---|---|---|
 | `io/` | JSON ↔ C++ | `Aircraft`'ın ölçüm alanları, `command` (Python'un son uyguladığı) |
 | `model/` | Veri tipleri, `World::update` | `enemy_id`, `picture`, füzelerin `target` bilgisi |
-| `calculations/` | Saf hesap (`geometry::`, `turn::`, `engagement::`, `missile_geometry::`) | Hiçbir şey; sonuç döndürür |
+| `calculations/` | Saf hesap (`geometry::`, `turn::`, `engagement::`, `missile_geometry::`, `missile_flight::`) | Hiçbir şey; sonuç döndürür |
 | `control/` | Karar ve manevra | `command`, `phase`, atış emri |
 | `common/` | Birim, açı, NED vektörü, LLA/ECEF | — |
 
@@ -46,7 +46,9 @@ classDiagram
         bool has_launch_order
         Wez wez
         double nez_nm
+        optional a_pole_nm
         optional f_pole_nm
+        optional tr_nm
         bool enemy_in_wez
         bool enemy_in_nez
         fire(MissileProfile) bool
@@ -55,13 +57,13 @@ classDiagram
         FighterState state_
         Maneuvers maneuvers_
         step(Aircraft& own, Aircraft enemy)
-        go_to(FighterState, Maneuver&, own)
+        go_to(FighterState)
     }
     class OtopilotHostile {
         HostileState state_
         Maneuvers maneuvers_
         step(Aircraft& own, Aircraft enemy)
-        go_to(HostileState, Maneuver&, own)
+        go_to(HostileState)
     }
     class Maneuver {
         phase()*
@@ -97,12 +99,13 @@ return CommandWriter::write(state.tick, world_);
 |---|---|---|
 | `Kinematics` | konum, yönelim, TAS, Mach, NED hız | StateReader |
 | `AircraftProfile` | ana silah (`main_weapon`), yük, radar, out g'si ve payı | StateReader (tip değişince) |
-| `Weapons` | füze slotları, atış emri; ana silahımın WEZ'i, NEZ'i, F-pole'u, düşman WEZ/NEZ'imde mi | StateReader, `weapons.fire`, World::update |
+| `MissileProfile` | füze menzili, hızı, pitbull ve patlama yarıçapı; R_cold ve Rmax uyumları; uçuş eğrisi (`glide`) | `missile_profiles.hpp` (sabit tablo) |
+| `Weapons` | füze slotları, atış emri; ana silahımın WEZ'i, NEZ'i, A/F-pole'u, TR'si, düşman WEZ/NEZ'imde mi | StateReader, `weapons.fire`, World::update |
 | `Missile` | slot/profil, atış bilgisi, Python kimliği/durumu, kinematik, `target` (hedefe göre) | StateReader, `weapons.fire`, World::update |
 | `Picture` | atanmış düşmana göre geometri, out planı, kaçış: R_cold, NEZ, MAR, DOR, `threat` | World::update |
 | `ThreatInfo` | bana gelen en acil düşman füzesinin bana göre durumu | World::update |
 | `FlightCommand` | yön, irtifa, gaz, isteğe bağlı g sınırı; setter'lar aralığı korur | StateReader, otopilot |
-| `Phase` | kayda çıkan aşama: `0 Hold`, `1 Fire`, `2 Out`, `3 In`, `4 Crank`, `5 Beam` | otopilot (aktif manevradan) |
+| `Phase` | kayda çıkan aşama: `0 Hold`, `1 Fire`, `2 Out`, `3 Commit`, `4 Crank`, `5 Beam`, `6 Recommit` | otopilot (aktif manevradan) |
 
 "Olmayabilen" sayılar `std::optional` tipindedir: tehdit (bana gelen füze yoksa `threat`), füze yetişemiyorsa `f_pole_nm`. WEZ, R_cold, NEZ, MAR ve DOR her uçağın profilindeki `main_weapon`'dan hesaplandığı için her zaman vardır. Kayda olmayan değerler 0 olarak yazılır.
 
@@ -116,11 +119,11 @@ return CommandWriter::write(state.tick, world_);
    - geometri (`geometry::`)
    - out planı (`engagement::out_plan` → `turn::to_heading`)
    - düşmanın ana silahının (`enemy.profile.main_weapon`) R_cold uyumuyla R_cold, NEZ ve MAR
-   - DOR: MAR + düşmanın 180°'lik recommit dönüşü boyunca yaklaştığı yol
+   - DOR: DR + düşmanın 180° In dönüşü boyunca yaklaştığı yol + out payı (0,5 NM)
    - tehdit: düşmanın bana gelen füzelerinden bana en yakın olanı
 4. **Weapons.** Her iki uçak için kendi ana silahıyla (`own.profile.main_weapon`):
    - WEZ ve `enemy_in_wez`
-   - F-pole
+   - A-pole, F-pole ve TR
    - NEZ: düşmanın gözünden kaçış NEZ'i (`engagement::nez_nm(enemy, own)`: düşmanın benden out planı ve füzemin R_cold uyumu); `enemy_in_nez` = WEZ iç sınırı < menzil ≤ NEZ. 1v1'de bu, düşmanın kendi `picture.nez_nm`'ine eşittir.
 5. **`me_in_enemy_wez`.** Karşı tarafın `weapons.enemy_in_wez` sonucundan kopyalanır.
 
@@ -138,7 +141,7 @@ Out planı, düşmanın bearing'i + 180°'ye yapılan dönüştür. Kaçış hı
 
 ## Manevralar ve karar
 
-Manevra yaşam döngüsü: `enter(own)` girişte bir kez, `update(own)` her step, `status(own)` → `Running` / `Done`.
+Manevra yaşam döngüsü: her otopilotun `Maneuvers` nesnesi son uçurulan manevrayı tutar. `fly()` ilk kullanımda veya manevra nesnesi değişince `enter(own)` çağırır; aynı manevra sürerken tekrarlamaz. Araya başka manevra girip geri dönülürse yeniden giriş yapılır. `update(own)` her step, `status(own)` → `Running` / `Done`.
 
 | Manevra | Faz | Davranış | Bitişi |
 |---|---|---|---|
@@ -146,26 +149,30 @@ Manevra yaşam döngüsü: `enter(own)` girişte bir kez, `update(own)` her step
 | `Fire` | Fire | komutu değiştirmez | sürekli |
 | `Out` | Out | bearing − 180, girişte kilitlenen alçalma, tam gaz, out g'si | \|ATA\| > 177° → Done |
 | `In` | In | yön = bearing | sürekli |
-| `Crank` | Crank | gimbal − 5° hedef ATA'ya P kontrolü; `in_radar_sight()` sorgusu (düşman radar konisinde mi, \|ATA\| < gimbal). Taraf `enter()`'da `crank_side_for` ile seçilir (`side()` ile okunur): düşman hangi taraftaysa o tarafta kalır | sürekli |
+| `Crank` | Crank | gimbal − 5° hedef ATA, LOS hızı kadar ileri alınır; `in_radar_sight()` sorgusu (düşman radar konisinde mi, \|ATA\| < gimbal). Taraf `enter()`'da `crank_side_for` ile seçilir (`side()` ile okunur): düşman hangi taraftaysa o tarafta kalır | sürekli |
 | `Beam` | Beam | bearing ∓ 90; taraf burnuma göre seçilir (düşman sağımdaysa sola, solumdaysa sağa), dönüş hep 90°'den kısa | sürekli |
 
-`OtopilotFighter` ve `OtopilotHostile` birer durum makinesidir; ikisi de `step` içinde tek bir switch kullanır. Her durum bir bloktur: önce o durumun manevrası `fly(own, manevra)` ile uçulur (fazı da manevradan alır), sonra çıkış koşullarına bakılır. Geçiş `go_to(yeni_durum, yeni_manevra, own)` ile yapılır; yeni manevranın `enter()`'ı o anda çağrılır, kendisi bir sonraki step'te uçulur. Başlangıç durumunun manevrası (In) `enter()` kullanmaz; başlangıç `enter()` kullanan bir manevraya değişirse ilk step'te çağrılması gerekir. Geçiş koşulları `control/conditions.hpp` içinde isimli fonksiyonlardır; karar yapısı ileride değişse de manevralar ve koşullar aynı kalır.
+`OtopilotFighter` ve `OtopilotHostile` birer durum makinesidir; ikisi de `step` içinde tek bir switch kullanır. Her durum bir bloktur: önce o durumun manevrası `maneuvers_.fly(own, manevra)` ile uçulur (fazı da manevradan alır), sonra çıkış koşullarına bakılır. `go_to(yeni_durum)` yalnız state'i değiştirir. Yeni state'in bloğu bir sonraki step'te manevrayı seçer; giriş hazırlığı ilk `fly()` çağrısında yapılır. State değişse bile aynı manevra kesintisiz sürüyorsa yeniden giriş yapılmaz. Geçiş koşulları `control/conditions.hpp` içinde isimli fonksiyonlardır; karar yapısı ileride değişse de manevralar ve koşullar aynı kalır.
 
-Mevcut taktik: şov senaryosu. MAR'ın doğru çalıştığını tek uçuşta gösterir. Çalıştırma (yaml'a dokunmadan):
+Mevcut fighter akışı iki atış ve iki ayrı destek bölümünden oluşur. Aynı Crank ve Out manevraları farklı statelerde tekrar kullanılır. Örnek çalıştırma (yaml'a dokunmadan):
 
 ```powershell
 python src/sim/sim_main.py --name show --range 40 --altitude 6000
 ```
 
-6 km, R_cold uyumunun geçerli aralığının (4–10 km) ortasıdır. Kayıt: `recordings/show`.
+6 km, R_cold uyumunun geçerli aralığının (4–10 km) ortasıdır.
 
 | Fighter | Geçiş |
 |---|---|
-| Commit (In) | düşman WEZ'imde → Fire; atmadan MAR'a girdim → Out |
-| Fire | AIM-120C atış emri, crank tarafı seçilir → Crank |
-| Crank | MAR'a girdim → Out |
-| Out | Out bitince gaz 0.45 → HoldAfterOut |
-| HoldAfterOut | Hold |
+| Commit (In) | MAR içindeyim → FirstEscape; değilsem menzil < 35 NM → FirstShot |
+| FirstShot (Fire) | tek step AIM-120C atış emri → FirstSupport |
+| FirstSupport (Crank) | DOR içindeyim → FirstEscape |
+| FirstEscape (Out) | Out bitince gaz 0.45 → Recommit |
+| Recommit (In) | burun hedefe hizalandı (\|ATA\| ≤ 2°) → SecondShot |
+| SecondShot (Fire) | tek step AIM-120C atış emri → SecondSupport |
+| SecondSupport (Crank) | MAR içindeyim → FinalEscape |
+| FinalEscape (Out) | Out bitince gaz 0.45 → Departure |
+| Departure (Hold) | rotayı koru |
 
 | Hostile | Geçiş |
 |---|---|
@@ -174,20 +181,22 @@ python src/sim/sim_main.py --name show --range 40 --altitude 6000
 | Out | Out bitince gaz 0.45 → HoldAfterOut |
 | HoldAfterOut | Hold |
 
-`recordings/show` uçuşunun akışı:
+Aynı komutla alınan son uçuşun akışı (`recordings/show_wez`; bu kayıt WEZ dış sınırı Rmax uyumuna geçmeden önce alındı, yeni formülle yeniden koşturulmadı):
 
 | t (s) | Olay |
 |---|---|
-| 0 | İki F-16 40 NM'den birbirine doğru (In) |
-| 65 | Fighter MAR'a 5 NM kala, 17.9 NM'den atar (MAR 12.9), crank'e girer |
-| 86 | Fighter MAR'a girer (11.64 ≤ 11.67), out yapar; hostile aynı step'te atar ve out yapar |
-| 100 | Fighter'ın out'u biter |
-| 107 | Hostile'ın out'u biter |
-| 127 | Fighter'ın füzesi hostile'ı vurur (292 m, isabet yarıçapı 300 m) |
-| 141 | Hostile'ın füzesi fighter'a 5.5 km kala Mach 1'in altına düşer, kaybolur: MAR'da dönen fighter kurtuldu |
+| 0 | İki F-16 40 NM'den birbirine doğru (In); düşman fighter'ın WEZ'indedir |
+| 0.2 | Fighter 39.9 NM'den atar, crank'e girer |
+| 97 | Fighter'ın füzesi hostile'ın 1.4 km yanından geçer (isabet yarıçapı 300 m): ıskalar |
+| 106.5 | Fighter MAR'a girer (10.93 ≤ 10.95), out yapar; hostile aynı step'te (fighter kendi MAR'ına girdi) atar ve out yapar |
+| 117 | Fighter'ın füzesi Mach 1'in altına düşer, kaybolur |
+| 121 / 127 | Fighter'ın / hostile'ın out'u biter |
+| 157 | Hostile'ın füzesi fighter'a en çok 4.7 km yaklaşıp kaybolur: MAR'da dönen fighter kurtuldu |
+
+Bu eski kayıtta fighter'ın atış kuralı yalnız "düşman WEZ'imde" idi; mevcut iki atışlı akışı temsil etmez.
 
 Bilinmesi gerekenler:
-- BVRGym füzesi 6 km'de burun buruna, manevra yapmayan hedefi yalnız ~12 NM'ye kadar vurur; daha uzakta tırmanıp dalma (loft) sonrası 0.3–1.9 km ile ıskalar. Dönen hedefi daha yakından da ıskalayabilir.
+- BVRGym füzesi 6 km'de burun buruna, manevra yapmayan hedefi yalnız ~12 NM'ye kadar vurur; daha uzakta tırmanıp dalma (loft) sonrası 0.3–1.9 km ile ıskalar. Dönen hedefi daha yakından da ıskalayabilir. WEZ'in dış sınırı (Rmax) "erişim" sınırıdır, isabet menzili değil ([wez_formulu.md](../../src/otopilot/calculations/wez_formulu.md)); WEZ'e girer girmez atmak isabet getirmez.
 - Gelen füzeye karşı "kalan süre" (mesafe / kapanma) füze yavaşladıkça ve biz döndükçe zıpladığı için kaldırıldı. Yerine kaçış payı (`escape_margin_nm`) gelecek.
 
 ## Füze slotları ve atış yaşam döngüsü
@@ -210,11 +219,18 @@ Bilinmesi gerekenler:
 ## Hesapların sınırları
 
 - **Geometri:** Ortalama Dünya yarıçaplı yerel düz dünya yaklaşımı kullanılır.
-- **WEZ:** İlk slotun profiline dayanır; düşmanın bana doğru hız bileşeniyle uzar:
+- **WEZ:** Uçak profilindeki ana silahtan hesaplanır (füze slotlarına bakılmaz). İç sınır füzenin en kısa menzilidir. Dış sınır Rmax, BVRGym taramasından çıkmış bir uyumdur ve düşmanın bana doğru hız bileşeniyle uzar ([wez_formulu.md](../../src/otopilot/calculations/wez_formulu.md)):
 
 ```text
-max_nm = missile.max_range_nm + enemy_closure_kt × (missile.max_range_nm / missile.speed_kt)
+Rmax = füzenin kendi yolu + düşmanın füze uçarken bana doğru aldığı yol
+     = (a + b·ln h) · (1 + k·(V_atan − 583 kt)) + enemy_closure_kt × (c + d·ln h) / 3600
 ```
 
+  Aspect'e değil düşmanın o anki hız vektörüne bakar. Profildeki `max_range_nm` hesaplarda kullanılmaz.
 - **R_cold:** BVRGym füzesine karşı yapılan kaçış taramasından elde edilen üstel bir uyumdur ([r_cold_formulu.md](../../src/otopilot/calculations/r_cold_formulu.md)).
+- **A/F-pole ve TR:** Atış öncesi bilgi olarak, ölçülmüş füze uçuş tablosundaki sürelerle hesaplanır; havada füze veya `speed_kt` sabiti kullanılmaz. A-pole aktifleşmede, F-pole isabette iki uçak arası mesafedir; TR tablodan `A_pole(TR) = DOR` çözümüdür. Sonuçlar `Weapons` ve hesap kaydına yazılır. [Formüller](../../src/otopilot/calculations/pole_tr_formulleri.md).
+- **Füze uçuş modeli:** `missile_flight::glide_...` fonksiyonları A/F-pole ve TR hesaplarına süre sağlar ([fuze_ucus_tablosu.md](../../src/otopilot/calculations/fuze_ucus_tablosu.md)). WEZ kendi Rmax uyumunu kullanır. C++ tablo modeli hâlâ Mach 1'de kesilir; BVRGym'deki 0,5 Mach eşiği henüz aktarılmamıştır.
+- **DR:** `engagement::dr_nm(own, enemy)` = R_cold + notch beklemesi boyunca düşmanın yaklaşması + out payı. Süre `dr_notch_time_s` (varsayılan 15 s), pay mevcut `out_offset_nm` (0,5 NM). Hız, düşmanın anlık LOS yaklaşma bileşenidir; gelecekteki dönüşü öngörülmez. `Picture::dr_nm` ve hesap kaydındaki `dr_nm` alanına yazılır. Ayrıntı: [DR formülü](../../src/otopilot/calculations/dr_formulu.md).
+- **DOR:** DR + anlık `enemy_closure_kt` ile 180° In dönüşünde yaklaşma + `out_offset_nm` (0,5 NM). In süresi mevcut TAS ve `out_g` ile hesaplanır. İlk Out süresi eklenmez; ileri simülasyon veya sayısal mesafe araması yapılmaz. MAR hesabı ve state geçişleri aynı kalır.
+- **Havadaki düşman füzesi:** `picture.threat` bana gelen en yakın füzeyi verir, ama taktikler onu kullanmaz; karar yalnız MAR'a dayanır. MAR "füze henüz atılmadı" varsayımıyla hesaplandığı için önceden atılmış bir füzeye karşı yeterli değildir. Kaçış payı (`escape_margin_nm`) bunun için planlandı.
 - **Profiller:** Profil seçimi Python fiziğini değiştirmez. Birim ve koordinat ayrıntıları [veri referansındadır](../veri_info/SIMULASYON_VERI_REFERANSI.md).

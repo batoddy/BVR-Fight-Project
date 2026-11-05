@@ -2,7 +2,6 @@
 
 #include <string>
 
-#include "model/missile_glide.hpp"
 
 // Füze rehberlik tipi: atıştan sonra ne kadar destek gerektiğini belirler.
 enum class MissileType
@@ -61,13 +60,14 @@ struct MissileProfile
     double blast_radius_ft = 0;    // ft, patlama yarıçapı
     RColdFit r_cold;               // bu füzeden kaçış hesabının uyumu
     RmaxFit r_max;                 // bu füzenin WEZ dış sınırının (Rmax) uyumu
-    GlideModel glide;             // ölçülmüş uçuş eğrisi: ne zaman nerede, hangi hızda (missile_flight::glide_...)
+    double slowing_accel_kt_s = 0;   // kt/s, uçuş uyumunun yavaşlaması; negatif
+    double start_speed_kt = 0;       // kt, uçuş uyumunun başlangıç hızı (boost bitişi)
 };
 
 // Füzeler. Atış: own.weapons.fire(AIM120C)
 //
 // Değerler ÖRNEK. BVRGym hepsini AIM-120 fiziğiyle uçurduğu için R_cold, Rmax uyumu ve uçuş modeli hepsinde aynı.
-//                                     name        type               max_nm  min_nm  speed_kt  pitbull_nm  blast_ft  r_cold          r_max          glide
-inline const MissileProfile AIM7M   = {"AIM-7M",   MissileType::Fox1, 14,     1,      1750,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, AIM120C_GLIDE};
-inline const MissileProfile AIM9X   = {"AIM-9X",   MissileType::Fox2, 6,      0.2,    1550,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, AIM120C_GLIDE};
-inline const MissileProfile AIM120C = {"AIM-120C", MissileType::Fox3, 50,     1,      1940,     8,          10,       AIM120C_R_COLD, AIM120C_R_MAX, AIM120C_GLIDE};
+//                                     name        type               max_nm  min_nm  speed_kt  pitbull_nm  blast_ft  r_cold          r_max     accel_kt_s start_kt
+inline const MissileProfile AIM7M   = {"AIM-7M",   MissileType::Fox1, 14,     1,      1750,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -11.16, 1825};
+inline const MissileProfile AIM9X   = {"AIM-9X",   MissileType::Fox2, 6,      0.2,    1550,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -11.16, 1825};
+inline const MissileProfile AIM120C = {"AIM-120C", MissileType::Fox3, 50,     1,      1940,     10,          10,       AIM120C_R_COLD, AIM120C_R_MAX, -11.16, 1825};

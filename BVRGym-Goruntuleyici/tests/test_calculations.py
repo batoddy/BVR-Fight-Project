@@ -80,6 +80,53 @@ class CalculationChecks(unittest.TestCase):
         finally:
             recorder.close()
 
+    def test_shot_estimates_and_decision_range_round_trip_in_display_units(self):
+        recorder = sim_recorder.Recorder(self.temp.name)
+        self.flight(recorder, [0.0, 1.0])
+        recorder.last_time = {'blue': 0.0, 'red': 0.0}
+        try:
+            recorder.record_calculations({'aircraft': [
+                dict(calc('blue', 'red', 0), a_pole_nm=12.5, f_pole_nm=-2.0, tr_nm=0.0, dr_nm=18.0),
+                dict(calc('red', 'blue', 0), a_pole_nm=None, f_pole_nm=None, tr_nm=None, dr_nm=None),
+            ]})
+        finally:
+            recorder.close()
+        samples, _ = read_recording(recorder.directory)
+        blue = next(row['calc'] for row in samples if row.get('agent_key') == 'blue' and 'calc' in row)
+        red = next(row['calc'] for row in samples if row.get('agent_key') == 'red' and 'calc' in row)
+        for field, value in [('a_pole', 12.5), ('f_pole', -2.0), ('tr', 0.0), ('dr', 18.0)]:
+            self.assertEqual(blue[field + '_nm'], value)
+            self.assertAlmostEqual(blue[field + '_m'], value * 1852)
+            self.assertIsNone(red[field + '_m'])
+        self.assertTrue(all('calc' not in row for row in samples if row['sim_time_s'] == 1.0))
+
+    def test_pitbull_matches_carrier_slot_and_recorded_time(self):
+        recorder = sim_recorder.Recorder(self.temp.name)
+        times = [0.0, 1.0, 2.0]
+        self.flight(recorder, times)
+        for key, name, team in [('blue', 'KE', 'Blue'), ('red', 'Hostile', 'Red')]:
+            for slot in (0, 1):
+                path = recorder.directory / f'AIM-120 AMRAAM ({name}--{key}--{slot}) [{team}].csv'
+                with path.open('w', newline='', encoding='utf-8') as handle:
+                    writer = csv.writer(handle)
+                    writer.writerow(OWN_HEADER)
+                    for time_s in times:
+                        writer.writerow([time_s, 18, 59, 7000, 0, 0, 90])
+        for time_s in times[:2]:
+            recorder.last_time = {'blue': time_s, 'red': time_s}
+            blue = dict(calc('blue', 'red', 0), pitbull_missile_slots='[1]' if time_s == 1 else '[]')
+            red = dict(calc('red', 'blue', 0), pitbull_missile_slots='[]')
+            recorder.record_calculations({'aircraft': [blue, red]})
+        recorder.close()
+        samples, _ = read_recording(recorder.directory)
+        missiles = [row for row in samples if row['kind'] == 'missile']
+        for row in missiles:
+            if row['sim_time_s'] == 2:
+                self.assertNotIn('is_pitbull', row)  # No calculation: unknown, not invented.
+            else:
+                expected = row['carrier_key'] == 'blue' and row['ammo_id'] == '1' and row['sim_time_s'] == 1
+                self.assertIs(row['is_pitbull'], expected)
+
 
 if __name__ == '__main__':
     unittest.main()

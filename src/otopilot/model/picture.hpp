@@ -30,7 +30,7 @@ struct ThreatInfo
     double closure_kt = 0;                 // kt, füzenin bana kapanma hızı; + yaklaşıyor
     double bearing_deg = 0;                // derece ±180, benden füzeye yön; 0 kuzey
     double ata_deg = 0;                    // derece ±180, burnuma göre füze; + sağımda
-    double aspect_deg = 0;                 // derece ±180, füzenin burnu bana göre; 0 bana dönük
+    double ta_deg = 0;                     // derece ±180, Target Aspect: füzenin burnu bana göre; 0 bana dönük
     double mach = 0;                       // birimsiz, füzenin hızı
     bool is_pitbull = false;               // füzenin arayıcısı beni kendi görüyor mu
 };
@@ -46,11 +46,12 @@ struct Picture
     double range_3d_nm = 0;        // NM, 3B düz çizgi mesafe
     double bearing_deg = 0;        // derece ±180, kuzeye göre düşmanın yönü
     double ata_deg = 0;            // derece ±180, burnum ile düşman arası; + sağımda
-    double aspect_deg = 0;         // derece ±180, düşmanın burnu ile bana bakışı; 0 hot, 180 cold
+    double ta_deg = 0;             // derece ±180, Target Aspect: düşmanın burnu ile bana bakışı; 0 hot, 180 cold
     Ned los_nm;                    // NM, benden düşmana vektör (uzunluğu range_3d_nm)
     Ned los_unit;                  // birimsiz, aynı vektörün yönü
     double closure_kt = 0;         // kt, mesafenin azalma hızı; + yaklaşıyoruz, ikimizin hareketi
     double enemy_closure_kt = 0;   // kt, yalnız düşmanın bana doğru hızı; + bana geliyor
+    double los_rate_deg_s = 0;     // derece/s, bearing'in değişimi; + saat yönünde
 
     // Kaçış: düşmanın füzesine karşı | engagement::
     OutPlan out;                       // şimdi out yapsam
@@ -58,8 +59,10 @@ struct Picture
     double r_cold_nm = 0;              // NM, kaçarken düşman füzesinin (main_weapon) yetişebileceği mesafe
     double nez_nm = 0;                 // NM, düşmanın füzesinden kaçamayacağım mesafe (onun NEZ'i)
     double mar_nm = 0;                 // NM, Minimum Abort Range
-    double dor_nm = 0;                 // NM, Desired Out Range: out sonrası recommit edebileceğim mesafe
+    double dr_nm = 0;                  // NM, Decision Range: R_cold + notch bsoyunca düşmanın yaklaşması + ek pay
+    double dor_nm = 0;                 // NM, DOR: DR + recommit dönüşünde düşmanın yaklaşması + out payı
     bool is_in_mar = false;            // range_3d_nm <= mar_nm
+    bool is_in_dor = false;
 
     // Bana gelen en yakın düşman füzesi; yoksa yok
     std::optional<ThreatInfo> threat;

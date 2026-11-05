@@ -126,18 +126,14 @@
             <div><dt title="Benim WEZ'im: ilk füzeme göre, bu düşmana karşı">WEZ menzili</dt><dd id="calc-wez">—</dd></div>
             <div><dt>Düşman WEZ'imde</dt><dd id="calc-enemy-in-my-wez">—</dd></div>
             <div><dt>Düşmanın WEZ'indeyim</dt><dd id="calc-me-in-enemy-wez">—</dd></div>
+            <div><dt title="Şimdi atış için, füzenin aktifleşmesindeki uçaklar arası mesafe tahmini; kayıttaki 0 çözüm yok anlamındadır">A-pole</dt><dd id="calc-a-pole">—</dd></div>
+            <div><dt title="Şimdi atış için, füzenin hedefe erişmesindeki uçaklar arası mesafe tahmini; kayıttaki 0 çözüm yok anlamındadır">F-pole</dt><dd id="calc-f-pole">—</dd></div>
+            <div><dt title="Otopilotun şimdi atış için hesapladığı TR mesafesi; kayıttaki 0 çözüm yok anlamındadır">TR</dt><dd id="calc-tr">—</dd></div>
             <div><dt title="Minimum Abort Range">MAR</dt><dd id="calc-mar">—</dd></div>
-            <div><dt title="Desired Out Range">DOR</dt><dd id="calc-dor">—</dd></div>
+            <div><dt title="Decision Range: R_cold + notch süresindeki düşman yaklaşması + out payı">DR</dt><dd id="calc-dr">—</dd></div>
+            <div><dt title="Desired Out Range: DR + düşmanın In dönüşündeki yaklaşması + out payı">DOR</dt><dd id="calc-dor">—</dd></div>
             <div><dt title="Düşman füzesinin, ben kaçarken (kuyruktan) yetişebileceği en uzak atış mesafesi">Stern WEZ</dt><dd id="calc-stern-wez">—</dd></div>
             <div><dt title="No Escape Zone">NEZ</dt><dd id="calc-nez">—</dd></div>
-            <div><dt title="Menzil MAR'ın içinde mi">MAR içindeyim</dt><dd id="calc-me-in-mar">—</dd></div>
-            <div><dt title="Benim füzemin NEZ'i: düşman şimdi out yapsa kaçamayacağı mesafe">Benim NEZ'im</dt><dd id="calc-own-nez">—</dd></div>
-            <div><dt>Düşman NEZ'imde</dt><dd id="calc-enemy-in-my-nez">—</dd></div>
-            <div><dt title="Füzem vurduğunda aramızda kalacak mesafe; yetişemiyorsa —">F-pole</dt><dd id="calc-f-pole">—</dd></div>
-            <div><dt title="Şimdi out yapsam: dönülecek açı ve süre">Out dönüşü</dt><dd id="calc-out-turn">—</dd></div>
-            <div><dt title="Şimdi out yapsam: dönüş yarıçapı">Out yarıçapı</dt><dd id="calc-out-radius">—</dd></div>
-            <div><dt title="Dönüş bitince düşmana yatay yaklaşma; + yaklaştık">Out yaklaşma</dt><dd id="calc-out-approach">—</dd></div>
-            <div><dt title="Dönüş sonu kaçış hızı">Kaçış hızı</dt><dd id="calc-out-escape">—</dd></div>
             <div class="wide"><dt title="Bana gelen en yakın düşman füzesi: mesafe · Mach · arayıcı">Tehdit füzesi</dt><dd id="calc-threat">—</dd></div>
           </dl>
           <p id="relative-empty" class="data-note" hidden>Bu ölçüm anında otopilot hesabı kayıtlı değil.</p>
@@ -153,14 +149,16 @@
             <label title="Kapanma hızı: aradaki mesafenin azalma hızı, + yaklaşıyoruz"><input id="overlay-closure" type="checkbox">Closure (Vc)</label>
           </div>
           <label><input id="overlay-radar" type="checkbox">Radar açısı</label>
-          <label title="Seçili uçağın WEZ'i: etrafında min–max halkası"><input id="overlay-own-wez" type="checkbox">Dost WEZ</label>
-          <label title="Hedef uçağın WEZ'i: etrafında min–max halkası"><input id="overlay-enemy-wez" type="checkbox">Düşman WEZ</label>
+          <label title="Seçili uçağın WEZ'i: azami menzilin dış sınırı"><input id="overlay-own-wez" type="checkbox">Dost WEZ</label>
+          <label title="Hedef uçağın WEZ'i: azami menzilin dış sınırı"><input id="overlay-enemy-wez" type="checkbox">Düşman WEZ</label>
           <h3>Düşman çevresinde</h3>
           <div class="overlay-indent">
             <label title="Seçili uçağın stern_wez hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-stern-wez" type="checkbox">Stern WEZ</label>
             <label title="Seçili uçağın nez hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-nez" type="checkbox">NEZ</label>
             <label title="Seçili uçağın mar hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-mar" type="checkbox">MAR</label>
+            <label title="Seçili uçağın Decision Range hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-dr" type="checkbox">DR</label>
             <label title="Seçili uçağın dor hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-dor" type="checkbox">DOR</label>
+            <label title="Seçili uçağın kaydedilmiş TR mesafesi, hedefin etrafında çember; yalnız pozitif çözüm varsa gösterilir"><input id="overlay-tr" type="checkbox">TR</label>
           </div>
         </section>
       </div>

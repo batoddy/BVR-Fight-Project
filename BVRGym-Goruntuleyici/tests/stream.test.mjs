@@ -16,6 +16,19 @@ const item=(sequence,time,heading=0,id='blue',kind='aircraft')=>({sequence,id,ki
 const packet=(samples,session='flight',sequence=samples.length,cursor=samples.length)=>({samples,session,sequence,cursor});
 const store=()=>{const buffer=new SampleBuffer();buffer.consume(packet([item(1,0),item(2,200)]));return buffer;};
 
+test('Pitbull starts at its recorded time, survives a missing final calculation and seeks backward',()=>{
+  const buffer=new SampleBuffer();
+  buffer.consume(packet([
+    {...item(1,0,0,'m','missile'),is_pitbull:false},
+    {...item(2,10,0,'m','missile'),is_pitbull:true},
+    item(3,20,0,'m','missile')
+  ]));
+  assert.equal(buffer.at('m',9.9).is_pitbull,false);
+  assert.equal(buffer.at('m',10).is_pitbull,true);
+  assert.equal(buffer.at('m',20).is_pitbull,true);
+  assert.equal(buffer.at('m',0).is_pitbull,false);
+});
+
 test('Position and heading interpolate smoothly across north; absent speed stays unknown',()=>{
   const mid=interpolate(item(1,0,359),item(2,1,1),.5);
   assert.equal(mid.heading_deg,0);assert.equal(mid.east_m,50);

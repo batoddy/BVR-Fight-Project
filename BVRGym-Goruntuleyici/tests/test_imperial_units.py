@@ -52,7 +52,7 @@ class ImperialUnitsChecks(unittest.TestCase):
                                 simObj=aircraft, ammo={'0': missile}, target=None, healthPoints=1.0)
         with tempfile.TemporaryDirectory() as directory:
             with recorder_module.Recorder(directory) as recorder:
-                recorder.record({'blue': agent}, {'blue': [90, 3048, .7]})
+                recorder.record({'blue': agent}, {'blue': [90, 3048, .7, None]})
                 recorder.record_calculations({'aircraft': [dict(
                     id='blue', target_id='red', range_3d_nm=12.0, range_2d_nm=11.0,
                     los_down_nm=-1.0, rate_of_closure_kt=600.0, enemy_in_my_wez=True,
