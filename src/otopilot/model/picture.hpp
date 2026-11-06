@@ -4,16 +4,7 @@
 #include <vector>
 
 #include "common/ned.hpp"
-
-// Sabit g'li seviye dönüşün sonucu | turn::to_heading
-struct TurnResult
-{
-    double turn_deg = 0;          // derece, dönülen açı; + sağa (saat yönü), - sola
-    double radius_m = 0;          // m, dönüş yarıçapı (ortalama hızla)
-    double time_s = 0;            // s, dönüş süresi
-    Ned displacement_nm;          // NM, dönüş bitince başlangıca göre yer değişimi; down hep 0
-    double end_heading_deg = 0;   // derece ±180, dönüş sonu yönü
-};
+#include "model/turn_result.hpp"
 
 // Out manevrasının tahmini | engagement::out_plan. R_cold, NEZ ve MAR bunu kullanır.
 struct OutPlan
@@ -23,21 +14,7 @@ struct OutPlan
     double approach_nm = 0;     // NM, dönüş bitince düşmana yatay yaklaşma; + yaklaştık
 };
 
-// Bana doğru gelen düşman füzesinin bana göre durumu | World::update
-struct ThreatInfo
-{
-    int slot = 0;                          // düşmanın füze slotu: enemy.weapons.missiles[slot]
-    double range_nm = 0;                   // NM, füze ile aramızdaki 3B mesafe
-    double closure_kt = 0;                 // kt, füzenin bana kapanma hızı; + yaklaşıyor
-    double bearing_deg = 0;                // derece ±180, benden füzeye yön; 0 kuzey
-    double ata_deg = 0;                    // derece ±180, burnuma göre füze; + sağımda
-    double ta_deg = 0;                     // derece ±180, Target Aspect: füzenin burnu bana göre; 0 bana dönük
-    double mach = 0;                       // birimsiz, füzenin hızı
-    bool is_pitbull = false;               // füzenin arayıcısı beni kendi görüyor mu
-    std::optional<double> a_pole_nm;       // NM, füzenin A-pole'u (missile.target'tan)
-    std::optional<double> f_pole_nm;       // NM, füzenin F-pole'u (missile.target'tan)
-    std::optional<double> stay_away_nm;    // NM, bu füze için uzak durmam gereken menzil; hesap eklenene kadar yok
-};
+struct Missile;   // model/missile.hpp; tehdit listesi yalnız adres tutar
 
 // own'un atanmış düşmana göre durum resmi: geometri ve kaçış (düşmanın füzesine karşı).
 // Ölçülmez, hesaplanır | World::update
@@ -60,20 +37,22 @@ struct Picture
     // Kaçış: düşmanın füzesine karşı | engagement::
     OutPlan out;                       // şimdi out yapsam
     bool me_in_enemy_wez = false;      // ben düşmanın WEZ'inde miyim (onun weapons.enemy_in_wez'i)
+    bool me_in_enemy_mar = false;      // ben düşmanın MAR'ının içinde miyim: düşman şimdi out yapmalı (onun picture.is_in_mar'ı)
     std::optional<double> enemy_a_pole_nm;   // NM, düşman şimdi atsa A-pole'u (onun weapons.a_pole_nm'i)
     std::optional<double> enemy_f_pole_nm;   // NM, düşman şimdi atsa F-pole'u (onun weapons.f_pole_nm'i)
     double r_cold_nm = 0;              // NM, kaçarken düşman füzesinin (main_weapon) yetişebileceği mesafe
     double nez_nm = 0;                 // NM, düşmanın füzesinden kaçamayacağım mesafe (onun NEZ'i)
     double mar_nm = 0;                 // NM, Minimum Abort Range
-    double dr_nm = 0;                  // NM, Decision Range: R_cold + notch bsoyunca düşmanın yaklaşması + ek pay
-    double dor_nm = 0;                 // NM, DOR: DR + recommit dönüşünde düşmanın yaklaşması + out payı
+    double dr_nm = 0;                  // NM, Decision Range: R_cold + notch süresince düşmanın TAS'ıyla yaklaşması + 0,5 NM
+    double dor_nm = 0;                 // NM, DOR: MAR + recommit dönüşüm süresince düşmanın TAS'ıyla yaklaşması + 0,5 NM
     bool is_in_mar = false;            // range_3d_nm <= mar_nm
-    bool is_in_dor = false;
+    bool is_in_dor = false;            // range_3d_nm <= dor_nm
 
-    // Bana gelen düşman füzeleri; her step baştan taranır, füze yoksa boş
-    std::vector<ThreatInfo> threats;
-    // Bana gelen en yakın düşman füzesi; yoksa yok
-    std::optional<ThreatInfo> threat;
-    // NM, tüm füzeler için uzak durmam gereken en kısa menzil; değer yoksa yok
-    std::optional<double> closest_stay_away_nm;
+    // Bana gelen düşman füzelerinin adresleri (enemy.weapons.missiles içinde); her step baştan taranır, füze yoksa boş.
+    // Füzenin bana göre bilgileri missile->target'ta. Adresleri sonraki step'e saklama.
+    std::vector<const Missile*> threats;
+    // Bana gelen en yakın düşman füzesi; yoksa nullptr
+    const Missile* threat = nullptr;
+    // Bana gelen düşman füzesi var mı. NOT: gerçek "spike" radar kilididir; radar modeli yokken füze geliyor mu'ya bakılır.
+    bool is_spiked = false;
 };

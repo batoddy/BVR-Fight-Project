@@ -7,7 +7,7 @@ namespace
     constexpr double HOT_MAX_DEG = 30.0;     // derece, bu açıya kadar hot
     constexpr double FLANK_MAX_DEG = 70.0;   // derece, bu açıya kadar flank
     constexpr double BEAM_MAX_DEG = 110.0;   // derece, bu açıya kadar beam; ötesi cold
-    constexpr double NOSE_ON_TARGET_MAX_DEG = 10.0;   // derece, burun hizalama toleransı
+    constexpr double NOSE_ON_TARGET_MAX_DEG = 3.0;    // derece, burun hizalama toleransı
 
     // Açıyı (±180) sınıfa çevirir; yön değil büyüklük kullanılır.
     Aspect aspect_of(double angle_deg)
@@ -45,9 +45,9 @@ bool condition::nose_on_target(const Aircraft& own)
     return std::abs(own.picture.ata_deg) <= NOSE_ON_TARGET_MAX_DEG;
 }
 
-bool condition::inside_enemy_mar(const Aircraft& own, const Aircraft& enemy)
+bool condition::inside_enemy_mar(const Aircraft& own)
 {
-    return enemy.picture.mar_nm >= own.picture.range_3d_nm;
+    return own.picture.me_in_enemy_mar;
 }
 
 bool condition::enemy_in_my_wez(const Aircraft& own)
@@ -70,12 +70,12 @@ Aspect condition::my_aspect(const Aircraft& own)
     return aspect_of(own.picture.ata_deg);
 }
 
-bool condition::threat_inbound(const Aircraft& own)
+bool condition::is_spiked(const Aircraft& own)
 {
-    return own.picture.threat.has_value();
+    return own.picture.is_spiked;
 }
 
-// atış sırasına göre slot değil !
+// Füze slotuna göre değil, atış sırasına (fire_order) göre aranır.
 bool condition::own_missile_pitbull(const Aircraft& own, int fire_order)
 {
     for (const Missile& missile : own.weapons.missiles)

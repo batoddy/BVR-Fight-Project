@@ -2,7 +2,6 @@
 
 #include <string>
 
-
 // Füze rehberlik tipi: atıştan sonra ne kadar destek gerektiğini belirler.
 enum class MissileType
 {
@@ -32,7 +31,7 @@ inline constexpr RColdFit AIM120C_R_COLD = {2.646, 0.1523, -0.00201, -0.00008, 1
 //   R_m = (a + b·ln h) · (1 + k·(V_atan − launch_ref_kt))   füzenin kendi gittiği yol, NM; h km
 //   t   = c + d·ln h                                       uçuş süresi, s
 //   V   = düşmanın bana doğru hızı, kt (+ geliyor, − kaçıyor)
-// Katsayıların nasıl ölçüldüğü: calculations/wez_formulu.md
+// Ölçüm sonuçları ve uyum: calculations/wez_grafikler/wez_sonuc.txt
 struct RmaxFit
 {
     double a = 0;               // NM, R_m sabiti
@@ -44,7 +43,7 @@ struct RmaxFit
 };
 
 // AIM-120C, BVRGym füzesi, burun buruna erişim taraması (4-10 km, düşman bana doğru 420-1120 kt, atan 430-740 kt).
-inline constexpr RmaxFit AIM120C_R_MAX ={-29.595, 39.193, -48.62, 95.66, 0.000417, 583.0};
+inline constexpr RmaxFit AIM120C_R_MAX = {-29.595, 39.193, -48.62, 95.66, 0.000417, 583.0};
 
 // Füze tipinin sabit özellikleri. Simülasyondan gelmez; burada elle doldurulur.
 // Not: BVRGym her füzeyi AIM-120 fiziğiyle uçurur; tip yalnız C++ hesaplarında kullanılır.
@@ -53,8 +52,7 @@ struct MissileProfile
     std::string name;
     MissileType type = MissileType::Fox3;
 
-    double max_range_nm = 0;       // NM, açık kaynak menzili; hesaplarda kullanılmaz (WEZ dış sınırı r_max'tan)
-    double min_range_nm = 0;       // NM, etkin menzil iç sınırı
+    double min_range_nm = 0;       // NM, etkin menzil iç sınırı; WEZ dış sınırı r_max uyumundan
     double speed_kt = 0;           // kt, ortalama hız (uçuş süresi tahmini için)
     double pitbull_range_nm = 0;   // NM, Fox3: arayıcının kendi kilitlendiği füze-hedef mesafesi; diğerlerinde 0
     double blast_radius_ft = 0;    // ft, patlama yarıçapı
@@ -64,10 +62,10 @@ struct MissileProfile
     double start_speed_kt = 0;       // kt, uçuş uyumunun başlangıç hızı (boost bitişi)
 };
 
-// Füzeler. Atış: own.weapons.fire(AIM120C)
+// Füzeler. Atış: own.weapons.fire(own.profile.main_weapon)
 //
 // Değerler ÖRNEK. BVRGym hepsini AIM-120 fiziğiyle uçurduğu için R_cold, Rmax uyumu ve uçuş modeli hepsinde aynı.
-//                                     name        type               max_nm  min_nm  speed_kt  pitbull_nm  blast_ft  r_cold          r_max     accel_kt_s start_kt
-inline const MissileProfile AIM7M   = {"AIM-7M",   MissileType::Fox1, 14,     1,      1750,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18, 2700};
-inline const MissileProfile AIM9X   = {"AIM-9X",   MissileType::Fox2, 6,      0.2,    1550,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18, 2700};
-inline const MissileProfile AIM120C = {"AIM-120C", MissileType::Fox3, 50,     1,      1940,     10,          10,      AIM120C_R_COLD, AIM120C_R_MAX, -18, 2700};
+//                                     name        type               min_nm  speed_kt  pitbull_nm  blast_ft  r_cold          r_max          accel_kt_s start_kt
+inline const MissileProfile AIM7M   = {"AIM-7M",   MissileType::Fox1, 1,      1750,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};
+inline const MissileProfile AIM9X   = {"AIM-9X",   MissileType::Fox2, 0.2,    1550,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};
+inline const MissileProfile AIM120C = {"AIM-120C", MissileType::Fox3, 1,      1940,     10,         10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};

@@ -38,8 +38,8 @@ try{
   await page.waitForFunction(()=>document.querySelector('#timeline').value==='10');
   await page.locator('#entity-list .entity').filter({hasText:'MiG-29'}).click();
   await page.waitForFunction(()=>document.querySelector('#entity-state').textContent.includes('Ölçüm bitti'),null,{timeout:3000}).catch(async error=>{console.log({errors,state:await page.evaluate(()=>({selected:document.querySelector('#selected-name').textContent,time:document.querySelector('#timeline').value,max:document.querySelector('#timeline').max,state:document.querySelector('#entity-state').textContent}))});throw error;});
-  assert.ok((await page.locator('#record-warning').textContent()).includes('aynı numaralı'));
-  assert.ok((await page.locator('#record-warning').textContent()).includes('genel nesne'));
+  assert.ok((await page.locator('#warning-list').textContent()).includes('aynı numaralı'));
+  assert.ok((await page.locator('#warning-list').textContent()).includes('genel nesne'));
   await page.evaluate(async()=>{
     const {buffer,scene}=await import('/app.js');
     const mig=[...buffer.tracks.values()].find(t=>t.samples[0].model==='MiG-29').samples[0];

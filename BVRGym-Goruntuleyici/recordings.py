@@ -321,6 +321,13 @@ def read_calculations(directory):
                         if not isinstance(slots, list) or any(type(slot) is not int or slot < 0 for slot in slots):
                             raise ValueError('pitbull_missile_slots geçersiz')
                         values[key] = slots
+                    elif key == 'missile_catch_times_s':
+                        times = json.loads(raw or '{}')
+                        if not isinstance(times, dict) or any(
+                                not slot.isdigit() or type(value) not in (int, float) or not math.isfinite(value)
+                                for slot, value in times.items()):
+                            raise ValueError('missile_catch_times_s geçersiz')
+                        values[key] = times
                     elif key.endswith('_id'):
                         values[key] = raw or None
                     elif not raw:
@@ -360,6 +367,8 @@ def attach_calculations(samples, calculations):
             values = calculations.get(row.get('carrier_key'), {}).get(row['sim_time_s'])
             if values is not None and 'pitbull_missile_slots' in values:
                 row['is_pitbull'] = str(row.get('ammo_id')) in {str(slot) for slot in values['pitbull_missile_slots']}
+            if values is not None and 'missile_catch_times_s' in values:
+                row['catch_time_s'] = values['missile_catch_times_s'].get(str(row.get('ammo_id')))
             continue
         values = calculations.get(row.get('agent_key'), {}).get(row['sim_time_s']) if row['kind'] == 'aircraft' else None
         if values is None:
@@ -420,14 +429,29 @@ def read_recording(directory):
     paths = sorted(object_files(directory))
     samples, entities = assemble([read_object(path) for path in paths],
                                  [metadata(path) for path in paths])
-    calculation_warnings = attach_calculations(samples, read_calculations(directory))
+    # Hesap ve olay dosyaları ek bilgidir: yoksa ya da okunamazsa kayıt yine açılır, eksik olan uyarıda listelenir.
+    missing = []
+    try:
+        calculations = read_calculations(directory)
+        if not (directory / CALCULATIONS).is_file():
+            missing.append(f'Otopilot hesapları ({CALCULATIONS}) kayıtta yok; hesap alanları gösterilmiyor.')
+    except (OSError, ValueError, csv.Error) as exc:
+        calculations = {}
+        missing.append(f'Otopilot hesapları okunamadı ({exc}); hesap alanları gösterilmiyor.')
+    calculation_warnings = attach_calculations(samples, calculations)
     manifest, warnings = read_manifest(directory)
-    events, event_warnings = read_events(directory)
+    try:
+        events, event_warnings = read_events(directory)
+        if not (directory / 'events.jsonl').is_file():
+            missing.append('Olay kaydı (events.jsonl) kayıtta yok; füze vuruş bilgisi gösterilmiyor.')
+    except (OSError, ValueError) as exc:
+        events, event_warnings = [], []
+        missing.append(f'Olay kaydı okunamadı ({exc}); füze vuruş bilgisi gösterilmiyor.')
     attach_outcomes(entities, events)
     if entities:
         entities[0]['manifest'] = manifest
         entities[0]['events'] = events
-        entities[0]['source_warnings'] = warnings + event_warnings + calculation_warnings
+        entities[0]['source_warnings'] = missing + warnings + event_warnings + calculation_warnings
     return samples, entities
 
 

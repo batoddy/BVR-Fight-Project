@@ -146,6 +146,7 @@ Hazır mühimmat yalnız CSV başlığıyla kalır. Uçan füze kayıt alır; bi
 | Angajman | `enemy_in_my_wez`, `me_in_enemy_wez`, `stern_wez_nm`, `nez_nm`, `mar_nm`, `dr_nm`, `dor_nm` |
 | Atış tahmini | `a_pole_nm`, `f_pole_nm`, `tr_nm` |
 | Profil / çizim | `radar_gimbal_deg`, `radar_range_nm`, `wez_min_range_nm`, `wez_max_range_nm` |
+| Füzelerim | `pitbull_missile_slots` (JSON liste: pitbull olan slotlar), `missile_catch_times_s` (JSON nesne `{"slot": s}`: havadaki füzenin hedefe yetişmesine kalan süre; değeri olmayan füze yazılmaz) |
 
 Boolean değerler CSV'de `1/0` olarak yazılır. Alan kümesi ilk mesajdan sonra değiştirilemez. `phase`: `0 Hold`, `1 Fire`, `2 Out`, `3 Commit`, `4 Crank`, `5 Beam`, `6 Recommit`.
 

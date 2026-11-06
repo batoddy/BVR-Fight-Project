@@ -14,6 +14,8 @@ public:
     Message step(const Message& state);
 
 private:
+    static constexpr bool PRINT_LOG = false;   // true: terminale saniyede bir durum satırı (ConsoleLog)
+
     World world_;
 
     OtopilotFighter otopilot_fighter_;

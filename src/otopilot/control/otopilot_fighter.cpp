@@ -89,43 +89,49 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
 {
     (void)enemy;
 
+    const MissileProfile& weapon = own.profile.main_weapon;
+
     switch (state_)
     {
     // Deneme: 50, 40, 30, 20 NM'de birer atış. Kalan füze sayısı hangi atışta olduğumuzu söyler (4 füze).
-    case FighterState::Commit:
-        maneuvers_.fly(own, maneuvers_.hold);
+    case OtopilotState::Commit:
+        maneuvers_.fly(own, maneuvers_.commit);
         if (own.weapons.missiles_left() == 4 && own.picture.range_3d_nm < 50.0)
         {
-            own.weapons.fire(AIM120C);
+            own.weapons.fire(weapon);
         }
         else if (own.weapons.missiles_left() == 3 && own.picture.range_3d_nm < 40.0)
         {
-            own.weapons.fire(AIM120C);
+            own.weapons.fire(weapon);
         }
         else if (own.weapons.missiles_left() == 2 && own.picture.range_3d_nm < 30.0)
         {
-            own.weapons.fire(AIM120C);
+            own.weapons.fire(weapon);
         }
         else if (own.weapons.missiles_left() == 1 && own.picture.range_3d_nm < 20.0)
         {
-            own.weapons.fire(AIM120C);
+            own.weapons.fire(weapon);
         }
         break;
 
-    case FighterState::FirstShot:
-        maneuvers_.fly(own, maneuvers_.fire);
-        own.weapons.fire(AIM120C);
-        go_to(FighterState::FirstSupport);
+    // Atış manevra değil: emir verilir, önceki manevranın komutu sürer. Emir kabul edilmezse aynı durumda kalınır.
+    case OtopilotState::FirstShot:
+        if (own.weapons.fire(weapon))
+        {
+            go_to(OtopilotState::FirstSupport);
+        }
         break;
 
-    case FighterState::Departure:
+    case OtopilotState::Departure:
         maneuvers_.fly(own, maneuvers_.hold);
+        break;
+
+    default:   // deneme: diğer durumlar bu akışta kullanılmıyor
         break;
     }
 }
 
-
-void OtopilotFighter::go_to(FighterState next)
+void OtopilotFighter::go_to(OtopilotState next)
 {
     state_ = next;
 }

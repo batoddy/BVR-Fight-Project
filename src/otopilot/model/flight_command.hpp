@@ -4,15 +4,22 @@
 
 #include "common/angles.hpp"
 
+// Gaz seviyeleri, 0..1 komut. F-16 modeli komutu ×2 uygular: 0.5 askeri güç, üstü art yakıcı.
+// Manevralar gazı sayıyla değil bu adlarla yazar: command.set_throttle(throttle::MAX_THRUST)
+namespace throttle
+{
+    inline constexpr double IDLE = 0.0;         // rölanti
+    inline constexpr double DEFAULT = 0.45;     // seyir: askeri gücün biraz altı (scenario.yaml başlangıç gazı)
+    inline constexpr double MRT = 0.5;          // askeri güç (Military Rated Thrust): art yakıcısız en yüksek
+    inline constexpr double MAX_THRUST = 1.0;   // tam art yakıcı
+}
+
 // Python'un uçuş kontrolcüsüne giden hedef: değiştirilene kadar her step aynısı gider.
 // Setter'lar değeri geçerli aralıkta tutar; geçersiz komut oluşturulamaz. Zincirlenebilir:
-//   own.command.set_heading_deg(bearing).set_throttle(1.0).set_g_limit(6.0);
+//   own.command.set_heading_deg(bearing).set_throttle(throttle::MAX_THRUST).set_g_limit(6.0, own.profile.max_g);
 class FlightCommand
 {
 public:
-    static constexpr double G_LIMIT_MIN = 1.5;   // g, Python'un kabul ettiği en küçük g sınırı
-    static constexpr double G_LIMIT_MAX = 9.0;   // g, F-16 yapısal sınırı
-
     /// derece, herhangi bir açı; ±180'e sarılır
     FlightCommand& set_heading_deg(double deg)
     {
@@ -42,16 +49,12 @@ public:
         return *this;
     }
 
-    /// g, dönüşte çekilecek en büyük yük; aralık dışı G_LIMIT_MIN ya da G_LIMIT_MAX'a çekilir.
-    FlightCommand& set_g_limit(double g)
+    /// g, dönüşte çekilecek en büyük yük. @param max_g uçağın sınırı (profile.max_g); g bunu aşarsa max_g'ye çekilir.
+    FlightCommand& set_g_limit(double g, double max_g)
     {
-        if (g < G_LIMIT_MIN)
+        if (g > max_g)
         {
-            g = G_LIMIT_MIN;
-        }
-        if (g > G_LIMIT_MAX)
-        {
-            g = G_LIMIT_MAX;
+            g = max_g;
         }
         g_limit_ = g;
         return *this;

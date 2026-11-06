@@ -12,7 +12,8 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 | `control/` | Karar ve manevra | `command`, `phase`, atış emri (`weapons.fire`) |
 | `common/` | Birim, açı, vektör, koordinat yardımcıları | — |
 
-- **Hesap fonksiyonları saftır.** Girdiyi yalnız parametrelerden alır. `Aircraft` alabilir, ama yalnız ölçülen (`kinematics`, `weapons.missiles`) ve sabit (`profile`) alanlarını okur, **`picture`'ı okumaz**. Başka bir hesabın sonucu gerekiyorsa onu kendisi çağırır (ör. `nez_nm(own, enemy)` içeride `out_plan` ve `r_cold_nm`'i çağırır).
+- **Hesap fonksiyonları saftır.** Girdiyi yalnız parametrelerden alır, hiçbir şey yazmaz. `Aircraft` alabilir; ölçülen (`kinematics`, `weapons.missiles`) ve sabit (`profile`) alanlarını okur. Başka bir hesabın sonucu gerekiyorsa onu kendisi çağırır (ör. `nez_nm(own, enemy)` içeride `out_plan` ve `r_cold_nm`'i çağırır).
+- **`engagement` hesapları `picture`'ı okuyabilir** (A-pole, F-pole, TR: menzil, kapanma, DOR). Böyle bir fonksiyonun `.hpp` yorumunda hangi alanı okuduğu yazılır ve `World::update`'te o alan hesaplandıktan sonra çağrılır.
 - **Hesap sırası yalnız `World::update`'te durur.** Hangi hesabın hangisinden önce geldiği orada okunur.
 - **Karar ve manevra kodu hesap yapmaz, `picture`'ı ve `weapons`'ı okur.** Yeni bir değer gerekiyorsa `calculations/`'a fonksiyon, `Picture`'a (kaçış) ya da `Weapons`'a (benim füzem) alan eklenir.
 - **Silah hesapları ana silahtan yapılır.** WEZ, NEZ, F-pole, R_cold ve MAR `profile.main_weapon` ile hesaplanır; füze slotlarından (`weapons.missiles`) profil çekilmez.
@@ -35,10 +36,12 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 ## 3. Tip seçimi
 
 - **Durum tutmayan fonksiyon grubu → `namespace`** (`geometry::`, `engagement::`, `turn::`). Çağrılırken namespace adı her zaman yazılır; `using namespace` kullanılmaz. Dosyaya özel yardımcılar `.cpp` içinde isimsiz namespace'te durur.
+  - İstisna: `io/` çevirmenleri (`StateReader`, `CommandWriter`, `CalculationWriter`) yalnız `static` fonksiyonlu sınıftır; yardımcıları `private` olarak başlıkta görünür.
 - **Durum tutan ya da bir kuralı koruyan → `class`**: özel üyeler `_` ile biter (`state_`).
 - **Yalnız veri → `struct`**: alanlar `public`, sonlarında `_` yoktur. Struct'ta yalnız basit `const` sorgu fonksiyonları olur (`in_flight()`).
 - **Durumlar `enum class`'tır**, `int` değildir.
-- **Değeri düzgün tutulması gereken veri setter'la yazılır.** Örneğin `FlightCommand::set_heading_deg` yönü ±180'e sarar, `set_throttle` 0..1'e sıkıştırır. Setter'lar zincirlenebilir: `command.set_throttle(1.0).set_g_limit(6.0)`.
+- **Değeri düzgün tutulması gereken veri setter'la yazılır.** Örneğin `FlightCommand::set_heading_deg` yönü ±180'e sarar, `set_throttle` 0..1'e sıkıştırır, `set_g_limit(g, max_g)` g'yi profilin sınırına indirir. Setter'lar zincirlenebilir: `command.set_throttle(throttle::MAX_THRUST).set_g_limit(own.profile.out_g, own.profile.max_g)`.
+- **Uçağa ait sınırlar profilden gelir** (`max_g`, `out_g`, gimbal ...); sınıfların içine sabit sınır yazılmaz.
 
 ## 4. "Değer yok"
 
@@ -52,7 +55,7 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 - **Kod İngilizce, yorumlar Türkçe.** Sınıf adı olarak `Otopilot` kalır.
 - **Biçim:** fonksiyon ve değişkenler `snake_case`, tipler `PascalCase`, sabitler `UPPER_SNAKE_CASE`, enum değerleri `PascalCase`.
 - **Fiziksel değerin adı birimle biter:** `_ft`, `_m`, `_nm`, `_kt`, `_mps`, `_s`, `_deg`, `_rad`, `_g`. Birimsiz oranlar ve Mach eksiz kalır.
-- **`get_` öneki yok:** `range_3d_nm()`, `last_fired()`.
+- **`get_` öneki yok:** `range_3d_nm()`, `active_missiles()`.
 - **Bool'lar soru gibi okunur:** `is_`, `has_`, `in_` önekleri (`is_pitbull`, `has_launch_order`, `enemy_in_wez`).
 - **Tek harfli isim** yalnız kısa döngü sayacında ve yorumda yazılı bir formülün sembolünde kullanılır (ör. R_cold'daki `x`, `y`; dönüşteki `n`).
 - **Aynı kavram her yerde aynı adı taşır:**
@@ -67,13 +70,16 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 - **Açılar içeride her zaman ±180.** 0..360 yalnız Python sınırında (`io/`) kullanılır.
 - **SI'ya çevirme:** formül gerektiriyorsa çeviri fonksiyonun içinde yapılır; yerel değişkenin adı birimi taşır (`speed_mps`, `turn_rad`).
 - **Sabitler** `common/units.hpp`'dedir. Kodun içinde sihirli sayı yazılmaz; ayar ya profile, ya manevra/otopilot sınıfının birimli bir sabitine konur. Doğrudan yazılabilen sayılar: 0, 1, 2, 90, 180, 360.
+- **Gaz sayıyla yazılmaz:** `throttle::IDLE`, `throttle::DEFAULT`, `throttle::MRT`, `throttle::MAX_THRUST` (`model/flight_command.hpp`).
 
 ## 7. Manevra ve karar
 
 - **Manevra yaşam döngüsü:** Her otopilotun `Maneuvers` nesnesi son uçurulan manevrayı tutar. `maneuvers_.fly(own, manevra)` ilk kullanımda veya manevra nesnesi değiştiğinde `enter(own)` çağırır. Aynı manevra sürerken tekrarlamaz; araya başka manevra girdikten sonra geri dönülürse yeniden çağırır. `update(own)` her step `own.command`'dan başlayıp komutu döner, `status(own)` bitti mi sorusuna cevap verir. State değişse bile aynı manevra kesintisiz sürüyorsa yeniden giriş yapılmaz.
-- **Kendi içinde biten manevralar** (Out gibi) hedefe ulaşınca `Done` döner. **Sürekli manevralar** (Crank, Beam, Hold, Commit, Recommit) hep `Running` döner; onları otopilot bitirir. Bu manevralar karara yardım eden sorgular sunabilir (ör. `Crank::in_radar_sight`).
+- **Kendi içinde biten manevralar** (Out, Recommit) hedefe ulaşınca `Done` döner. **Sürekli manevralar** (Crank, Beam, Hold, Commit) hep `Running` döner; onları otopilot bitirir. Bu manevralar karara yardım eden sorgular sunabilir (ör. `Crank::in_radar_sight`).
+- **Gaz manevranın içindedir:** her manevra kendi `THROTTLE` sabitini (`throttle::` seviyesi) `update()`'te yazar; Hold gaza dokunmaz. Otopilot ve taktik gaz yazmaz.
+- **Atış manevra değildir:** atış durumu/adımı yalnız `own.weapons.fire(own.profile.main_weapon)` emrini verir; manevra uçmaz, önceki komut sürer. `fire` false dönerse aynı durumda kalınır.
 - **Geçiş koşulları** `control/conditions.hpp` içinde isimli fonksiyonlar olarak durur. Karar kodu bu koşulları çağırır; böylece karar yapısı değişse de (switch → karar ağacı) koşullar aynı kalır.
-- **Otopilot** (`OtopilotFighter`, `OtopilotHostile`) `step` içinde tek switch'tir; her durum bir blok: `maneuvers_.fly(own, manevra)` ile uç, sonra çıkış koşullarına bak. Durum yalnız `go_to(durum)` ile değiştirilir (`state_ = ...` elle yazılmaz); `go_to` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; `enter()` ve komut üretimi ilk `fly()` çağrısında yapılır. Aynı manevrayı kullanan farklı statelerin çıkış koşulları bağımsızdır.
+- **Otopilot** (`OtopilotFighter`, `OtopilotHostile`) ortak durum listesini (`OtopilotState`, `control/otopilot_state.hpp`) kullanır; `step` içinde tek switch'tir; her durum bir blok: `maneuvers_.fly(own, manevra)` ile uç, sonra çıkış koşullarına bak. Durum yalnız `go_to(durum)` ile değiştirilir (`state_ = ...` elle yazılmaz); `go_to` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; `enter()` ve komut üretimi ilk `fly()` çağrısında yapılır. Aynı manevrayı kullanan farklı statelerin çıkış koşulları bağımsızdır.
 
 ## 8. Dosya düzeni
 
@@ -94,7 +100,7 @@ Hesap ve manevra kodu bir insanın formülü kâğıttan takip eder gibi okuyabi
 - **Ara sonuçlar isimli değişkenlerdir.** Uzun tek satırlık ifade yerine anlamı olan adımlar: `flight_time_s`, `enemy_approach_nm`, `worst_case_nm`.
 - **Kapalı kütüphane kısayolları kullanılmaz:** `std::hypot` yerine açık Pisagor (`std::sqrt(kuzey * kuzey + doğu * doğu)`), `std::clamp` ve iç içe `std::min`/`std::max` yerine `if`. Tek bir `std::max(a, b)` formülde "büyük olanı" diye geçiyorsa kalabilir. `atan2`, `sin`, `cos`, `sqrt`, `exp` gibi matematik fonksiyonları normaldir.
 - **Seçim `if` ile yazılır**, iç içe ya da uzun `?:` ile değil. Kısa bir durum geçişi (`return in_mar ? Out : Hold;`) kalabilir.
-- **Hız × süre hesapları** `travel_distance_nm(speed_kt, time_s)` ve `travel_time_s(distance_nm, speed_kt)` ile yazılır; formülde `3600` görünmez.
+- **Hız × süre hesapları** `travel_distance_nm(speed_kt, time_s)` ve `travel_time_s(distance_nm, speed_kt)` ile, sabit ivmeli olanlar `accel_travel_distance_nm` ve `accel_travel_time_s` ile yazılır (`common/formulas.hpp`); formülde `3600` görünmez.
 
 - **Her bilgi tek yerde:** `.hpp` *ne yaptığını*, `.cpp` *nasıl yaptığını* söyler; aynı cümle iki kez yazılmaz.
 - **`.hpp`, fonksiyonlar:** Doxygen biçimi (`///`), fonksiyon bildiriminin hemen üstünde. Tek satır yeter: ne yaptığı / ne döndürdüğü, birimi, ne zaman "yok" döndüğü. Gerekirse ikinci `///` satırı. `@param` yalnız bilgi veren parametrede (birim, anlam), `own` gibi her yerde aynı olanlarda yazılmaz.
@@ -103,7 +109,7 @@ Hesap ve manevra kodu bir insanın formülü kâğıttan takip eder gibi okuyabi
   std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);
   ```
 - **`.hpp`, geri kalan her şey düz `//`:** değişken, alan, sabit ve enum değerleri satır sonunda tek satırlık `//` ile; sınıf, struct, enum ve dosya/namespace açıklamaları üstte `//` ile. Bunlara Doxygen yazılmaz.
-- **Taktik dosyaları** (`otopilot_fighter`, `otopilot_hostile`) Doxygen kullanmaz; düz `//`.
+- **Taktik dosyaları** (`otopilot_fighter`, `otopilot_hostile`, `tactic`) Doxygen kullanmaz; düz `//`.
 - **Adı her şeyi söyleyen tek satırlık yardımcılar** (ör. `meter_to_nmile`) tek tek açıklanmaz; grubun üstüne bir `//` yeter.
 - **`.cpp`:** formül ve türetmesi, düz `//`.
 - **Alan yorumu:** `birim, anlam | kaynak ya da yazan`.

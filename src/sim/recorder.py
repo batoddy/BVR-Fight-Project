@@ -364,7 +364,7 @@ class Recorder:
                 units=dict(distance="NM", speed="kt", angle="deg", time="s"),
                 note="Satır başına bir uçağın karşı uçağa göre hesabı. time_s, C++'ın "
                      "kullandığı ölçümün zamanıdır ve uçak CSV'sindeki satırla aynıdır. "
-                     "Birim sütun adının sonundadır; is_self_in_enemy_wez 1/0. Son ölçümün hesabı yoktur: "
+                     "Birim sütun adının sonundadır; bool alanlar (ör. me_in_enemy_wez) 1/0. Son ölçümün hesabı yoktur: "
                      "simülasyon bittiği için C++'a gönderilmez.",
             ),
         )

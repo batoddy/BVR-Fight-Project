@@ -4,8 +4,11 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+
 #include "io/connection.hpp"
 
 struct Connection::Impl
@@ -168,48 +171,9 @@ Message Connection::Impl::read()
     }
 }
 
-// Kullanım: main.exe [IPv4] [port]   Varsayılan: 127.0.0.1 6000
-Connection::Connection(int argc, char* argv[])
+Connection::Connection(const std::string& host, unsigned short port)
+    : impl_(std::make_unique<Impl>(host, port))
 {
-    if (argc > 3)
-    {
-        throw std::runtime_error("Kullanim: main.exe [IPv4] [port]");
-    }
-
-    std::string host = "127.0.0.1";
-    if (argc > 1)
-    {
-        host = argv[1];
-    }
-
-    unsigned short port = 6000;
-    if (argc > 2)
-    {
-        std::string text = argv[2];
-        std::size_t used = 0;
-        int value = 0;
-
-        // Sayı değilse stoi hata atar; o durumda aşağıdaki kontrol yakalar.
-        try
-        {
-            value = std::stoi(text, &used);
-        }
-        catch (const std::exception&)
-        {
-            used = 0;
-        }
-
-        bool whole_text_is_number = used == text.size();
-        bool in_range = value >= 1 && value <= 65535;
-        if (!whole_text_is_number || !in_range)
-        {
-            throw std::runtime_error("Port 1..65535 araliginda olmali.");
-        }
-
-        port = static_cast<unsigned short>(value);
-    }
-
-    impl_ = std::make_unique<Impl>(host, port);
 }
 
 Connection::~Connection() = default;

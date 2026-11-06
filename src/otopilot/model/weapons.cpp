@@ -1,5 +1,7 @@
 #include "model/weapons.hpp"
 
+#include <algorithm>
+
 bool Weapons::fire(const MissileProfile& profile)
 {
     // Emri verilmiş ama Python'un henüz uçurmadığı bir füzemiz varken yenisini verme:
@@ -47,29 +49,20 @@ int Weapons::missiles_left() const
     return count;
 }
 
-bool Weapons::has_active_missile_against(const std::string& target_id) const
+// Slotlar atış sırasında değil; havadakiler toplanıp fire_order'a göre sıralanır (en çok slot sayısı kadar).
+std::vector<const Missile*> Weapons::active_missiles() const
 {
+    std::vector<const Missile*> active;
     for (const Missile& missile : missiles)
     {
-        if (missile.in_flight() && missile.target_id == target_id)
+        if (missile.in_flight())
         {
-            return true;
+            active.push_back(&missile);
         }
     }
-    return false;
-}
-
-const Missile* Weapons::last_fired() const
-{
-    const Missile* last = nullptr;
-    for (const Missile& missile : missiles)
-    {
-        if (missile.is_fired && (last == nullptr || missile.fire_order > last->fire_order))
-        {
-            last = &missile;
-        }
-    }
-    return last;
+    std::sort(active.begin(), active.end(),
+              [](const Missile* a, const Missile* b) { return a->fire_order < b->fire_order; });
+    return active;
 }
 
 const Missile* Weapons::active_missile() const

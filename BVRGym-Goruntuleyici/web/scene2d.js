@@ -1,6 +1,6 @@
 import {sampleWindow} from './stream.js';
 import {Basemap} from './basemap.js';
-import {MODEL_LENGTHS,ENEMY_ZONES,radarColor,DISTANCE_UNITS,altitudeLabel,distanceScale,speedLabel,flightLabel,analysisLabel,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
+import {MODEL_LENGTHS,ENEMY_ZONES,radarColor,DISTANCE_UNITS,altitudeLabel,distanceScale,speedLabel,flightLabel,catchLabel,analysisLabel,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
 
 export function updateScaleBar(element,metersPerPixel,width,mode,unit='nm'){
   if(!element)return;
@@ -188,8 +188,9 @@ export class Scene {
       if(this.labelMode!=='none'&&(this.labelMode!=='selected'||entity.id===selected)){
         const name=this.labelNames?entity.name:'',speed=this.labelSpeed?speedLabel(entity,this.speedUnit):'',altitude=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';
         const isMissile=entity.kind==='missile',pitbull=isMissile&&entity.is_pitbull===true;
-        const flight=isMissile&&entity.id===selected?flightLabel(entity,this.distanceUnit):'';
-        if(!name&&!speed&&!altitude&&!pitbull)continue;
+        // Füze satırı: seçiliyse atıştan beri süre/yol; varış süresi hesap varsa her zaman.
+        const flight=[isMissile&&entity.id===selected?flightLabel(entity,this.distanceUnit):'',isMissile?catchLabel(entity):''].filter(Boolean).join(' · ');
+        if(!name&&!speed&&!altitude&&!pitbull&&!flight)continue;
         // Füze etiketi uçağınkinden küçük: yazı 10 px, satırlar daha sık.
         const fontPx=entity.kind==='missile'?10:12,rowPx=entity.kind==='missile'?12:15;
         ctx.font=`600 ${fontPx}px "Segoe UI",sans-serif`;const nameWidth=Math.min(isMissile&&entity.id!==selected?64:90,ctx.measureText(name).width);

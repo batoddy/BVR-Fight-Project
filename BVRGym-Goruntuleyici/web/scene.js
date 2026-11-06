@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {OrbitControls} from './vendor/OrbitControls.js';
 import {createF16,createMissile,createGeneric,disposeObject} from './aircraft3d.js';
 import {Scene as Scene2D,updateScaleBar} from './scene2d.js';
-import {MODEL_LENGTHS,ENEMY_ZONES,radarColor,altitudeLabel,speedLabel,flightLabel,analysisLabel,guideLength,visualScale,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
+import {MODEL_LENGTHS,ENEMY_ZONES,radarColor,altitudeLabel,speedLabel,flightLabel,catchLabel,analysisLabel,guideLength,visualScale,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
 
 const point=e=>new THREE.Vector3(e.east_m,e.altitude_m,-e.north_m);
 const degrees=Math.PI/180;
@@ -553,15 +553,17 @@ export class Scene {
       record.ring.scale.setScalar(guideLength(visualLength('aircraft',this.objectScale),.6,this.metersPerPixel(this.camera.position.distanceTo(record.ring.position),rect.height),6));
       const projected=position.clone().project(this.camera);
       const isMissile=entity.kind==='missile',pitbull=isMissile&&entity.is_pitbull===true;
-      const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed||pitbull)&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
+      // Füze satırı: seçiliyse atıştan beri süre/yol; varış süresi hesap varsa her zaman.
+      const flight=isMissile&&isSelected?flightLabel(entity,this.distanceUnit):'',arrival=isMissile?catchLabel(entity):'';
+      const visible=entity.visible!==false&&this.labelMode!=='none'&&(this.labelMode!=='selected'||isSelected)&&(this.labelNames||this.labelAltitude||this.labelSpeed||pitbull||Boolean(arrival))&&projected.z>=-1&&projected.z<=1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
       record.label.hidden=!visible;record.label.classList.toggle('selected',isSelected);record.label.classList.toggle('stale',Boolean(entity.measurement_ended));
       record.labelName.textContent=this.labelNames?entity.name:'';record.labelName.hidden=!this.labelNames;
       record.labelSpeedValue.textContent=this.labelSpeed?speedLabel(entity,this.speedUnit):'';record.labelSpeedValue.hidden=!this.labelSpeed;
       record.labelAltitudeValue.textContent=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';record.labelAltitudeValue.hidden=!this.labelAltitude;
       record.label.classList.toggle('missile',isMissile);
       record.labelPitbull.hidden=!pitbull;
-      record.labelFlightValue.textContent=isMissile?flightLabel(entity,this.distanceUnit):'';record.labelFlightValue.hidden=!isMissile||!isSelected;
-      record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,entity.name,pitbull?'PB · Pitbull · füzenin kendi radarı aktif':null,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent,isMissile?'atıştan beri '+record.labelFlightValue.textContent:null].filter(Boolean).join(' · ');
+      record.labelFlightValue.textContent=[flight,arrival].filter(Boolean).join(' · ');record.labelFlightValue.hidden=!flight&&!arrival;
+      record.label.title=[entity.measurement_ended?'Son ölçüm · konum sabit':null,entity.name,pitbull?'PB · Pitbull · füzenin kendi radarı aktif':null,record.labelSpeedValue.textContent,record.labelAltitudeValue.textContent,isMissile?'atıştan beri '+flightLabel(entity,this.distanceUnit):null,arrival?arrival+' · hedefe yetişmeye kalan (otopilot)':null].filter(Boolean).join(' · ');
       record.label.style.borderColor='#'+colorFor(entity).toString(16);
       const labelOffset=Math.max(26,modelLength/metersPerPixel/2+8);
       if(visible){

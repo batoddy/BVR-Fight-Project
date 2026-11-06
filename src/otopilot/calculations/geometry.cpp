@@ -9,8 +9,8 @@ namespace
 {
     // Düz dünya yaklaşımı: iki uçak arasında Dünya düz kabul edilir. Hata yaklaşık %0,3
     // (90 km'de ~300 m; ortalama yarıçap ve irtifanın yok sayılmasından). WEZ gibi km'lik
-    // sınırlar için yeterli. Daha hassası gerekirse common/geodesy.hpp'deki lla_to_ecef ile
-    // yapılır; fonksiyonların dışarıdan görünüşü değişmez.
+    // sınırlar için yeterli. Daha hassası gerekirse WGS84 ECEF dönüşümüyle yapılır (eski common/geodesy.hpp
+    // git geçmişinde); fonksiyonların dışarıdan görünüşü değişmez.
     constexpr double EARTH_RADIUS_NM = meter_to_nmile(6371000.0);
 }
 
@@ -111,10 +111,4 @@ double geometry::other_closure_kt(const Kinematics& own, const Kinematics& other
 {
     const Ned unit = los_unit(own, other);
     return -dot(other.velocity_ned_kt, unit);   // other LOS'un tersine gidiyorsa bana geliyor: +
-}
-
-
-double geometry::my_closure_w_crank_kt(const Kinematics& own, double radar_angle)
-{
-    return own.tas_kt * std::sin(radar_angle * DEG_TO_RAD);
 }

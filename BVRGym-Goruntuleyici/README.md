@@ -42,7 +42,7 @@ Kısayollar metin alanı düzenlerken veya menü açıkken ilgili girişe öncel
 
 Sol panelde uçaklar takım ve adla filtrelenir. Göz düğmesi uçağı ve bağlı mühimmatını gizler. Envanterde uçaktaki, havadaki ve kaydı biten mühimmat ayrı görünür; uçuş ölçümü olmayan slot sahnede hayali bir füze oluşturmaz.
 
-Füze etiketleri iki satırda ad, hız ve irtifayı gösterir; uzun adlar kısaltılır. Füze seçilince atıştan beri geçen süre ve gidilen yol da açılır. Yeşil **PB** rozeti, otopilotun kaydettiği pitbull durumunu gösterir. Bu bilgi yeni `calculations.csv` kayıtlarındaki `pitbull_missile_slots` alanından okunur; alanı içermeyen eski kayıtlarda rozet gösterilmez.
+Füze etiketleri iki satırda ad, hız ve irtifayı gösterir; uzun adlar kısaltılır. Füze seçilince atıştan beri geçen süre ve gidilen yol da açılır. Yeşil **PB** rozeti, otopilotun kaydettiği pitbull durumunu gösterir. Bu bilgi yeni `calculations.csv` kayıtlarındaki `pitbull_missile_slots` alanından okunur; alanı içermeyen eski kayıtlarda rozet gösterilmez. Otopilot füzenin hedefine yetişmesine kalan süreyi hesapladıysa etikette **varış** satırı da görünür (`missile_catch_times_s` alanı); hesap yoksa satır çıkmaz.
 
 **Nesne ölçeği** `1×`, `25×`, `50×`, `100×` seçeneklerine sahiptir. `1×` gerçek model boyunu kullanır; diğer ölçeklerde füzeler görünürlük için ek `3.75×` büyütülür. Dünya mesafeleri ve hesaplanan menziller değişmez. Tanınmayan model genel geometriyle gösterilir.
 
@@ -71,7 +71,9 @@ Görüntüleyici bu dosyaları, eski metre/ft-s kayıtlarını ve BVRGym native
 CSV'lerini birlikte destekler. Okuma sırasında yapılan birim dönüşümü kaynak
 dosyaları değiştirmez.
 
-Varsayılan gösterim hız için m/s, irtifa için ft, mesafe için NM'dir. Ayarlarda hız `m/s`, `km/s`, `km/sa`, `kt`, `Mach`; irtifa `ft/m`; mesafe `NM/km` olarak seçilir. Birim seçimi kaynak dosyaları veya dünya koordinatlarını değiştirmez.
+Sağ üstteki üçgen simgesi **Uyarılar** listesini açar: kayıtta olmayan ya da okunamayan veriler (ör. `calculations.csv`, `events.jsonl`) madde madde yazılır; sayı rozeti uyarı adedini gösterir. `calculations.csv` okunamasa da kayıt açılır, yalnız otopilot hesapları gösterilmez.
+
+Varsayılan gösterim hız için m/s, irtifa için ft, mesafe için NM'dir. Dişli simgesindeki ayarlarda hız `m/s`, `km/s`, `km/sa`, `kt`, `Mach`; irtifa `ft/m`; mesafe `NM/km` olarak seçilir. Birim seçimi kaynak dosyaları veya dünya koordinatlarını değiştirmez.
 
 İrtifa referansı manifestten okunur. WGS84 elipsoid yüksekliği MSL gibi etiketlenmez; jeoit dönüşümü uygulanmaz. Zemin 0 m çizim referansıdır, arazi modeli değildir. Ayrıntılı koordinat ve kayıt sözleşmesi [veri referansındadır](../docs/veri_info/SIMULASYON_VERI_REFERANSI.md).
 

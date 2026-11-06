@@ -24,7 +24,7 @@ private:
     /// Konum ve hareket alanları -> kinematics (uçakta en üst seviyede durur)
     static void read_kinematics(const Json& json, Kinematics& kinematics);
 
-    /// data.missiles içinde sahibi aircraft olan füzeler -> aircraft.weapons.missiles; weapons.has_launch_order sıfırlanır.
+    /// data.missiles içinde sahibi aircraft olan füzeler -> aircraft.weapons.missiles.
     /// İlk step slotları kurar (sayı Python'dan, tipler profile.loadout'tan). Sonra UÇAN füze bir
     /// slota eşleşir: Python id'si daha önce eşleşmişse o slot güncellenir; yeni beliren, atılmış
     /// ama henüz eşleşmemiş en eski atışa bağlanır. Hazır (ready) füzeler okunmaz.
@@ -32,4 +32,7 @@ private:
 
     /// "ready" / "in_flight" / "ended" -> MissileState; bilinmeyen metinde hata
     static MissileState read_missile_state(const std::string& text);
+
+    /// "hit" / "lost" -> MissileOutcome; bilinmeyen metinde hata (null outcome çağırmadan önce elenir)
+    static MissileOutcome read_missile_outcome(const std::string& text);
 };

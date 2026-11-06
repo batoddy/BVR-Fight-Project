@@ -98,8 +98,6 @@ void StateReader::read_kinematics(const Json& json, Kinematics& kinematics)
 
 void StateReader::read_missiles(const Json& data, Aircraft& aircraft)
 {
-    aircraft.weapons.has_launch_order = false;   // yeni step: önceki step'in emri gitti
-
     // İlk step: slotları kur. Sayı Python'dan (scenario.yaml ammo), tipler uçak profilinin yükünden.
     if (aircraft.weapons.missiles.empty())
     {
@@ -184,8 +182,7 @@ void StateReader::read_missiles(const Json& data, Aircraft& aircraft)
         match->outcome = MissileOutcome::None;
         if (!json.at("outcome").is_null())
         {
-            const std::string outcome = json.at("outcome").get<std::string>();
-            match->outcome = (outcome == "hit") ? MissileOutcome::Hit : MissileOutcome::Lost;
+            match->outcome = read_missile_outcome(json.at("outcome").get<std::string>());
         }
         read_kinematics(json.at("kinematics"), match->kinematics);
     }
@@ -207,4 +204,18 @@ MissileState StateReader::read_missile_state(const std::string& text)
     }
 
     throw std::runtime_error("Bilinmeyen fuze durumu: " + text);
+}
+
+MissileOutcome StateReader::read_missile_outcome(const std::string& text)
+{
+    if (text == "hit")
+    {
+        return MissileOutcome::Hit;
+    }
+    if (text == "lost")
+    {
+        return MissileOutcome::Lost;
+    }
+
+    throw std::runtime_error("Bilinmeyen fuze sonucu: " + text);
 }

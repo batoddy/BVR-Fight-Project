@@ -6,7 +6,7 @@ Bir step'te sıra şöyledir (`Sim::step`):
 
 1. `StateReader` ölçümleri ve Python'un son uyguladığı komutu (`own.command`) okur.
 2. `World::update` düşman atamasını, füze bilgilerini ve her uçağın `picture`'ını hesaplar.
-3. Her otopilot `step(own, enemy)` ile aktif manevrayı uçurur, ardından geçiş kurallarını çalıştırır.
+3. Önceki step'in atış emri sıfırlanır; her otopilot `step(own, enemy)` ile aktif manevrayı uçurur, ardından geçiş kurallarını çalıştırır.
 4. `CommandWriter` `own.command`'ı ve atış emirlerini Python'a gönderir.
 
 ## Ölçüm ve durum bilgisine erişim
@@ -18,8 +18,10 @@ own.kinematics.tas_kt          // gerçek hava hızı, KTAS
 own.picture.range_3d_nm        // atanmış düşmana mesafe, NM (World::update)
 own.picture.ata_deg            // + sağda, - solda
 own.picture.mar_nm             // NM, düşmanın ana silahına karşı Minimum Abort Range
-own.picture.threat             // std::optional<ThreatInfo>: bana gelen en acil füze
-enemy.picture.mar_nm           // düşmanın kendi hesabı (ör. hostile senaryosu bunu kullanır)
+own.picture.threat             // const Missile*: bana gelen en yakın düşman füzesi; yoksa nullptr
+own.picture.threats            // std::vector<const Missile*>: bana gelen bütün düşman füzeleri
+own.picture.is_spiked          // bana gelen düşman füzesi var mı
+own.picture.me_in_enemy_mar    // ben düşmanın MAR'ının içinde miyim (düşmanın hesabından kopyalanır)
 
 own.weapons.wez                // benim WEZ'im (profile.main_weapon'a göre)
 own.weapons.nez_nm             // benim NEZ'im: düşman şimdi out yapsa füzemden kaçamaz
@@ -32,14 +34,14 @@ own.weapons.f_pole_nm          // std::optional<double>: füze yetişemiyorsa de
 
 `picture` ve `weapons`'ın hesaplanan alanları yalnız okunur. Yeni bir değer gerekiyorsa `calculations/`'a fonksiyon, `model/picture.hpp` ya da `model/weapons.hpp`'ye alan eklenir ve `World::update` içinde doldurulur.
 
-`optional` kullanımı (yalnız gerçekten olmayabilen değerlerde: tehdit, F-pole):
+`optional` kullanımı (yalnız gerçekten olmayabilen değerlerde: F-pole, catch time):
 
 ```cpp
 if (const auto f_pole_nm = own.weapons.f_pole_nm)   // değer varsa
 {
     if (*f_pole_nm > 15.0) { ... }                   // * ile değeri al
 }
-if (own.picture.threat) { ... }                      // bana gelen füze var mı
+if (own.picture.threat != nullptr) { ... }           // bana gelen füze var mı (tehdit adres, optional değil)
 ```
 
 ## Yön, irtifa ve gaz hedefi
@@ -47,48 +49,47 @@ if (own.picture.threat) { ... }                      // bana gelen füze var mı
 ```cpp
 own.command.set_heading_deg(own.picture.bearing_deg + 30.0)
            .set_altitude_ft(26000.0)
-           .set_throttle(0.8)
-           .set_g_limit(4.0);
+           .set_throttle(throttle::MRT)
+           .set_g_limit(4.0, own.profile.max_g);
 ```
 
-`FlightCommand`, uçağın anlık ölçümü değil ulaşmasını istediğin hedeftir. Setter'lar yönü ±180'e sarar, gazı 0..1'e ve g sınırını 1.5..9'a sıkıştırır; geçersiz komut oluşamaz. Her step `own.command` Python'un son uyguladığı komutla başlar. Bir değeri değiştirirsen başka bir değer yazılana kadar o değer kalır. g sınırı ise Python'dan geri gelmez: her step yok başlar, gerekiyorsa manevra koyar.
+`FlightCommand`, uçağın anlık ölçümü değil ulaşmasını istediğin hedeftir. Setter'lar yönü ±180'e sarar, gazı 0..1'e sıkıştırır, g sınırını profildeki `max_g`'ye indirir; geçersiz komut oluşamaz. Gaz sayıyla değil seviyeyle yazılır: `throttle::IDLE`, `throttle::DEFAULT` (0.45), `throttle::MRT` (0.5, askeri güç), `throttle::MAX_THRUST` (1.0, tam art yakıcı). Gazı şimdilik manevralar kendi içinde yazar. Her step `own.command` Python'un son uyguladığı komutla başlar. Bir değeri değiştirirsen başka bir değer yazılana kadar o değer kalır. g sınırı ise Python'dan geri gelmez: her step yok başlar, gerekiyorsa manevra koyar.
 
 ## Bir aşamanın geçişini yaz
 
-Durumlar `enum class` ile yazılır. `step` içindeki tek switch'te her durum bir bloktur: önce o durumun manevrası `maneuvers_.fly` ile uçulur, sonra çıkış koşullarına bakılır. `go_to(yeni_durum)` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; ilk kullanımda ve manevra değiştiğinde `Maneuvers::fly` giriş hazırlığını yapar. Örnek durum makinesi:
+Durumlar iki otopilotun ortak listesi `OtopilotState`'tedir (`control/otopilot_state.hpp`). `step` içindeki tek switch'te her durum bir bloktur: önce o durumun manevrası `maneuvers_.fly` ile uçulur, sonra çıkış koşullarına bakılır. `go_to(yeni_durum)` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; ilk kullanımda ve manevra değiştiğinde `Maneuvers::fly` giriş hazırlığını yapar. Atış manevra değildir: yalnız `own.weapons.fire` emri verilir, önceki manevranın komutu sürer. Örnek durum makinesi:
 
 ```cpp
-// otopilot_fighter.hpp
-enum class FighterState { Hold, Crank, Out };
-
 // otopilot_fighter.cpp
 void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
 {
     switch (state_)
     {
-    case FighterState::Hold:
-        maneuvers_.fly(own, maneuvers_.hold);
-        if (condition::enemy_in_my_wez(own) && own.weapons.fire(AIM120C))
+    case OtopilotState::Commit:
+        maneuvers_.fly(own, maneuvers_.commit);
+        if (condition::enemy_in_my_wez(own) && own.weapons.fire(own.profile.main_weapon))
         {
-            go_to(FighterState::Crank);   // taraf sonraki step'te, ilk crank kullanımında seçilir
+            go_to(OtopilotState::FirstSupport);   // taraf sonraki step'te, ilk crank kullanımında seçilir
         }
         break;
 
-    case FighterState::Crank:
+    case OtopilotState::FirstSupport:
         maneuvers_.fly(own, maneuvers_.crank);
         if (condition::in_mar(own))
         {
-            go_to(FighterState::Out);
+            go_to(OtopilotState::FirstEscape);
         }
         break;
 
-    case FighterState::Out:
-        maneuvers_.fly(own, maneuvers_.out);
+    case OtopilotState::FirstEscape:
+        maneuvers_.fly(own, maneuvers_.out);   // gazı Out kendisi yazar (tam art yakıcı)
         if (maneuvers_.out.status(own) == ManeuverStatus::Done)
         {
-            own.command.set_throttle(0.45);   // geçiş anında komut düzeltmesi
-            go_to(FighterState::Hold);
+            go_to(OtopilotState::Commit);      // Commit kendi gazını (DEFAULT) yazar
         }
+        break;
+
+    default:
         break;
     }
 }
@@ -96,7 +97,7 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
 
 `Maneuvers::fly` fazı manevradan alır (`own.phase = manevra.phase()`) ve komutu yazar. Aynı manevra sürerken `enter()` tekrarlanmaz; araya başka manevra girdikten sonra geri dönülürse yeniden çalışır. Aynı manevrayı kullanan iki state arasında geçiş, yeniden giriş sayılmaz. İlk manevranın girişi de otomatik yapılır.
 
-Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `in_dor`, `nose_on_target` (|ATA| ≤ 2°), `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `enemy_aspect`, `my_aspect`, `threat_inbound`, `own_missile_pitbull(own, fire_order)` (1: ilk attığım füze, 2: ikinci, ...).
+Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `in_dor`, `nose_on_target`, `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `enemy_aspect`, `my_aspect`, `is_spiked`, `own_missile_pitbull(own, fire_order)` (1: ilk attığım füze, 2: ikinci, ...). Hepsi yalnız `own`'u okur.
 
 `enemy_aspect(own)` düşmanın burnunun bana göre durumunu (`picture.ta_deg`), `my_aspect(own)` benim burnumun düşmana göre durumunu (`picture.ata_deg`) `Aspect` olarak verir: `Hot` (≤ 30°), `Flank` (≤ 70°), `Beam` (≤ 110°), `Cold` (ötesi). Sağ/sol ayrılmaz; eşikler `conditions.cpp` içindeki sabitlerdedir.
 
@@ -108,30 +109,32 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 
 ## Manevralar
 
-| Manevra | Faz | Bitişi |
-|---|---|---|
-| `hold` | Hold | sürekli |
-| `fire` | Fire | sürekli (komut değişmez; tek step'lik atış durumu için) |
-| `out` | Out | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
-| `commit` | Commit | sürekli |
-| `crank` | Crank | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) `crank_side_for(own)` ile seçilir, `side()` ile okunur |
-| `beam` | Beam | sürekli |
+| Manevra | Faz | Gaz | Bitişi |
+|---|---|---|---|
+| `hold` | Hold | dokunmaz | sürekli |
+| `out` | Out | MAX_THRUST | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
+| `commit` | Commit | DEFAULT | sürekli |
+| `recommit` | Recommit | MAX_THRUST | `status()` → Done: \|ATA\| atış açısına (30° + 1°) indi |
+| `crank` | Crank | DEFAULT | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) seçilir, `side()` ile okunur |
+| `beam` | Beam | DEFAULT | sürekli |
 
-Sürekli manevraları otopilot bitirir. Karara yardım eden sorgular (`Crank::in_radar_sight` gibi) manevranın kendisinde durur.
+Notch, Drag, Offset, Flank, Collision, FlyHeading, Snake ve Pursuit (pure/lag/lead) iskelet olarak durur; gövdeleri komutu değiştirmez. Sürekli manevraları otopilot bitirir. Karara yardım eden sorgular (`Crank::in_radar_sight` gibi) manevranın kendisinde durur.
 
 ## Atış ve füzeler
 
 ```cpp
-if (own.weapons.fire(AIM120C)) { ... }   // bu step için atış emri oluştu
+if (own.weapons.fire(own.profile.main_weapon)) { ... }   // bu step için atış emri oluştu
 
 const Missile* supporting = own.weapons.active_missile();   // havadaki son füzem; yoksa nullptr
+for (const Missile* missile : own.weapons.active_missiles()) { ... }   // havadaki bütün füzelerim, atış sırasıyla
 if (supporting != nullptr && supporting->target.is_pitbull) { ... }
 
-if (own.picture.threat)                               // bana gelen en yakın düşman füzesi
+if (const Missile* threat = own.picture.threat)       // bana gelen en yakın düşman füzesi (düşmanın füzesinin kendisi)
 {
-    const ThreatInfo& threat = *own.picture.threat;
-    // threat.range_nm, threat.bearing_deg, threat.ta_deg, threat.is_pitbull
+    // threat->target.range_nm, threat->target.is_pitbull, threat->target.catch_time_left_s, threat->kinematics.mach
+    // Bana göre açılar füzede tutulmaz: geometry::bearing_deg(own.kinematics, threat->kinematics)
 }
+for (const Missile* threat : own.picture.threats) { ... }   // bütün tehditler
 int remaining = own.weapons.missiles_left();
 ```
 
@@ -152,29 +155,31 @@ double last_fire_time_s_ = -1e9;
 
 ```cpp
 // Düşmanın 30° sağına uç.
-class Offset : public Maneuver
+class RightOffset : public Maneuver
 {
 public:
-    Phase phase() const override { return Phase::Commit; }
+    Phase phase() const override { return Phase::Offset; }
     FlightCommand update(const Aircraft& own) override;
 
 private:
     static constexpr double OFFSET_DEG = 30.0;   // derece, bearing'e eklenen açı
+    static constexpr double THROTTLE = throttle::DEFAULT;
 };
 ```
 
 `control/maneuver.cpp`:
 
 ```cpp
-FlightCommand Offset::update(const Aircraft& own)
+FlightCommand RightOffset::update(const Aircraft& own)
 {
-    FlightCommand command = own.command;   // irtifa ve gaz aynı kalır
-    command.set_heading_deg(own.picture.bearing_deg + OFFSET_DEG);
+    FlightCommand command = own.command;   // irtifa aynı kalır
+    command.set_heading_deg(own.picture.bearing_deg + OFFSET_DEG)
+           .set_throttle(THROTTLE);
     return command;
 }
 ```
 
-`Maneuvers` sınıfına `Offset offset;` satırını ekle ve bir durumun bloğunda `maneuvers_.fly(own, maneuvers_.offset)` ile uçur. Manevra kendi içinde bitiyorsa `status()`'u, girişte bir şey kilitlemesi gerekiyorsa `enter()`'ı uygula. Yeni bir `Phase` değeri dış sözleşmeyi etkiler: `model/phase.hpp` ile görüntüleyicideki `PHASE_NAMES` listesi birlikte güncellenir.
+`Maneuvers` sınıfına `RightOffset right_offset;` satırını ekle ve bir durumun bloğunda `maneuvers_.fly(own, maneuvers_.right_offset)` ile uçur. Manevra kendi içinde bitiyorsa `status()`'u, girişte bir şey kilitlemesi gerekiyorsa `enter()`'ı uygula. Yeni bir `Phase` değeri dış sözleşmeyi etkiler: `model/phase.hpp` ile görüntüleyicideki `PHASE_NAMES` listesi birlikte güncellenir.
 
 ## Profil veya hesap ekle
 
@@ -184,8 +189,8 @@ FlightCommand Offset::update(const Aircraft& own)
 | Füze menzil, ortalama hız, pitbull eşiği, R_cold ve Rmax (WEZ) uyumu | `model/missile_profiles.hpp` |
 | Saf konum/hız geometrisi | `calculations/geometry.hpp/.cpp` |
 | Dönüş süresi, yarıçapı, yer değişimi | `calculations/turn.hpp/.cpp` |
-| WEZ, out planı, R_cold, NEZ, MAR, DOR | `calculations/engagement.hpp/.cpp` |
-| Füze–hedef hesabı | `calculations/missile_geometry.hpp/.cpp` |
+| WEZ, A/F-pole, TR, out planı, R_cold, NEZ, MAR, MRR, DR, DOR | `calculations/engagement.hpp/.cpp` |
+| Füze–hedef hesabı ve füze uçuş uyumu | `calculations/missile_geometry.hpp/.cpp` |
 | Hesaplanan alanın uçakta tutulması | `model/picture.hpp` (kaçış) ya da `model/weapons.hpp` (silah) ve `model/world.cpp` |
 | Yeni ölçümün Python'dan gelmesi | Python `Simulation.read_state()` ve C++ `StateReader` |
 
@@ -203,4 +208,15 @@ Uçak profilindeki `main_weapon` WEZ, NEZ, F-pole ve karşı tarafın R_cold/MAR
 
 Proje kökünde `cmake --build src/otopilot/build` çalıştır, ardından `src/otopilot/build/units_test.exe` ile testleri koştur. Yeni `.cpp` dosyasını uygun kaynak klasörüne kaydetmen yeterli; CMake onu `otopilot_core` kütüphanesine ekler.
 
-Konsol gözlemi için `control/sim.cpp` içindeki `// log_.print(world_);` satırını açabilirsin. Ayrıntılı zaman ve alan incelemesi için CSV dosyaları esas alınır.
+MinGW kurulum dizininin yolunda boşluk varsa ilk yapılandırmayı kısa (8.3) yol ve `-B` bayraklarıyla yap (PowerShell):
+
+```powershell
+cmake -S src/otopilot -B src/otopilot/build -G "MinGW Makefiles" `
+  "-DCMAKE_CXX_COMPILER=C:/Users/PC_100~3/tools/mingw64/bin/g++.exe" `
+  "-DCMAKE_MAKE_PROGRAM=C:/Users/PC_100~3/tools/mingw64/bin/mingw32-make.exe" `
+  "-DCMAKE_CXX_FLAGS=-BC:/Users/PC_100~3/tools/mingw64/lib/ -BC:/Users/PC_100~3/tools/mingw64/x86_64-w64-mingw32/lib/"
+
+cmake --build src/otopilot/build
+```
+
+Konsol gözlemi için `control/sim.hpp` içindeki `PRINT_LOG`'u `true` yap. Ayrıntılı zaman ve alan incelemesi için CSV dosyaları esas alınır.

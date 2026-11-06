@@ -12,7 +12,9 @@ else:
     from bvrgym_setup import create_agents
     from scenario import validate_scenario
 
-G_LIMIT_MIN, G_LIMIT_MAX = 1.5, 9.0   # g; komuttaki g_limit aralığı (9: F-16 yapısal sınırı)
+# g; komuttaki g_limit'in kabul aralığı (tel doğrulaması). Uçağın asıl sınırını C++ profili (max_g) uygular;
+# alt sınır flight_control'ün yatış formülü (acos(1/g)) için gerekir.
+G_LIMIT_MIN, G_LIMIT_MAX = 1.5, 9.0
 
 
 class Simulation:
@@ -24,7 +26,7 @@ class Simulation:
         validate_scenario(scenario)
         self.world = scenario["world"]
         self.tick = 0
-        self.agents = create_agents(scenario, bvrgym_path)
+        self.agents, self.controls = create_agents(scenario, bvrgym_path)
 
         # Her uçak için son uygulanan hedefler: [yön (derece), irtifa (m), gaz (0..1), g sınırı].
         # g sınırı isteğe bağlı; None ise flight_control.py'nin varsayılanı kullanılır.
@@ -100,10 +102,10 @@ class Simulation:
         commands = self._validate_flight_commands(aircraft_commands)
 
         # Bütün komutlar doğrulanmadan hiçbir uçağı ilerletme.
-        # g sınırı BVRGym'in apply_action yolundan geçmez; uçağın kontrolcüsüne doğrudan yazılır.
+        # g sınırı BVRGym'in apply_action yolundan geçmez; bizim kontrol nesnemize yazılır.
         for key, agent in self.agents.items():
             heading_deg, altitude_m, throttle, g_limit = commands[key]
-            agent.simObj.aircraft_control.g_limit = g_limit
+            self.controls[key].g_limit = g_limit
             agent.apply_action([heading_deg, altitude_m, throttle])
 
         self.commands = commands

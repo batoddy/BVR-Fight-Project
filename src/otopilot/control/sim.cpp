@@ -10,9 +10,15 @@ Message Sim::step(const Message& state)
 
     // 2. Düşman ataması, füze bilgileri ve iki uçağın picture'ı.
     world_.update();
-    // log_.print(world_);
+    if (PRINT_LOG)
+    {
+        log_.print(world_);
+    }
 
     // 3. Her otopilot kendi uçağının komutunu, fazını ve atış emrini yazar.
+    //    Önceki step'in atış emri Python'a gitti: bu step'in emri yoksa gönderilmez.
+    world_.fighter.weapons.has_launch_order = false;
+    world_.hostile.weapons.has_launch_order = false;
     otopilot_fighter_.step(world_.fighter, world_.hostile);
     otopilot_hostile_.step(world_.hostile, world_.fighter);
 

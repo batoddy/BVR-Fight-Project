@@ -15,7 +15,7 @@ struct Wez
 };
 
 // Uçağın silahları: füze slotları, atış emri ve füzemin atanmış düşmana karşı durumu.
-//   own.weapons.fire(AIM120C), own.weapons.enemy_in_nez, own.weapons.active_missile() ...
+//   own.weapons.fire(own.profile.main_weapon), own.weapons.enemy_in_nez, own.weapons.active_missiles() ...
 // Kaçış tarafı (düşmanın füzesine karşı R_cold, NEZ, MAR, tehdit) own.picture'dadır.
 struct Weapons
 {
@@ -23,7 +23,7 @@ struct Weapons
     // İlk step'te StateReader kurar (sayı Python'dan, tipler profile.loadout'tan), sonra uçanları doldurur.
     std::vector<Missile> missiles;
 
-    bool has_launch_order = false;   // bu step atış emri var mı; her step false başlar (StateReader) | fire
+    bool has_launch_order = false;   // bu step atış emri var mı; her step otopilottan önce false yapılır (Sim::step) | fire
 
     // Ana silahımın (profile.main_weapon) düşmana karşı durumu | World::update
     Wez wez;                           // benim WEZ'im
@@ -42,11 +42,9 @@ struct Weapons
     /// adet: atılmamış füze sayısı
     int missiles_left() const;
 
-    /// target_id'ye doğru hâlâ uçan bir füzem var mı
-    bool has_active_missile_against(const std::string& target_id) const;
-
-    /// Son atılan füze; hiç atılmadıysa nullptr. İşaretçiyi bu step içinde kullan, saklama.
-    const Missile* last_fired() const;
+    /// Havadaki bütün füzelerim, atış sırasıyla (fire_order); yoksa boş. Pitbull, kalan süre: missile->target.
+    /// İşaretçileri bu step içinde kullan, saklama.
+    std::vector<const Missile*> active_missiles() const;
 
     /// Havadaki füzelerimden en son atılanı (desteklediğim füze); yoksa nullptr. Bu step içinde kullan.
     const Missile* active_missile() const;

@@ -21,11 +21,11 @@ namespace condition
     /// Düşmana menzilim DOR'ımın içinde.
     bool in_dor(const Aircraft& own);
 
-    /// Burnum hedefe dönük: |ATA| en fazla 2°.
+    /// Burnum hedefe dönük: |ATA| en fazla 3°.
     bool nose_on_target(const Aircraft& own);
 
-    /// Ben düşmanın MAR'ının içindeyim: düşmanın kendi hesabına göre out yapması gereken mesafe.
-    bool inside_enemy_mar(const Aircraft& own, const Aircraft& enemy);
+    /// Ben düşmanın MAR'ının içindeyim: düşmanın kendi hesabına göre out yapması gereken mesafe (picture.me_in_enemy_mar).
+    bool inside_enemy_mar(const Aircraft& own);
 
     /// Düşman benim WEZ'imde.
     bool enemy_in_my_wez(const Aircraft& own);
@@ -39,8 +39,8 @@ namespace condition
     /// Benim bakışım: benim burnum düşmana göre nasıl (picture.ata_deg).
     Aspect my_aspect(const Aircraft& own);
 
-    /// Bana doğru uçan bir düşman füzesi var.
-    bool threat_inbound(const Aircraft& own);
+    /// Spike: bana doğru uçan bir düşman füzesi var (picture.is_spiked; radar kilidi modeli yokken).
+    bool is_spiked(const Aircraft& own);
 
     /// fire_order'ıncı attığım füze (1: ilk, 2: ikinci, ...) kendi arayıcısıyla hedefi görüyor (artık destek gerekmez).
     /// O sırada atılmış füze yoksa false.

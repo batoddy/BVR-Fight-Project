@@ -2,7 +2,7 @@
 
 #include "common/ned.hpp"
 #include "model/kinematics.hpp"
-#include "model/picture.hpp"
+#include "model/turn_result.hpp"
 
 // Sabit yük faktörüyle seviye dönüş. Saf fonksiyonlar; out, commit, recommit hesapları bunun üstüne kurulur.
 // Her fonksiyon tek bir şeyi hesaplar; to_heading hepsini birleştirip TurnResult döner.

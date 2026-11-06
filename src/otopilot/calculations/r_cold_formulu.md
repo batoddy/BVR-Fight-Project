@@ -72,7 +72,7 @@ Sonucun mesafeye göre tek yönlü olduğu ayrıca kontrol edildi. 4, 8 ve 10 km
 
 ## Erişim kriteriyle yeniden ölçüm
 
-WEZ taramasında (`wez_formulu.md`) aynı senaryo "isabet değil erişim" kriteriyle yeniden ölçüldü. 36 sonucun hepsi aşağıdaki **Eski R** sütunuyla 0.15 NM içinde aynı çıktı. Bu tablodaki veriler ve formül değiştirilmedi; yeni ölçüm `wez_grafikler/wez_olcumler_ana_cold_v2.csv` dosyasında, karşılaştırma grafiği `wez_grafikler/r_cold_eski_yeni.png`.
+WEZ taramasında (sonuçlar `wez_grafikler/wez_sonuc.txt`) aynı senaryo "isabet değil erişim" kriteriyle yeniden ölçüldü. 36 sonucun hepsi aşağıdaki **Eski R** sütunuyla 0.15 NM içinde aynı çıktı. Bu tablodaki veriler ve formül değiştirilmedi; yeni ölçüm `wez_grafikler/wez_olcumler_ana_cold_v2.csv` dosyasında, karşılaştırma grafiği `wez_grafikler/r_cold_eski_yeni.png`.
 
 ## Ölçülen veri
 

@@ -43,17 +43,17 @@ Süre kontrolü ilk uçağın fizik saatindeki başlangıca göre yapılır. Ba�
 
 `Simulation.step()` her uçak için tam bir `{id, heading_deg, altitude_m, throttle}` komutu ister; isteğe bağlı `g_limit` (`1.5..9 g`) dönüş yükünü sınırlar ve `cmd_g_limit` sütununa yazılır. Bilinmeyen/tekrarlanan kimlik, eksik uçak, sonlu olmayan sayı, yönün `0..360` veya gazın `0..1` dışına çıkması hatadır. Komut listesi tamamen doğrulanmadan hiçbir uçak ilerletilmez. Ana döngüdeki atış emirleri bu doğrulamadan önce işlendiği için tüm mesajın işlemsel geri alınması sağlanmaz.
 
-`fire(shooter_id, target_id)`, kendine atışı ve hazır mühimmat yokluğunu `False` ile sonuçlandırır. Hazır ilk slotun hedefini bağlar ve fırlatır. Havadaki başka füze yeni atışı engellemez. Fırlatma BVRGym `launch()` ile olduğu gibi yapılır. BVRGym `reset()`'e taşıyıcının Mach sayısını m/s diye verdiği için füze neredeyse sıfır hızla başlar; bu uyuşmazlık bu katmanda düzeltilmez.
+`fire(shooter_id, target_id)`, kendine atışı ve hazır mühimmat yokluğunu `False` ile sonuçlandırır. Hazır ilk slotun hedefini bağlar ve fırlatır. Havadaki başka füze yeni atışı engellemez. Fırlatma BVRGym `launch()` ile yapılır. BVRGym `reset()`'e taşıyıcının Mach sayısını m/s diye verdiği için füze neredeyse sıfır hızla başlardı; `fire()` bu yüzden `launch()`'tan hemen sonra füzeyi aynı konum ve yönde taşıyıcının gerçek hava hızıyla (m/s) yeniden `reset()` eder. BVRGym kaynağı değişmez.
 
 ## Fizik ve kontrol zamanları
 
 Mevcut modelde fizik `dt` yaklaşık `1/120 s`, `Control_time_step` değeri `10`'dur. Dış adım yaklaşık `dt × Control_time_step × sim_time_step` sürer. YAML'da `sim_time_step=1` yaklaşık 12 dış adım/s verir. Bu alan saniye değildir.
 
-Uçak `F16BVR._step()` içinde yön ve irtifa hatasını bir iç çevrim başında hesaplar; kontrol yüzeyleri her fizik alt adımında güncellenir. `flight_control.py` kendi integral hesabında `DT_S=1/120` kullanır; fizik adımı değiştirilirse bu varsayım da gözden geçirilmelidir.
+Uçak `F16BVR._step()` içinde yön ve irtifa hatasını bir iç çevrim başında hesaplar; kontrol yüzeyleri her fizik alt adımında güncellenir. `flight_control.py` kendi integral ve tam çekiş süresi hesabında fizik adımını modelden okur (`fdm.get_delta_t()`).
 
 ## Yön ve irtifa kontrolü
 
-`install()` her uçağın kendi `AircraftPIDAutopilot` nesnesine kontrol fonksiyonunu bağlar; BVRGym kaynağı değişmez. Zincir: irtifa hatası → istenen dikey hız → istenen dikey ivme → yatış → hedef g → elevator PI. Büyük irtifa değişimi de aynı yoldan, dikey hız sınırıyla yapılır; BVRGym'in kendi kontrolüne devredilmez.
+`install()` her uçağın kendi `AircraftPIDAutopilot` nesnesinin `get_control_input`'unu bizim kontrolümüzle değiştirir ve bir `FlightControl` nesnesi döndürür; BVRGym kaynağı değişmez, BVRGym nesnesine alan eklenmez. Kontrolün durumu (`g_limit`, elevator integrali, tam çekiş süresi) bu nesnededir; `Simulation.controls[anahtar]` üzerinden erişilir. Zincir: irtifa hatası → istenen dikey hız → istenen dikey ivme → yatış → hedef g → elevator PI. Büyük irtifa değişimi de aynı yoldan, dikey hız sınırıyla yapılır; BVRGym'in kendi kontrolüne devredilmez.
 
 Dönüşte çekilecek en büyük yük komuttaki isteğe bağlı `g_limit` alanından gelir (yoksa `DEFAULT_TURN_G`). Büyük yön hatasında sert dönüş: yatış `acos((1 + a/g) / g_limit)`, yatış oturmadan çekilir; alçalma istenirse yatış 90°'ye yaklaşır ve uçak burun aşağı döner (out). Küçük hatada koordineli dönüş, yatış `acos(1 / g_limit)` ile sınırlı (crank, beam, recommit için düşük `g_limit`). Elevator, yatışta istenen dikey ivmeyi verecek yükü izler. Elevator 1 s'den uzun tam çekişte kalırsa (F-16 uçuş kontrol bilgisayarı yavaş hızda yükü sınırlar) yatış ulaşılan g'ye göre kurulur.
 
@@ -88,6 +88,38 @@ Görüntüleyici yeni ve eski kayıtların birimlerini okuma sınırında çöze
 Olaylar durum değişimlerinden oluşur: hedef ataması/kaldırılması, fırlatma, isabet, kayıp ve sağlık değişimi. Olay zamanı değişimin görüldüğü snapshot zamanıdır. `record_calculations()` C++ verisini tekrar hesaplamadan yazar ve aynı uçağın son ölçüm zamanını ekler. Alan kümesi ilk hesap mesajından sonra sabit olmalıdır.
 
 `manifest.json`, senaryoyu, koordinat referansını, kaynak propertyleri, gerçek fizik adımını ve dosya/satır sayılarını açıklar. Başlangıçta ve kapanışta yazılır; her snapshot'ta yenilenmez. Alan ve birim ayrıntıları veri referansındadır.
+
+## Çağrı izi: kurulumdan uçuşa
+
+**Kurulum** (bir kez):
+
+1. `load_scenario()` (`scenario.py`) `scenario.yaml`'ı okur: süre, adım ayarı, uçak başlangıçları.
+2. `Simulation(scenario, WORKSPACE / "BVRGym")` (`simulation.py`) senaryoyu doğrular (`validate_scenario`) ve `create_agents()`'ı (`bvrgym_setup.py`) çağırır.
+3. `_create_agent()` her uçak için `f16_config` ve `AAM_config`'i kopyalar, adım ayarlarını uygular ve `BaseBVRAgent(conf, None)` ile BVRGym ajanını kurar. BVRGym içinde `F16BVR(...)` uçak fiziğini, `reset_agent()` başlangıç konumunu, `reset_ammo()` mühimmat kadar `AAMBVR` füzesini oluşturur.
+4. `flight_control.install(agent.simObj.aircraft_control)` yön/irtifa kontrolünü bağlar. `Simulation` ilk komutları (`commands`, YAML'dan) ve başlangıç saatini tutar.
+
+**Uçuş döngüsü** (süre dolana kadar):
+
+5. `simulation.finished()` süreyi, `simulation.read_state()` uçak ve füze durumlarını okur; okuma fiziği ilerletmez.
+6. Atış emri varsa `simulation.fire(shooter_id, target_id)` hazır ilk füzeye hedef atar, `launch()` eder ve hızı düzeltir.
+7. `simulation.step(aircraft_commands)` bütün komutları doğrular, sonra her ajanda `apply_action()` çağırır. BVRGym önce uçağı, sonra o uçağın aktif füzelerini ilerletir.
+8. Uçak `F16BVR.step()` içinde uçar: `get_control_input(...)` (bizim `_control`) yatış ve yük faktörünü kontrol eder, `command_aircraft(...)` yüzey ve gazı uygular, `fdm.run()` bir fizik adımı hesaplar. Büyük irtifa değişimi de bu kontrolle yapılır; BVRGym'in kendi kontrolüne devredilmez.
+9. Aktif füzeler `AAMBVR.step()` ile uçar: düşük hız, düşük irtifa ve isabet koşulları değerlendirilir; ilk ivmelenmeden sonra TAS 200 m/s altına inerse uçuş biter. Güdüm `PN.get_guidance(...)` ile yapılır.
+10. Son uygulanan komutlar saklanır, `tick` bir artar; 5. adıma dönülür.
+
+`step()` birden fazla JSBSim fizik alt adımı çalıştırabilir: `tick` dış döngü sayacıdır, geçen süre fizik modelinin saatinden okunur.
+
+## BVRGym'in davranışına müdahaleler
+
+BVRGym kaynak dosyalarına dokunulmaz; bütün uyarlamalar dışarıdan, nesne kurulduktan sonra yapılır.
+
+| Müdahale | Yer | Ne yapar |
+|---|---|---|
+| Uçuş kontrolü | `flight_control.py` → `install()`, `_control()` | `AircraftPIDAutopilot.get_control_input` yerine bizim kontrolümüz çalışır; durum `FlightControl` nesnesindedir. Aç/kapa: `FLIGHT_CONTROL_ENABLED` (1 bizim kontrol, 0 BVRGym'in kendi PID'i; o zaman `g_limit` yok sayılır). |
+| Atış | `simulation.py` → `Simulation.fire()` | `BaseBVRAgent.launch_missile()` havada kendi füzesi varken atmaz; biz hazır slotu doğrudan kullanırız. Hedef C++'ın `target_id`'sinden gelir. Mach/m/s hatası için füze `launch()` sonrası gerçek hava hızıyla yeniden `reset()` edilir. |
+| Füze | — | Güdüm, config ve sonlanma BVRGym'deki haliyle kullanılır. |
+| Kurulum ayarları | `bvrgym_setup.py` → `_copy_config()`, `_create_agent()` | Config'ler ajan başına kopyalanır; uçak ve füzenin `Sim_time_step`'i YAML'dan gelir. `data_output_xml` ve `fg_sleep_time` kapatılır; kayıt `Recorder`, gerçek zaman beklemesi `world.sleep_s` ile yönetilir. |
+| Dış kontrol döngüsü | `sim_main.py`, `simulation.py`, `connector.py`, `recorder.py` | Python ölçüm gönderir, C++ kararını bekleyip ilerler; uçuş ve atış emirleri TCP üzerinden gelir. |
 
 ## Yerel şablon
 

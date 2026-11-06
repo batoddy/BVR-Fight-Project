@@ -17,7 +17,10 @@ else:
 # =============================================================================
 
 def create_agents(scenario, bvrgym_path):
-    """Bütün ajanları oluştur ve çağıranın çalışma dizinini geri getir."""
+    """Bütün ajanları ve uçuş kontrollerini oluştur: (agents, controls), ikisi de anahtar → nesne.
+
+    Çağıranın çalışma dizini geri getirilir.
+    """
     bvrgym_path = Path(bvrgym_path).resolve()
     if not bvrgym_path.is_dir():
         raise FileNotFoundError(f"BVRGym klasörü bulunamadı: {bvrgym_path}")
@@ -29,10 +32,10 @@ def create_agents(scenario, bvrgym_path):
     previous_cwd = Path.cwd()
     try:
         os.chdir(bvrgym_path)
-        return {
-            key: _create_agent(settings, scenario["world"]["sim_time_step"])
-            for key, settings in scenario["agents"].items()
-        }
+        agents, controls = {}, {}
+        for key, settings in scenario["agents"].items():
+            agents[key], controls[key] = _create_agent(settings, scenario["world"]["sim_time_step"])
+        return agents, controls
     finally:
         # Oluşturma başarısız olsa da terminalin çalışma dizini korunur.
         os.chdir(previous_cwd)
@@ -51,7 +54,7 @@ def _copy_config(module):
 
 
 def _create_agent(settings, sim_time_step):
-    """YAML'daki tek bir ajan tanımından uçak ve füze slotlarını oluştur."""
+    """YAML'daki tek bir ajan tanımından uçak, füze slotları ve uçuş kontrolünü oluştur: (agent, control)."""
     # type, C++ hesap profilinin etiketidir; fizik modeli burada hâlâ F-16'dır.
     aircraft_type = settings.get("type", "F16")
     if not isinstance(aircraft_type, str) or not aircraft_type.strip():
@@ -79,6 +82,6 @@ def _create_agent(settings, sim_time_step):
         aircraft_simObj_conf=aircraft, missile_simObj_conf=missile,
     ), None)
 
-    # Yön/irtifa komutunu uygulayan mevcut kontrolü yalnız bu uçağa bağla.
-    flight_control.install(agent.simObj.aircraft_control)
-    return agent
+    # Yön/irtifa komutunu uygulayan kontrolü yalnız bu uçağa bağla; durumu bizim nesnemizde tutulur.
+    control = flight_control.install(agent.simObj.aircraft_control)
+    return agent, control

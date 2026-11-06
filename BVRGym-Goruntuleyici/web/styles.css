@@ -45,7 +45,10 @@ main{grid-column:2;grid-row:1}
 
 :root:not([data-theme=dark]) .munition.carried{color:#b58811}:root:not([data-theme=dark]) .munition.flying{color:#db770c;background:#fff0cb}:root:not([data-theme=dark]) .entity.selected{border-color:#0756a5}:root:not([data-theme=dark]) .scene-hud{font-weight:600}
 
-#record-warning{color:var(--muted);border-left:2px solid var(--muted);padding-left:8px}
+.icon-summary{width:38px;padding:0;position:relative}.icon-summary:after{display:none}.icon-summary svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.warning-summary.has-warnings{color:#b45309;border-color:#b45309}:root[data-theme=dark] .warning-summary.has-warnings{color:#fbbf24;border-color:#fbbf24}
+.warning-count{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#b45309;color:#fff;font-size:10px;font-weight:700;line-height:17px;text-align:center}
+.warnings-popover{width:380px}.warning-list{margin:0;padding-left:18px;display:grid;gap:8px;font-size:13px}.warning-list li{overflow-wrap:anywhere}.warning-list li.empty{list-style:none;margin-left:-18px;color:var(--muted)}
 
 .flight-label.missile{font-size:10px;line-height:1.15;min-height:18px;padding:2px 4px;column-gap:5px;row-gap:0}
 .flight-label.missile:not(.selected) .flight-label-name{max-width:64px}

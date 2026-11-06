@@ -45,6 +45,4 @@ namespace geometry
     /// derece/s, LOS değişim hızı: own'dan other'a bearing'in değişimi, yatay düzlemde; + saat yönünde.
     /// Aynı noktadalarsa 0.
     double los_rate_deg_s(const Kinematics& own, const Kinematics& other);
-
-    double my_closure_w_crank_kt(const Kinematics& own, double radar_angle);
 }

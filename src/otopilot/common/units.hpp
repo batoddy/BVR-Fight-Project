@@ -25,9 +25,3 @@ inline constexpr double mps_to_knot(double mps) { return meter_to_nmile(mps) * S
 inline constexpr double knot_to_mps(double kt) { return nmile_to_meter(kt) / SECONDS_PER_HOUR; }
 inline constexpr double fps_to_knot(double fps) { return mps_to_knot(feet_to_meter(fps)); }
 inline constexpr double knot_to_fps(double kt) { return meter_to_feet(knot_to_mps(kt)); }
-
-/// NM, yol = hız × süre. kt "saatte NM" olduğu için süre saniyeden saate çevrilir.
-inline constexpr double travel_distance_nm(double speed_kt, double time_s) { return speed_kt * time_s / SECONDS_PER_HOUR; }
-
-/// s, süre = yol / hız.
-inline constexpr double travel_time_s(double distance_nm, double speed_kt) { return SECONDS_PER_HOUR * distance_nm / speed_kt; }

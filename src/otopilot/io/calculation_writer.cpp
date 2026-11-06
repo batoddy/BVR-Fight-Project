@@ -1,6 +1,9 @@
 #include "io/calculation_writer.hpp"
 
 #include <optional>
+#include <string>
+
+#include "model/missile.hpp"
 
 Json CalculationWriter::write(const World& world)
 {
@@ -19,7 +22,7 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
     Json json;
     json["id"] = own.id;
     json["target_id"] = enemy.id;
-    json["phase"] = static_cast<int>(own.phase);   // model/phase.hpp: 0 Hold, 1 Fire, 2 Out, 3 Commit, 4 Crank, 5 Beam, 6 Recommit
+    json["phase"] = static_cast<int>(own.phase);   // sayı karşılıkları model/phase.hpp'de
 
     json["range_2d_nm"] = picture.range_2d_nm;
     json["range_3d_nm"] = picture.range_3d_nm;
@@ -43,10 +46,10 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
     json["tr_nm"] = own.weapons.tr_nm.value_or(0.0);
 
     // Tehdit: füze yoksa 0. Sütunlar her step aynı kalmalı (recorder.py); pitbull 0/1, okuyucu sayı bekler.
-    const std::optional<ThreatInfo>& threat = picture.threat;
-    json["threat_range_nm"] = threat ? threat->range_nm : 0.0;
-    json["threat_mach"] = threat ? threat->mach : 0.0;
-    json["threat_pitbull"] = (threat && threat->is_pitbull) ? 1 : 0;
+    const Missile* threat = picture.threat;
+    json["threat_range_nm"] = threat ? threat->target.range_nm : 0.0;
+    json["threat_mach"] = threat ? threat->kinematics.mach : 0.0;
+    json["threat_pitbull"] = (threat && threat->target.is_pitbull) ? 1 : 0;
 
     // Sabit: profil. Görüntüleyici radar açısını ve WEZ'i bunlarla çizer.
     json["radar_gimbal_deg"] = own.profile.radar_gimbal_deg;   // yarım açı (60 = ±60)
@@ -63,5 +66,16 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
         }
     }
     json["pitbull_missile_slots"] = pitbull_slots.dump();
+
+    // Havadaki füzelerimin hedefe yetişmesine kalan süre: {"slot": s}. Değeri olmayan füze yazılmaz.
+    Json catch_times = Json::object();
+    for (const Missile& missile : own.weapons.missiles)
+    {
+        if (missile.in_flight() && missile.target.catch_time_left_s.has_value())
+        {
+            catch_times[std::to_string(missile.slot)] = *missile.target.catch_time_left_s;
+        }
+    }
+    json["missile_catch_times_s"] = catch_times.dump();
     return json;
 }

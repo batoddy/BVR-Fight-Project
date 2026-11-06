@@ -1,14 +1,16 @@
 #pragma once
 
 #include <memory>
+#include <string>
+
 #include "io/messages.hpp"
 
 // Uygulama yalnızca mesaj alır/verir; taşıma ayrıntıları .cpp içinde kalır.
 class Connection
 {
 public:
-    /// Python sunucusuna bağlanır (varsayılan 127.0.0.1:6000; adres argümanla değiştirilebilir).
-    Connection(int argc, char* argv[]);
+    /// Python sunucusuna bağlanır. host: IPv4 adresi; port: 1..65535 (main.cpp komut satırından okur).
+    Connection(const std::string& host, unsigned short port);
     ~Connection();
 
     // Kopyalanamaz: tek bir TCP bağlantısını temsil eder.

@@ -24,7 +24,7 @@ FLIGHT_CONTROL_ENABLED = 1
 # =============================================================================
 
 G0 = 9.81                 # m/s²
-DT_S = 1.0 / 120.0        # s, otopilot her JSBSim adımında (120 Hz) bir kez çağrılır
+# Kontrol her JSBSim fizik adımında bir kez çağrılır; adım süresi (dt) modelden okunur (fdm.get_delta_t()).
 
 # Dikey kanal: irtifa hatası -> istenen dikey hız -> istenen dikey ivme.
 # İki çarpanla ω = sqrt(K_H · K_VZ) = 0,2 rad/s, sönüm 1,25 (aşmasız yaklaşma).
@@ -52,31 +52,40 @@ TAU_HEAD = 2.0            # s, ince ayarda yön hatasını kapatma süresi
 # BİR UÇAĞIN BVRGYM OTOPİLOTUNA BAĞLAMA
 # =============================================================================
 
+class FlightControl:
+    """Bir uçağın kontrol durumu. Bizim alanlarımız burada durur; BVRGym nesnesine alan eklenmez.
+
+    BVRGym'e tek müdahale: AircraftPIDAutopilot.get_control_input bu nesnenin kontrolüyle değiştirilir.
+    """
+
+    def __init__(self, autopilot):
+        self.autopilot = autopilot
+        self.g_limit = None        # g; Simulation.step her adım komuttan yazar; None: DEFAULT_TURN_G
+        self.g_integral = None     # elevator PI integrali; ilk çağrıda o anki çubuktan başlar
+        self.saturated_s = 0.0     # s, elevator'ın kesintisiz tam çekişte kaldığı süre
+
+
 def install(autopilot):
-    """Bir uçağın AircraftPIDAutopilot nesnesine bu kontrolü bağla (yalnız o uçağı etkiler)."""
-    autopilot.g_limit = None   # Simulation.step her adım komuttan yazar; None: DEFAULT_TURN_G
-    if not FLIGHT_CONTROL_ENABLED:
-        return   # BVRGym'in orijinal get_control_input'u yerinde kalır
-    autopilot.g_integral = None
-    autopilot.saturated_s = 0.0   # elevator'ın kesintisiz tam çekişte kaldığı süre
-
-    def get_control_input(diff_head, diff_alt):
-        return _control(autopilot, diff_head, diff_alt)
-
-    autopilot.get_control_input = get_control_input
+    """Bir uçağın AircraftPIDAutopilot nesnesine bu kontrolü bağla (yalnız o uçağı etkiler); durumunu döndür."""
+    control = FlightControl(autopilot)
+    if FLIGHT_CONTROL_ENABLED:
+        autopilot.get_control_input = lambda diff_head, diff_alt: _control(control, diff_head, diff_alt)
+    # 0 ise BVRGym'in orijinal get_control_input'u yerinde kalır; g_limit yok sayılır.
+    return control
 
 
 # =============================================================================
 # HER FİZİK ADIMINDA ÇALIŞAN KONTROL AKIŞI
 # =============================================================================
 
-def _control(ap, diff_head, diff_alt):
+def _control(control, diff_head, diff_alt):
     """diff_head: derece (+ sağa dön), diff_alt: m (+ yukarı). Dönüş: aileron, elevator, rudder."""
-    turn_g = ap.g_limit if ap.g_limit is not None else DEFAULT_TURN_G
+    ap = control.autopilot
+    turn_g = control.g_limit if control.g_limit is not None else DEFAULT_TURN_G
 
     a_cmd = _vertical_accel(ap, diff_alt)
-    hard_turn = _set_bank(ap, diff_head, a_cmd, turn_g)
-    _set_elevator(ap, a_cmd, hard_turn, turn_g)
+    hard_turn = _set_bank(control, diff_head, a_cmd, turn_g)
+    _set_elevator(control, a_cmd, hard_turn, turn_g)
 
     return ap.aileron_cmd, ap.elevator_cmd, ap.rudder_cmd
 
@@ -100,8 +109,9 @@ def _vertical_accel(ap, diff_alt):
 # YATIŞ — yön hatasından roll hedefi üretme
 # =============================================================================
 
-def _set_bank(ap, diff_head, a_cmd, turn_g):
+def _set_bank(control, diff_head, a_cmd, turn_g):
     """Yön hatası büyükse sert, küçükse koordineli dönüş yatışı uygula. Sert dönüşse True."""
+    ap = control.autopilot
     nav = ap.aircraft_navigation
     aircraft = ap.aircraft
 
@@ -115,7 +125,7 @@ def _set_bank(ap, diff_head, a_cmd, turn_g):
         roll_dir = 1 if diff_head >= 0 else -1
         a_bank = min(a_cmd, A_UP_HARD)
         bank_g = turn_g
-        if ap.saturated_s > SATURATED_S:
+        if control.saturated_s > SATURATED_S:
             bank_g = float(np.clip(aircraft.fdm["forces/load-factor"], 1.5, turn_g))
         cos_bank = float(np.clip((1.0 + a_bank / G0) / bank_g, 0.0, 1.0))
         ap.set_roll_PID(roll_ref=roll_dir * math.degrees(math.acos(cos_bank)))
@@ -136,9 +146,11 @@ def _set_bank(ap, diff_head, a_cmd, turn_g):
 # ELEVATOR — hedef yük faktörünü izleme
 # =============================================================================
 
-def _set_elevator(ap, a_cmd, hard_turn, turn_g):
+def _set_elevator(control, a_cmd, hard_turn, turn_g):
     """Mevcut yatıştan hedef g'yi bul ve PI kontrolüyle elevator komutunu güncelle."""
+    ap = control.autopilot
     aircraft = ap.aircraft
+    dt_s = aircraft.fdm.get_delta_t()   # s, bir JSBSim fizik adımı
 
     # Düşey bileşen: n · cos(yatış) = 1 + a/g. 1/cos, turn_g'ye karşılık gelen yatışta kesilir.
     cos_bank = max(math.cos(math.radians(aircraft.get_phi())), 1.0 / turn_g)
@@ -155,13 +167,13 @@ def _set_elevator(ap, a_cmd, hard_turn, turn_g):
     n = float(aircraft.fdm["forces/load-factor"])
     error = n_ref - n
 
-    if ap.g_integral is None:
-        ap.g_integral = -float(aircraft.fdm["fcs/elevator-cmd-norm"])   # o anki çubuktan başla
-    ap.g_integral = float(np.clip(ap.g_integral + KI_G * error * DT_S, -1.0, 1.0))
-    ap.elevator_cmd = float(np.clip(-(KP_G * error + ap.g_integral), -1.0, 1.0))   # negatif = çek
+    if control.g_integral is None:
+        control.g_integral = -float(aircraft.fdm["fcs/elevator-cmd-norm"])   # o anki çubuktan başla
+    control.g_integral = float(np.clip(control.g_integral + KI_G * error * dt_s, -1.0, 1.0))
+    ap.elevator_cmd = float(np.clip(-(KP_G * error + control.g_integral), -1.0, 1.0))   # negatif = çek
 
     # Tam çekişte geçen süre: _set_bank uçağın turn_g'ye ulaşıp ulaşamadığını buradan anlar.
     if ap.elevator_cmd <= -0.99 and hard_turn:
-        ap.saturated_s += DT_S
+        control.saturated_s += dt_s
     else:
-        ap.saturated_s = 0.0
+        control.saturated_s = 0.0

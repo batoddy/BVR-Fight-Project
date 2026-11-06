@@ -43,8 +43,8 @@ void OtopilotHostile::step(Aircraft& own, const Aircraft& enemy)
 
     switch (state_)
     {
-    case HostileState::Commit:
-        maneuvers_.fly(own, maneuvers_.hold);
+    case OtopilotState::Commit:
+        maneuvers_.fly(own, maneuvers_.commit);
         break;
 
     default:   // deneme: yalnız Commit kullanılıyor

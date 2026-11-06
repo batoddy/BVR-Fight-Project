@@ -6,6 +6,7 @@
 #include "calculations/geometry.hpp"
 #include "calculations/missile_geometry.hpp"
 #include "calculations/turn.hpp"
+#include "common/formulas.hpp"
 #include "common/units.hpp"
 
 namespace
@@ -16,6 +17,7 @@ namespace
         return own.kinematics.tas_kt;
     }
 
+    constexpr double POLE_MARGIN_NM = 1.0;   // NM, A-pole, F-pole ve TR'nin güvenlik payı
 }
 
 // WEZ: füzenin etkin menzil aralığı.
@@ -26,7 +28,7 @@ namespace
 //     uçuş süresi        = c + d·ln h
 //     düşmanın aldığı yol = düşmanın bana doğru hızı × uçuş süresi
 //   Düşman bana geliyorsa menzil uzar, benden kaçıyorsa (enemy_closure_kt < 0) kısalır.
-// Katsayılar BVRGym füzesine karşı yapılan erişim taramasından: calculations/wez_formulu.md
+// Katsayılar BVRGym füzesine karşı yapılan erişim taramasından: calculations/wez_grafikler/wez_sonuc.txt
 Wez engagement::wez_nm(const Aircraft& own, const Aircraft& enemy)
 {
     const MissileProfile& missile = own.profile.main_weapon;
@@ -53,44 +55,79 @@ bool engagement::in_wez(const Aircraft& own, const Aircraft& enemy)
     const double range_nm = geometry::range_3d_nm(own.kinematics, enemy.kinematics);
 
     const bool beyond_min = range_nm > own_wez.min_nm;
-    const bool within_max = range_nm < own_wez.max_nm;
+    const bool within_max = range_nm <= own_wez.max_nm;
     return beyond_min && within_max;
 }
 
+// Pole'lar own.picture'dan (menzil, kapanma) okur: World::update'te compute_picture'dan sonra çağrılır.
+// Füze uyumdaki gibi uçar, hedef yerinde kabul edilir; iki uçak arası kapanma şu anki closure_kt ile sürer.
+// POLE_MARGIN_NM (1 NM) A-pole, F-pole ve TR'de aynı güvenlik payıdır.
+
+// A-pole: füze pitbull olduğu anda iki uçak arasında kalan mesafe.
+//   füzenin pitbull'a kadar yolu = menzil − pitbull mesafesi
+//   t = füzenin bu yolu alma süresi
+//   A-pole = menzil − kapanma × t − pay
 std::optional<double> engagement::a_pole_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    const double range_nm = own.picture.range_3d_nm - own.profile.main_weapon.pitbull_range_nm;
-    const std::optional<double> flight_time_s = missile_geometry::time_at_distance(own.profile.main_weapon, range_nm);
-    if (!flight_time_s)
-    {
-        return std::nullopt;   // füze o mesafeye erişemez
-    }
-    return (range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - 1);
-}
-
-std::optional<double> engagement::f_pole_nm(const Aircraft& own, const Aircraft& enemy)
-{
+    (void)enemy;   // menzil ve kapanma own.picture'da
     const double range_nm = own.picture.range_3d_nm;
-    const std::optional<double> flight_time_s = missile_geometry::time_at_distance(own.profile.main_weapon, range_nm);
+    const double missile_path_nm = range_nm - own.profile.main_weapon.pitbull_range_nm;
+    const std::optional<double> flight_time_s = missile_geometry::time_at_distance_s(own.profile.main_weapon, missile_path_nm);
     if (!flight_time_s)
     {
         return std::nullopt;   // füze o mesafeye erişemez
     }
-    return (range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - 1);
+    return range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - POLE_MARGIN_NM;
 }
 
+// F-pole: füze hedefe vardığında iki uçak arasında kalan mesafe.
+//   t = füzenin menzil kadar yolu alma süresi
+//   F-pole = menzil − kapanma × t − pay
+std::optional<double> engagement::f_pole_nm(const Aircraft& own, const Aircraft& enemy) // 30.000 ft
+{
+    (void)enemy;   // menzil ve kapanma own.picture'da
+    const double range_nm = own.picture.range_3d_nm;
+    const std::optional<double> flight_time_s = missile_geometry::time_at_distance_s(own.profile.main_weapon, range_nm);
+    if (!flight_time_s)
+    {
+        return std::nullopt;   // füze o mesafeye erişemez
+    }
+    return range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - POLE_MARGIN_NM;
+}
 
+// TR: en kısa atış menzili; buradan atarsam füze pitbull olduğunda (A-pole) DOR'umun dışında kalırım.
+//   A-pole = TR − kapanma × t − pay = DOR   →   TR = DOR + pay + kapanma × t
+//   füzenin pitbull'a kadar yolu = TR − pitbull = DOR + pay − pitbull + kapanma × t
+//   Füze yolu: v0·t + a·t²/2. İki denklem birleşince kapanma füzenin hızından düşülür:
+//     (v0 − kapanma)·t + a·t²/2 = DOR + pay − pitbull   →   t = accel_travel_time_s(yol, v0 − kapanma, a)
 std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    const double range_nm = own.picture.range_3d_nm - own.profile.main_weapon.pitbull_range_nm;
-    const std::optional<double> flight_time_s = missile_geometry::time_at_distance(own.profile.main_weapon, range_nm);
+    (void)enemy;   // DOR ve kapanma own.picture'da
+    const MissileProfile& missile = own.profile.main_weapon;
+    const double closure_kt = own.picture.closure_kt;
+
+    const double gap_nm = own.picture.dor_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
+    if (gap_nm < 0.0)
+    {
+        return std::nullopt;   // DOR pitbull mesafesinden kısa: bu tanımla TR yok
+    }
+
+    const double relative_start_kt = missile.start_speed_kt - closure_kt;
+    const std::optional<double> flight_time_s = accel_travel_time_s(gap_nm, relative_start_kt, missile.slowing_accel_kt_s);
     if (!flight_time_s)
     {
-        return std::nullopt;   // füze o mesafeye erişemez
+        return std::nullopt;   // füze bu kapanmayla pitbull'a erişemez
     }
-    return (range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - 1);
+    return own.picture.dor_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s);
 }
 
+// NEZ'imde mi: düşman şimdi out yapsa füzemden kaçamaz. NEZ benim füzeme karşı düşmanın kaçış NEZ'idir.
+bool engagement::in_nez(const Aircraft& own, const Aircraft& enemy)
+{
+    const double range_nm = geometry::range_3d_nm(own.kinematics, enemy.kinematics);
+    const double min_nm = own.profile.main_weapon.min_range_nm;
+    return range_nm > min_nm && range_nm <= nez_nm(enemy, own);
+}
 
 
 // Out planı: şimdi out yapsam ne olur.
@@ -228,11 +265,12 @@ bool engagement::in_mar(const Aircraft& own, const Aircraft& enemy)
     return range_nm <= mar_nm(own, enemy);
 }
 
-// MRR (Minimum Recommit Range), Cold Ops'ta bakılır: buradan dönüp atarsam MAR'da hâlâ kaçabilir miyim.
+// MRR (Minimum Recommit Range): Cold Ops'ta (out sonrası düşmanı arkada tutup uzaklaşırken) bakılır:
+// buradan dönüp recommit yapar ve atarsam, atıştan sonraki out'ta hâlâ kaçabilir miyim.
 // Şu anki burun yönüyle hesaplanan MAR kullanılmaz: cold uçarken dönüş payı ~0 çıkar.
 //   Recommit sonrası MAR = recommit atış açısından (recommit_fire_ata_deg) out yapılırsa MAR
-//   MRR = recommit sonrası MAR + 150° recommit dönüşünde düşmanın yaklaşması + 0,5 NM
-double engagement::mrr_cold_ops_nm(const Aircraft& own, const Aircraft& enemy)
+//   MRR = recommit sonrası MAR + (180 − atış açısı)° recommit dönüşümde düşmanın TAS'ıyla yaklaşması + 0,5 NM
+double engagement::mrr_nm(const Aircraft& own, const Aircraft& enemy)
 {
     const double planned_mar_nm = mar_nm(own, enemy, own.profile.recommit_fire_ata_deg);
 
@@ -245,9 +283,8 @@ double engagement::mrr_cold_ops_nm(const Aircraft& own, const Aircraft& enemy)
 }
 
 // DR (Decision Range): STERN WEZ + düşmanın notch beklemesi boyunca yaklaştığı yol + mesafe payı.
-//   STERN WEZ = R_cold; notch beklemesi varsayılan 15 s, ek pay sabit 0,5 NM.
-//   Yalnız düşmanın bana doğru hız bileşeni kullanılır; TAS veya iki uçağın toplam kapanması değil.
-//   Hız işaretlidir: düşman uzaklaşıyorsa yaklaşma terimi negatiftir.
+//   STERN WEZ = R_cold; notch beklemesi profile.dr_notch_time_s (15 s), ek pay sabit 0,5 NM.
+//   Düşmanın yaklaşması TAS'ıyla hesaplanır: en kötü durum, düşman tam bana doğru geliyor kabul edilir.
 double engagement::dr_nm(const Aircraft& own, const Aircraft& enemy)
 {
     const double stern_wez_nm = engagement::r_cold_nm(own, enemy);
@@ -255,8 +292,9 @@ double engagement::dr_nm(const Aircraft& own, const Aircraft& enemy)
     return stern_wez_nm + enemy_approach_nm + 0.5;
 }
 
-// DOR = MAR + 180°- radar_gimal_deg - recommit dönüşü boyunca yaklaşması + out payı.
-// Recommit dönüş süresi, mevcut hız ve out_g ile hesaplanır; hız ve yaklaşma bileşeni sabit kabul edilir.
+// DOR = MAR + recommit dönüşüm boyunca düşmanın yaklaşması + 0,5 NM.
+//   Recommit dönüşü: (180 − recommit_fire_ata_deg)°, şu anki hızımla ve out_g ile.
+//   Düşmanın yaklaşması TAS'ıyla (en kötü durum: tam bana doğru geliyor).
 double engagement::dor_nm(const Aircraft& own, const Aircraft& enemy)
 {
     const double speed_kt = own.kinematics.tas_kt;
@@ -273,15 +311,3 @@ bool engagement::in_dor(const Aircraft& own, const Aircraft& enemy)
     return range_nm <= dor_nm(own, enemy);
 }
 
-std::optional<double> engagement::closest_stay_away_nm(const std::vector<ThreatInfo>& threats)
-{
-    std::optional<double> closest_nm;
-    for (const ThreatInfo& threat : threats)
-    {
-        if (threat.stay_away_nm.has_value() && (!closest_nm.has_value() || *threat.stay_away_nm > *closest_nm))
-        {
-            closest_nm = threat.stay_away_nm;
-        }
-    }
-    return closest_nm;
-}

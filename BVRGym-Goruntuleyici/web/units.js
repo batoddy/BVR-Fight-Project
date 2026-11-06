@@ -64,6 +64,12 @@ export function flightLabel(entity,unit='nm'){
   return time+' · '+path;
 }
 
+// Füze etiketi: otopilotun hesapladığı hedefe yetişmeye kalan süre, ör. "varış 12,3 s"; hesap yoksa boş.
+export function catchLabel(entity){
+  const seconds=entity.catch_time_s;
+  return Number.isFinite(seconds)?'varış '+seconds.toLocaleString('tr-TR',{minimumFractionDigits:1,maximumFractionDigits:1})+' s':'';
+}
+
 export function speedLabel(entity,unit='mps'){
   const definition=SPEED_UNITS[unit]||SPEED_UNITS.mps,speed=speedValue(entity,unit);
   const value=speed==null?'—':speed.toLocaleString('tr-TR',{minimumFractionDigits:definition.labelDigits,maximumFractionDigits:definition.labelDigits});

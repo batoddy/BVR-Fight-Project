@@ -2,7 +2,7 @@
 
 #include "model/world.hpp"
 
-// Terminale saniyede bir satır: iki uçağın durumu ve fighter'ın son füzesi.
+// Terminale saniyede bir satır: iki uçağın durumu ve fighter'ın havadaki füzeleri.
 // Her step yazarsak terminal saniyede ~12 satırla dolar; bu yüzden son yazılan saniyeyi tutar.
 class ConsoleLog
 {

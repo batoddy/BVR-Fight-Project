@@ -54,6 +54,10 @@ Json CommandWriter::to_json(const std::string& id, const FlightCommand& command)
     // İsteğe bağlı: yoksa alan yazılmaz, Python varsayılanı kullanır.
     if (const std::optional<double> g_limit = command.g_limit())
     {
+        if (!std::isfinite(*g_limit))
+        {
+            throw std::runtime_error(id + ": g_limit sayi degil (NaN/sonsuz)");
+        }
         json["g_limit"] = *g_limit;
     }
 

@@ -10,7 +10,7 @@
 #include "calculations/missile_geometry.hpp"
 #include "calculations/turn.hpp"
 #include "common/angles.hpp"
-#include "common/geodesy.hpp"
+#include "common/formulas.hpp"
 #include "common/units.hpp"
 #include "control/conditions.hpp"
 #include "control/otopilot_fighter.hpp"
@@ -63,16 +63,6 @@ namespace
         near(wrap_180(270), -90, "wrap 270");
         near(wrap_180(-200), 160, "wrap -200");
         near(wrap_360(-90), 270, "wrap -90");
-
-        const Ecef equator = lla_to_ecef(0, 0, 0);
-        near(equator.x_nm, 6378137.0 / 1852.0, "ECEF uses NM");
-        for (double latitude : {-60.0, 0.0, 45.0, 80.0})
-        {
-            const Lla recovered = ecef_to_lla(lla_to_ecef(latitude, 18.0, 10000.0));
-            near(recovered.lat_deg, latitude, "LLA latitude round trip");
-            near(recovered.lon_deg, 18, "LLA longitude round trip");
-            near(recovered.altitude_ft, 10000, "LLA altitude in ft", 1e-7);
-        }
     }
 
     void geometry_and_missile_time()
@@ -104,10 +94,10 @@ namespace
     void flight_command_setters()
     {
         FlightCommand command;
-        command.set_heading_deg(270).set_throttle(1.4).set_g_limit(12);
+        command.set_heading_deg(270).set_throttle(1.4).set_g_limit(12, 9.0);
         near(command.heading_deg(), -90, "heading wrapped to ±180");
         near(command.throttle(), 1.0, "throttle clamped");
-        near(*command.g_limit(), FlightCommand::G_LIMIT_MAX, "g limit clamped");
+        near(*command.g_limit(), 9.0, "g limit clamped to profile max");
         command.clear_g_limit();
         require(!command.g_limit().has_value(), "g limit cleared");
     }
@@ -227,7 +217,7 @@ namespace
         require(own.phase == Phase::Commit && own.weapons.missiles_left() == 4,
                 "transition selects next state without flying it yet");
         pilot.step(own, enemy);
-        require(own.phase == Phase::Fire && own.weapons.missiles_left() == 3, "first shot once");
+        require(own.weapons.missiles_left() == 3, "first shot once");
         own.weapons.missiles[0].python_id = "blue/missile/0";
         own.weapons.has_launch_order = false;
 
@@ -253,7 +243,7 @@ namespace
         require(condition::nose_on_target(own), "negative alignment boundary");
         pilot.step(own, enemy);
         pilot.step(own, enemy);
-        require(own.phase == Phase::Fire && own.weapons.missiles_left() == 2, "second shot once");
+        require(own.weapons.missiles_left() == 2, "second shot once");
         own.weapons.missiles[1].python_id = "blue/missile/1";
         own.weapons.has_launch_order = false;
 
@@ -396,24 +386,20 @@ namespace
 
         world.update();
         require(world.fighter.enemy_id == "red", "enemy assigned");
-        require(world.fighter.picture.threats.size() == 2, "every inbound missile is scanned");
-        require(world.fighter.picture.threat.has_value(), "threat found");
+        const std::vector<const Missile*>& threats = world.fighter.picture.threats;
+        require(threats.size() == 2, "every inbound missile is scanned");
+        require(threats[0] == &world.hostile.weapons.missiles[0], "threat is the missile itself, not a copy");
+        require(world.fighter.picture.threat != nullptr, "threat found");
         require(world.fighter.picture.threat->slot == 1, "closest missile is the threat");
-        near(world.fighter.picture.threat->bearing_deg, 0, "threat bearing", 1e-6);
-        near(*world.fighter.picture.threats[0].a_pole_nm, 20, "A-pole read from missile");
-        near(*world.fighter.picture.threats[1].f_pole_nm, 11, "F-pole read from missile");
-        require(!world.fighter.picture.closest_stay_away_nm.has_value(), "no stay-away value yet");
+        near(geometry::bearing_deg(world.fighter.kinematics, world.fighter.picture.threat->kinematics), 0, "threat bearing", 1e-6);
+        near(*threats[0]->target.a_pole_nm, 20, "A-pole read from missile");
+        near(*threats[1]->target.f_pole_nm, 11, "F-pole read from missile");
+        require(threats[1]->target.catch_time_left_s
+                == missile_geometry::catch_time_left_s(*threats[1]), "catch time computed for every missile");
+        require(world.fighter.picture.is_spiked, "spiked while a missile is inbound");
         require(world.hostile.picture.threats.empty(), "no threat list against hostile");
-        require(!world.hostile.picture.threat.has_value(), "no missile against hostile");
-        require(!world.hostile.picture.closest_stay_away_nm.has_value(), "no stay-away without missile");
-
-        // Uzak durma sınırı: tüm füzeleri sağlayan en kısa menzil; değeri olmayan füze atlanır.
-        std::vector<ThreatInfo> stay_away_threats(3);
-        require(!engagement::closest_stay_away_nm({}).has_value(), "empty list has no stay-away");
-        require(!engagement::closest_stay_away_nm(stay_away_threats).has_value(), "missiles without value");
-        stay_away_threats[0].stay_away_nm = 20;
-        stay_away_threats[2].stay_away_nm = 25;
-        near(*engagement::closest_stay_away_nm(stay_away_threats), 25, "stay-away satisfies every missile");
+        require(world.hostile.picture.threat == nullptr, "no missile against hostile");
+        require(!world.hostile.picture.is_spiked, "not spiked without missile");
         // Silah ve kaçış hesapları main_weapon'dan; füze slotu olmasa da hesaplanır.
         require(world.hostile.picture.mar_nm > 0, "MAR from main weapon without missile slots");
         near(world.fighter.picture.dr_nm, engagement::dr_nm(world.fighter, world.hostile), "fighter DR computed");
@@ -465,12 +451,12 @@ namespace
         world.fighter.weapons.a_pole_nm = 18;
         world.fighter.weapons.f_pole_nm = 15;
         world.fighter.weapons.tr_nm = 30;
-        ThreatInfo threat;
-        threat.range_nm = 9;
-        threat.mach = 2.5;
-        threat.is_pitbull = true;
-        world.fighter.picture.threat = threat;
-        world.fighter.command.set_g_limit(6.0);
+        Missile threat;
+        threat.target.range_nm = 9;
+        threat.kinematics.mach = 2.5;
+        threat.target.is_pitbull = true;
+        world.fighter.picture.threat = &threat;
+        world.fighter.command.set_g_limit(6.0, 9.0);
         const Message message = CommandWriter::write(1, world);
         const Json& fighter_command = message.data.at("aircraft").at(0);
         near(fighter_command.at("altitude_m").get<double>(), 3048, "writer metric command");
@@ -502,7 +488,7 @@ namespace
             {"target_id", "red"}, {"state", "in_flight"}, {"outcome", nullptr},
             {"kinematics", data["aircraft"][0]}};
         StateReader::read_world(data, world);
-        require(!world.fighter.weapons.has_launch_order, "launch order reset each step");
+        require(world.fighter.weapons.has_launch_order, "reader leaves launch order reset to Sim::step");
         const Missile& missile = world.fighter.weapons.missiles[0];
         require(missile.has_kinematics, "missile kinematics matched");
         require(world.fighter.weapons.active_missile() == &missile, "active missile");

@@ -11,13 +11,17 @@ otopilot/
 │   ├── sim.hpp / sim.cpp
 │   ├── otopilot_fighter.hpp / otopilot_fighter.cpp
 │   ├── otopilot_hostile.hpp / otopilot_hostile.cpp
+│   ├── otopilot_state.hpp                 (iki otopilotun ortak durum listesi)
 │   ├── maneuver.hpp / maneuver.cpp
+│   ├── tactic.hpp / tactic.cpp            (taktikler: manevraların kurallı sırası; henüz bağlı değil)
 │   └── conditions.hpp / conditions.cpp    (geçiş koşulları)
 ├── model/
 │   ├── aircraft.hpp
 │   ├── weapons.hpp / weapons.cpp          (füze slotları, atış, WEZ/NEZ/F-pole)
 │   ├── world.hpp / world.cpp
 │   ├── picture.hpp                        (hesaplanan durum resmi)
+│   ├── turn_result.hpp                    (dönüş hesabının sonuç tipi)
+│   ├── tactic_id.hpp
 │   ├── kinematics.hpp
 │   ├── missile.hpp
 │   ├── flight_command.hpp
@@ -30,7 +34,7 @@ otopilot/
 │   ├── engagement.hpp / engagement.cpp
 │   ├── missile_geometry.hpp / missile_geometry.cpp
 │   ├── r_cold_formulu.md, r_cold_grafikler/      (R_cold uyumu ve ölçümü)
-│   ├── wez_formulu.md, wez_grafikler/            (WEZ dış sınırı Rmax uyumu ve ölçümü)
+│   ├── wez_grafikler/ (wez_sonuc.txt)            (WEZ dış sınırı Rmax uyumu ve ölçümü)
 │   └── fuze_ucus_tablosu.md                      (füze uçuş modeli)
 ├── io/
 │   ├── state_reader.hpp / state_reader.cpp
@@ -40,7 +44,7 @@ otopilot/
 │   ├── connection.hpp / tcp_connection.cpp
 │   └── messages.hpp
 ├── common/
-│   ├── units.hpp / angles.hpp / ned.hpp / geodesy.hpp
+│   ├── units.hpp / angles.hpp / ned.hpp / formulas.hpp
 │   └── roles.hpp
 ├── tests/
 │   └── units_test.cpp
@@ -64,13 +68,13 @@ otopilot/
 | Füze menzil, hız, pitbull, R_cold ve Rmax (WEZ) parametreleri | [model/missile_profiles.hpp](model/missile_profiles.hpp) |
 | Mesafe, bearing, ATA, aspect, LOS ve kapanma | [calculations/geometry.cpp](calculations/geometry.cpp) |
 | Dönüş süresi, yarıçapı, yer değişimi | [calculations/turn.cpp](calculations/turn.cpp) |
-| WEZ, out planı, R_cold, NEZ, MAR, DOR | [calculations/engagement.cpp](calculations/engagement.cpp) |
-| Füzenin hedefine göre hesapları | [calculations/missile_geometry.cpp](calculations/missile_geometry.cpp) |
+| WEZ, A/F-pole, TR, out planı, R_cold, NEZ, MAR, MRR, DR, DOR | [calculations/engagement.cpp](calculations/engagement.cpp) |
+| Füzenin hedefine göre hesapları ve uçuş uyumu | [calculations/missile_geometry.cpp](calculations/missile_geometry.cpp) |
 | JSON ölçümünü C++ nesnelerine okumak | [io/state_reader.cpp](io/state_reader.cpp) |
 | Uçuş ve atış komutlarını JSON'a çevirmek | [io/command_writer.cpp](io/command_writer.cpp) |
 | C++ hesabını kayıt/görüntüleyiciye çıkarmak | [io/calculation_writer.cpp](io/calculation_writer.cpp) |
 | TCP çerçeveleme ve adım sırası | [io/tcp_connection.cpp](io/tcp_connection.cpp) |
-| Birim, açı, NED ve koordinat yardımcıları | [common/](common/) |
+| Birim, açı, NED ve hareket formülü yardımcıları | [common/](common/) |
 
 ## Derleme
 

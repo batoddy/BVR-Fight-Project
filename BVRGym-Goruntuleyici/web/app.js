@@ -188,6 +188,20 @@ for(const [id,key,definitions] of [['speed-unit','speedUnit',SPEED_UNITS],['alti
 }
 unitSettings(false);
 el('close-settings').onclick=()=>el('settings-options').open=false;
+el('close-warnings').onclick=()=>el('warnings-options').open=false;
+// Uyarılar: kayıtta eksik ya da okunamayan veriler. Liste yalnız içerik değişince yeniden kurulur.
+let shownWarnings=null;
+function showWarnings(warnings){
+  const key=warnings.join('\n');
+  if(key===shownWarnings)return;
+  shownWarnings=key;
+  const items=warnings.map(text=>{const item=document.createElement('li');item.textContent=text;return item;});
+  if(!items.length){const item=document.createElement('li');item.className='empty';item.textContent='Uyarı yok.';items.push(item);}
+  el('warning-list').replaceChildren(...items);
+  el('warning-count').textContent=warnings.length?String(warnings.length):'';el('warning-count').hidden=!warnings.length;
+  el('open-warnings').classList.toggle('has-warnings',warnings.length>0);
+  el('open-warnings').title=warnings.length?'Uyarılar · '+warnings.length:'Uyarı yok';
+}
 el('reset-units').onclick=()=>{el('speed-unit').value=defaults.speedUnit;el('altitude-unit').value=defaults.altitudeUnit;el('distance-unit').value=defaults.distanceUnit;unitSettings();};
 
 const number=(value,digits=0)=>Number(value).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
@@ -293,7 +307,7 @@ function analysis(){
       zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dr:preferences.overlayDr,dor:preferences.overlayDor,tr:preferences.overlayTr}}};
 }
 // C++ aircraft.hpp enum class Phase ile aynı sırada.
-const PHASE_NAMES=['HOLD','FIRE','OUT','COMMIT','CRANK','BEAM','RECOMMIT'];
+const PHASE_NAMES=['HOLD','FIRE','OUT','COMMIT','CRANK','BEAM','RECOMMIT','NOTCH','DRAG','OFFSET','FLANK','COLLISION','FLY HEADING','SNAKE','PURE PURSUIT','LAG PURSUIT','LEAD PURSUIT'];
 function relativePanel(first,entity){
   el('relative').hidden=first.kind!=='aircraft';
   if(first.kind!=='aircraft')return;
@@ -383,7 +397,7 @@ function labels(){
   el('altitude').closest('div').querySelector('dt').textContent=altitudeReference.label;
   el('altitude').closest('div').title=altitudeReference.note;
   el('altitude-reference-note').textContent=altitudeReference.note;
-  el('record-warning').textContent=(packet.warnings||[]).join(' ');el('record-warning').hidden=!packet.warnings?.length;
+  showWarnings(packet.warnings||[]);
   let status='Kayıt bekleniyor',notice='',error=false;
   if(connectionError){status='Bağlantı kesildi';notice=connectionError;error=true;}
   else if(packet.phase==='error'){status='Kayıt okunamadı';notice=packet.error;error=true;}
