@@ -24,10 +24,10 @@ namespace
         }
     }
 
-    // enemy'nin bana doğru uçan füzelerinden bana en yakın olanı.
-    std::optional<ThreatInfo> find_threat(const Aircraft& own, const Aircraft& enemy)
+    // enemy'nin bana doğru uçan tüm füzeleri. Füzenin kendi bilgileri missile.target'tan okunur.
+    std::vector<ThreatInfo> find_threats(const Aircraft& own, const Aircraft& enemy)
     {
-        std::optional<ThreatInfo> threat;
+        std::vector<ThreatInfo> threats;
         for (const Missile& missile : enemy.weapons.missiles)
         {
             if (!missile.has_kinematics || !missile.in_flight() || missile.target_id != own.id)
@@ -35,23 +35,34 @@ namespace
                 continue;
             }
 
-            ThreatInfo candidate;
-            candidate.slot = missile.slot;
-            candidate.range_nm = missile.target.range_nm;
-            candidate.closure_kt = missile.target.closure_kt;
-            candidate.bearing_deg = geometry::bearing_deg(own.kinematics, missile.kinematics);
-            candidate.ata_deg = geometry::ata_deg(own.kinematics, missile.kinematics);
-            candidate.ta_deg = geometry::ta_deg(own.kinematics, missile.kinematics);
-            candidate.mach = missile.kinematics.mach;
-            candidate.is_pitbull = missile.target.is_pitbull;
+            ThreatInfo threat;
+            threat.slot = missile.slot;
+            threat.range_nm = missile.target.range_nm;
+            threat.closure_kt = missile.target.closure_kt;
+            threat.bearing_deg = geometry::bearing_deg(own.kinematics, missile.kinematics);
+            threat.ata_deg = geometry::ata_deg(own.kinematics, missile.kinematics);
+            threat.ta_deg = geometry::ta_deg(own.kinematics, missile.kinematics);
+            threat.mach = missile.kinematics.mach;
+            threat.is_pitbull = missile.target.is_pitbull;
+            threat.a_pole_nm = missile.target.a_pole_nm;
+            threat.f_pole_nm = missile.target.f_pole_nm;
+            threats.push_back(threat);
+        }
+        return threats;
+    }
 
-            const bool is_closer = !threat.has_value() || candidate.range_nm < threat->range_nm;
-            if (is_closer)
+    // Tehditlerden bana en yakın olanı; füze yoksa yok.
+    std::optional<ThreatInfo> closest_threat(const std::vector<ThreatInfo>& threats)
+    {
+        std::optional<ThreatInfo> closest;
+        for (const ThreatInfo& threat : threats)
+        {
+            if (!closest.has_value() || threat.range_nm < closest->range_nm)
             {
-                threat = candidate;
+                closest = threat;
             }
         }
-        return threat;
+        return closest;
     }
 
     // own'un gözünden enemy: own.picture'ı doldurur. Sıra önemli: geometri → out planı → kaçış → tehdit.
@@ -83,7 +94,9 @@ namespace
         picture.is_in_dor = engagement::in_dor(own, enemy);
         
 
-        picture.threat = find_threat(own, enemy);
+        picture.threats = find_threats(own, enemy);
+        picture.threat = closest_threat(picture.threats);
+        picture.closest_stay_away_nm = engagement::closest_stay_away_nm(picture.threats);
     }
 
     // own'un ana silahının enemy'ye karşı durumu: own.weapons'ın hesaplanan alanları. own.picture'dan sonra çağrılır.
@@ -124,4 +137,10 @@ void World::update()
     // İkisi de bu step hesaplandıktan sonra kopyalanır; önce kopyalansa önceki step'in değeri gelirdi.
     fighter.picture.me_in_enemy_wez = hostile.weapons.enemy_in_wez;
     hostile.picture.me_in_enemy_wez = fighter.weapons.enemy_in_wez;
+
+    // Düşmanın "şimdi atsa" poleları: onun weapons hesabından, aynı sebeple compute_weapons'tan sonra.
+    fighter.picture.enemy_a_pole_nm = hostile.weapons.a_pole_nm;
+    hostile.picture.enemy_a_pole_nm = fighter.weapons.a_pole_nm;
+    fighter.picture.enemy_f_pole_nm = hostile.weapons.f_pole_nm;
+    hostile.picture.enemy_f_pole_nm = fighter.weapons.f_pole_nm;
 }

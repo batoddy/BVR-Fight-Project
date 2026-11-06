@@ -65,7 +65,7 @@ std::optional<double> engagement::a_pole_nm(const Aircraft& own, const Aircraft&
     {
         return std::nullopt;   // füze o mesafeye erişemez
     }
-    return range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s);
+    return (range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - 1);
 }
 
 std::optional<double> engagement::f_pole_nm(const Aircraft& own, const Aircraft& enemy)
@@ -76,7 +76,7 @@ std::optional<double> engagement::f_pole_nm(const Aircraft& own, const Aircraft&
     {
         return std::nullopt;   // füze o mesafeye erişemez
     }
-    return range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s);
+    return (range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - 1);
 }
 
 
@@ -88,7 +88,7 @@ std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& ene
     {
         return std::nullopt;   // füze o mesafeye erişemez
     }
-    return range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s);
+    return (range_nm - travel_distance_nm(own.picture.closure_kt, *flight_time_s) - 1);
 }
 
 
@@ -271,4 +271,17 @@ bool engagement::in_dor(const Aircraft& own, const Aircraft& enemy)
 {
     const double range_nm = geometry::range_3d_nm(own.kinematics, enemy.kinematics);
     return range_nm <= dor_nm(own, enemy);
+}
+
+std::optional<double> engagement::closest_stay_away_nm(const std::vector<ThreatInfo>& threats)
+{
+    std::optional<double> closest_nm;
+    for (const ThreatInfo& threat : threats)
+    {
+        if (threat.stay_away_nm.has_value() && (!closest_nm.has_value() || *threat.stay_away_nm > *closest_nm))
+        {
+            closest_nm = threat.stay_away_nm;
+        }
+    }
+    return closest_nm;
 }

@@ -23,6 +23,9 @@ bool Weapons::fire(const MissileProfile& profile)
         {
             missile.is_fired = true;
             missile.fire_order = fired_count + 1;
+            // Atış anındaki tahmin füzeyle gider; uçuş boyunca güncellenmez.
+            missile.target.a_pole_nm = a_pole_nm;
+            missile.target.f_pole_nm = f_pole_nm;
             has_launch_order = true;
             return true;
         }

@@ -29,6 +29,8 @@ struct MissileTargetInfo
     double range_nm = 0;                   // NM, füze ile hedef arası 3B mesafe
     double closure_kt = 0;                 // kt, füze ile hedef arası mesafenin azalma hızı; + yaklaşıyor
     bool is_pitbull = false;               // füze kendi radarıyla hedefi görüyor mu; bir kez true olunca kalır
+    std::optional<double> a_pole_nm;       // NM, atış anındaki weapons.a_pole_nm (Weapons::fire); uçuşta sabit
+    std::optional<double> f_pole_nm;       // NM, atış anındaki weapons.f_pole_nm (Weapons::fire); uçuşta sabit
 };
 
 // Uçağın füze slotlarından biri. Liste ilk step'te Python'daki füze sayısı kadar kurulur,

@@ -389,15 +389,31 @@ namespace
             missile.target_id = "blue";
             missile.kinematics = place(world.fighter.kinematics, 0, slot == 0 ? 12 : 6);
             missile.kinematics.velocity_ned_kt.north = -1500;
+            missile.target.a_pole_nm = 20.0 + slot;
+            missile.target.f_pole_nm = 10.0 + slot;
             world.hostile.weapons.missiles.push_back(missile);
         }
 
         world.update();
         require(world.fighter.enemy_id == "red", "enemy assigned");
+        require(world.fighter.picture.threats.size() == 2, "every inbound missile is scanned");
         require(world.fighter.picture.threat.has_value(), "threat found");
         require(world.fighter.picture.threat->slot == 1, "closest missile is the threat");
         near(world.fighter.picture.threat->bearing_deg, 0, "threat bearing", 1e-6);
+        near(*world.fighter.picture.threats[0].a_pole_nm, 20, "A-pole read from missile");
+        near(*world.fighter.picture.threats[1].f_pole_nm, 11, "F-pole read from missile");
+        require(!world.fighter.picture.closest_stay_away_nm.has_value(), "no stay-away value yet");
+        require(world.hostile.picture.threats.empty(), "no threat list against hostile");
         require(!world.hostile.picture.threat.has_value(), "no missile against hostile");
+        require(!world.hostile.picture.closest_stay_away_nm.has_value(), "no stay-away without missile");
+
+        // Uzak durma sınırı: tüm füzeleri sağlayan en kısa menzil; değeri olmayan füze atlanır.
+        std::vector<ThreatInfo> stay_away_threats(3);
+        require(!engagement::closest_stay_away_nm({}).has_value(), "empty list has no stay-away");
+        require(!engagement::closest_stay_away_nm(stay_away_threats).has_value(), "missiles without value");
+        stay_away_threats[0].stay_away_nm = 20;
+        stay_away_threats[2].stay_away_nm = 25;
+        near(*engagement::closest_stay_away_nm(stay_away_threats), 25, "stay-away satisfies every missile");
         // Silah ve kaçış hesapları main_weapon'dan; füze slotu olmasa da hesaplanır.
         require(world.hostile.picture.mar_nm > 0, "MAR from main weapon without missile slots");
         near(world.fighter.picture.dr_nm, engagement::dr_nm(world.fighter, world.hostile), "fighter DR computed");

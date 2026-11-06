@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include "common/ned.hpp"
 
@@ -33,6 +34,9 @@ struct ThreatInfo
     double ta_deg = 0;                     // derece ±180, Target Aspect: füzenin burnu bana göre; 0 bana dönük
     double mach = 0;                       // birimsiz, füzenin hızı
     bool is_pitbull = false;               // füzenin arayıcısı beni kendi görüyor mu
+    std::optional<double> a_pole_nm;       // NM, füzenin A-pole'u (missile.target'tan)
+    std::optional<double> f_pole_nm;       // NM, füzenin F-pole'u (missile.target'tan)
+    std::optional<double> stay_away_nm;    // NM, bu füze için uzak durmam gereken menzil; hesap eklenene kadar yok
 };
 
 // own'un atanmış düşmana göre durum resmi: geometri ve kaçış (düşmanın füzesine karşı).
@@ -56,6 +60,8 @@ struct Picture
     // Kaçış: düşmanın füzesine karşı | engagement::
     OutPlan out;                       // şimdi out yapsam
     bool me_in_enemy_wez = false;      // ben düşmanın WEZ'inde miyim (onun weapons.enemy_in_wez'i)
+    std::optional<double> enemy_a_pole_nm;   // NM, düşman şimdi atsa A-pole'u (onun weapons.a_pole_nm'i)
+    std::optional<double> enemy_f_pole_nm;   // NM, düşman şimdi atsa F-pole'u (onun weapons.f_pole_nm'i)
     double r_cold_nm = 0;              // NM, kaçarken düşman füzesinin (main_weapon) yetişebileceği mesafe
     double nez_nm = 0;                 // NM, düşmanın füzesinden kaçamayacağım mesafe (onun NEZ'i)
     double mar_nm = 0;                 // NM, Minimum Abort Range
@@ -64,6 +70,10 @@ struct Picture
     bool is_in_mar = false;            // range_3d_nm <= mar_nm
     bool is_in_dor = false;
 
+    // Bana gelen düşman füzeleri; her step baştan taranır, füze yoksa boş
+    std::vector<ThreatInfo> threats;
     // Bana gelen en yakın düşman füzesi; yoksa yok
     std::optional<ThreatInfo> threat;
+    // NM, tüm füzeler için uzak durmam gereken en kısa menzil; değer yoksa yok
+    std::optional<double> closest_stay_away_nm;
 };

@@ -68,4 +68,8 @@ namespace engagement
 
     /// own, enemy'ye karşı DOR'ının içinde mi: menzil ≤ DOR
     bool in_dor(const Aircraft& own, const Aircraft& enemy);
+
+    /// NM, tüm füzelerin uzak durma menzillerini sağlayan en kısa menzil: en büyük stay_away_nm.
+    /// Dışarıdan yaklaşırken ilk varılan sınır da budur. Hiçbir füzede değer yoksa std::nullopt.
+    std::optional<double> closest_stay_away_nm(const std::vector<ThreatInfo>& threats);
 }
