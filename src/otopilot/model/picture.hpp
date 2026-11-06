@@ -48,11 +48,8 @@ struct Picture
     bool is_in_mar = false;            // range_3d_nm <= mar_nm
     bool is_in_dor = false;            // range_3d_nm <= dor_nm
 
-    // Bana gelen düşman füzelerinin adresleri (enemy.weapons.missiles içinde); her step baştan taranır, füze yoksa boş.
-    // Füzenin bana göre bilgileri missile->target'ta. Adresleri sonraki step'e saklama.
-    std::vector<const Missile*> threats;
-    // Bana gelen en yakın düşman füzesi; yoksa nullptr
-    const Missile* threat = nullptr;
-    // Bana gelen düşman füzesi var mı. NOT: gerçek "spike" radar kilididir; radar modeli yokken füze geliyor mu'ya bakılır.
-    bool is_spiked = false;
+    // Tehditler: enemy.weapons.missiles içine adres; her step baştan taranır. Bilgileri missile->target'ta; sonraki step'e saklanmaz.
+    std::vector<const Missile*> threats;   // bana gelen bütün düşman füzeleri; yoksa boş
+    const Missile* threat = nullptr;       // bana en yakın olanı; yoksa nullptr
+    bool is_spiked = false;                // bana füze geliyor mu. NOT: gerçek spike radar kilididir, radar modeli yok
 };

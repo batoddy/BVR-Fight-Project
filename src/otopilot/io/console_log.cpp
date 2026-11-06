@@ -5,8 +5,7 @@
 
 namespace
 {
-    // Tek satırda uçağın durumu.
-    void print_aircraft(const Aircraft& aircraft)
+    void print_aircraft(const Aircraft& aircraft)   // tek satırda uçağın durumu
     {
         const Kinematics& kinematics = aircraft.kinematics;
         std::cout << aircraft.id
@@ -20,8 +19,7 @@ namespace
                   << "  kalan " << aircraft.weapons.missiles_left() << '/' << aircraft.weapons.missiles.size();
     }
 
-    // Havadaki füzelerim, atış sırasıyla: sıra, slot, hedefe uzaklık, pitbull.
-    void print_active_missiles(const Aircraft& own)
+    void print_active_missiles(const Aircraft& own)   // havadaki füzelerim, atış sırasıyla: sıra, slot, hedefe uzaklık, pitbull
     {
         for (const Missile* missile : own.weapons.active_missiles())
         {

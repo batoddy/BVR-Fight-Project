@@ -2,22 +2,18 @@
 
 // ========================================================================================================
 // TACTICS
-//
-//   start(own, tactic)        önceki taktiğin exit()'i, sonra bu taktiğin start()'ı
-//   update(own, maneuvers)    çalışan taktiğin update()'i
 // ========================================================================================================
 
+// NOT: yeni taktik öncekinin son manevrasıyla başlarsa (Skate'in Out'u → Abort'un Out'u) Maneuvers::fly
+// enter()'ı yeniden çağırmaz. Gerekirse: maneuvers.restart().
 void Tactics::start(Aircraft& own, Tactic& tactic)
 {
     if (active_ != nullptr && active_ != &tactic)
     {
-        active_->exit(own);
+        active_->exit(own);   // yarıda kalan taktik kalıcı komutlarını temizler
     }
     tactic.start(own);
     active_ = &tactic;
-
-    // Açık konu: yeni taktik, öncekinin son manevrasıyla başlarsa Maneuvers::fly enter()'ı yeniden çağırmaz
-    // (ör. Skate'in Out'u → Abort'un Out'u). Gerekirse: maneuvers.restart();
 }
 
 void Tactics::update(Aircraft& own, Maneuvers& maneuvers)
@@ -27,7 +23,6 @@ void Tactics::update(Aircraft& own, Maneuvers& maneuvers)
         return;
     }
     active_->update(own, maneuvers);
-
     // own.tactic = active_->id();   // Aircraft'a alan, CSV'ye ve görüntüleyiciye sütun eklenince
 }
 
@@ -41,18 +36,11 @@ namespace tactic
 void Commit::update(Aircraft& own, Maneuvers& maneuvers)
 {
     maneuvers.fly(own, maneuvers.commit);
-
-    // Kendi içinde bitmek isterse örnek:
-    // if (condition::in_mar(own)) { finish(); }
+    // if (condition::in_mar(own)) { finish(); }   // kendi içinde bitmek isterse örnek
 }
 
 // ========================================================================================================
-// SKATE AİLESİ
-//
-//   skate_rule::*            ailenin geçiş kuralları
-//   enter(own)               ilk adım Approach
-//   update(own, maneuvers)   Approach → Shoot → Support → Out → bitti
-//   exit(own)                İSKELET: yarıda kesilirse g sınırı
+// SKATE AİLESİ  —  Approach → Shoot → Support → Out → bitti
 // ========================================================================================================
 
 namespace skate_rule
@@ -66,16 +54,14 @@ namespace skate_rule
     bool long_shot_range(const Aircraft& own)
     {
         (void)own;
-        // Örnek: WEZ'in dış kısmında at.
-        // return own.picture.range_3d_nm < own.weapons.wez.max_nm * 0.9;
+        // return own.picture.range_3d_nm < own.weapons.wez.max_nm * 0.9;   // örnek: WEZ'in dış kısmında at
         return false;
     }
 
     bool long_out_range(const Aircraft& own)
     {
         (void)own;
-        // Örnek: DOR'a bir pay kala çık.
-        // return own.picture.range_3d_nm < own.picture.dor_nm + 5.0;
+        // return own.picture.range_3d_nm < own.picture.dor_nm + 5.0;       // örnek: DOR'a bir pay kala çık
         return false;
     }
 }
@@ -86,8 +72,7 @@ void Skate::enter(const Aircraft& own)
     step_ = Step::Approach;
 }
 
-// otopilot_fighter'daki Commit → FirstShot → FirstSupport → FirstEscape akışı; kurallar params_'tan.
-void Skate::update(Aircraft& own, Maneuvers& maneuvers)
+void Skate::update(Aircraft& own, Maneuvers& maneuvers)   // otopilot_fighter'ın ilk yarısı; kurallar params_'tan
 {
     switch (step_)
     {
@@ -103,9 +88,8 @@ void Skate::update(Aircraft& own, Maneuvers& maneuvers)
         }
         break;
 
-    // Atış manevra değil: Approach'un komutu sürer. Emir kabul edilmezse (önceki emir henüz uçmadı) tekrar denenir.
-    case Step::Shoot:
-        if (own.weapons.fire(own.profile.main_weapon))
+    case Step::Shoot:                                       // manevra uçmaz, Approach'un komutu sürer
+        if (own.weapons.fire(own.profile.main_weapon))      // kabul edilmezse (önceki emir uçmadı) sonraki step tekrar
         {
             go_to(Step::Support);
         }
@@ -132,11 +116,7 @@ void Skate::update(Aircraft& own, Maneuvers& maneuvers)
 void Skate::exit(Aircraft& own)
 {
     (void)own;
-    // Gazı sonraki manevra kendisi yazar; Out'un g sınırı ise komutta kalır. Yarıda kesilirse:
-    // if (step_ == Step::Out)
-    // {
-    //     own.command.clear_g_limit();
-    // }
+    // if (step_ == Step::Out) { own.command.clear_g_limit(); }   // örnek: out yarıda kesilirse g sınırını bırak
 }
 
 // ========================================================================================================
@@ -186,8 +166,7 @@ void Banzai::update(Aircraft& own, Maneuvers& maneuvers)
 // RECOMMIT  —  düşmana dönüp atış açısına gel
 // ========================================================================================================
 
-// otopilot_fighter'daki eski Recommit durumu; gazı Recommit manevrası yazar.
-void Recommit::update(Aircraft& own, Maneuvers& maneuvers)
+void Recommit::update(Aircraft& own, Maneuvers& maneuvers)   // otopilot_fighter'ın Recommit durumu
 {
     maneuvers.fly(own, maneuvers.recommit);
     if (maneuvers.recommit.status(own) == ManeuverStatus::Done)
@@ -200,8 +179,7 @@ void Recommit::update(Aircraft& own, Maneuvers& maneuvers)
 // ABORT  —  out; düşman arkada kalınca biter
 // ========================================================================================================
 
-// otopilot_fighter'daki eski FinalEscape durumu.
-void Abort::update(Aircraft& own, Maneuvers& maneuvers)
+void Abort::update(Aircraft& own, Maneuvers& maneuvers)   // otopilot_fighter'ın FinalEscape durumu
 {
     maneuvers.fly(own, maneuvers.out);
     if (maneuvers.out.status(own) == ManeuverStatus::Done)
@@ -275,11 +253,9 @@ void NotchDefense::update(Aircraft& own, Maneuvers& maneuvers)
     (void)maneuvers;
 
     // maneuvers.fly(own, maneuvers.notch);
-    // if (!condition::is_spiked(own)) { finish(); }   // füze geçti ya da bitti
-    //
-    // Füze çok yakınsa notch yerine drag (ileride ayrı kural):
+    // if (!condition::is_spiked(own)) { finish(); }                                                     // füze geçti ya da bitti
     // const Missile* threat = own.picture.threat;
-    // if (threat != nullptr && threat->target.range_nm < 5.0) { maneuvers.fly(own, maneuvers.drag); }
+    // if (threat != nullptr && threat->target.range_nm < 5.0) { maneuvers.fly(own, maneuvers.drag); }   // füze çok yakın: notch yerine drag
 }
 
 // ========================================================================================================

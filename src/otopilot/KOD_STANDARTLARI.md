@@ -102,36 +102,24 @@ Hesap ve manevra kodu bir insanın formülü kâğıttan takip eder gibi okuyabi
 - **Seçim `if` ile yazılır**, iç içe ya da uzun `?:` ile değil. Kısa bir durum geçişi (`return in_mar ? Out : Hold;`) kalabilir.
 - **Hız × süre hesapları** `travel_distance_nm(speed_kt, time_s)` ve `travel_time_s(distance_nm, speed_kt)` ile, sabit ivmeli olanlar `accel_travel_distance_nm` ve `accel_travel_time_s` ile yazılır (`common/formulas.hpp`); formülde `3600` görünmez.
 
-- **Her bilgi tek yerde:** `.hpp` *ne yaptığını*, `.cpp` *nasıl yaptığını* söyler; aynı cümle iki kez yazılmaz.
-- **`.hpp`, fonksiyonlar:** Doxygen biçimi (`///`), fonksiyon bildiriminin hemen üstünde. Tek satır yeter: ne yaptığı / ne döndürdüğü, birimi, ne zaman "yok" döndüğü. Gerekirse ikinci `///` satırı. `@param` yalnız bilgi veren parametrede (birim, anlam), `own` gibi her yerde aynı olanlarda yazılmaz.
+- **Yorum satırın yanına yazılır, üstüne değil.** Bildirim, alan, sabit, `if` dalı ya da tek satırlık işlem kendi satırının sonunda `//` ile açıklanır. Üste yalnız satıra sığmayan bilgi yazılır: sınıfın amacı, bir formülün türetmesi, `NOT:`. Gereksiz yorum yazılmaz; adı her şeyi söyleyen satır açıklanmaz.
   ```cpp
-  /// NM, F-pole: own'un füzesi enemy'ye vardığında iki uçak arasında kalan mesafe. Füze yetişemiyorsa yok.
-  std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);
+  void enter(const Aircraft& own) override;                     // hedef irtifayı kilitler: DESCEND_FT alçal, FLOOR_FT altına inme
+  static constexpr double DONE_ATA_DEG = 177.0;                 // derece, |ATA| bunu geçince düşman arkada
   ```
-- **`.hpp`, geri kalan her şey düz `//`:** değişken, alan, sabit ve enum değerleri satır sonunda tek satırlık `//` ile; sınıf, struct, enum ve dosya/namespace açıklamaları üstte `//` ile. Bunlara Doxygen yazılmaz.
-- **Taktik dosyaları** (`otopilot_fighter`, `otopilot_hostile`, `tactic`) Doxygen kullanmaz; düz `//`.
+- **Her bilgi tek yerde:** `.hpp` *ne yaptığını*, `.cpp` *nasıl yaptığını* söyler; aynı cümle iki kez yazılmaz.
+- **`.hpp`, fonksiyonlar:** satır sonunda tek satır `//`: ne yaptığı / ne döndürdüğü, birimi, ne zaman "yok" döndüğü. Satıra sığmıyorsa (uzun formül, çok koşul) bildirimin üstünde `//` ile.
+- **Alan yorumu:** `birim, anlam | kaynak ya da yazan`, satır sonunda.
 - **Adı her şeyi söyleyen tek satırlık yardımcılar** (ör. `meter_to_nmile`) tek tek açıklanmaz; grubun üstüne bir `//` yeter.
-- **`.cpp`:** formül ve türetmesi, düz `//`.
-- **Alan yorumu:** `birim, anlam | kaynak ya da yazan`.
-- **Bölüm banner'ı:** bir dosyada birden çok sınıf varsa (ör. `maneuver.hpp/.cpp`) her sınıf bir banner'la başlar, düz `//`.
-  - `.hpp`'de yalnız ad ve tek satır özet (fonksiyonları Doxygen anlatır):
-    ```cpp
-    // =============================================================================
-    // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
-    // =============================================================================
-    ```
-  - `.cpp`'de altına fonksiyon listesi de eklenir (içindekiler gibi; formül yorumları uzun olduğu için):
-    ```cpp
-    // =============================================================================
-    // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
-    //
-    //   enter(own)    girişte bir kez: hedef irtifayı kilitler
-    //   update(own)   her step: bearing − 180'e dön, hedef irtifaya in, tam gaz
-    //   status(own)   düşman arkamda kaldıysa Done
-    // =============================================================================
-    ```
+- **`.cpp`:** formülün türetmesi fonksiyonun üstünde, adımları satır sonunda `//`.
+- **Bölüm banner'ı:** bir dosyada birden çok sınıf varsa (ör. `maneuver.hpp/.cpp`) her sınıf yalnız ad ve tek satır özetli bir banner'la başlar; fonksiyon listesi yazılmaz (fonksiyonları `.hpp`'deki satır sonu yorumları anlatır):
+  ```cpp
+  // =============================================================================
+  // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
+  // =============================================================================
+  ```
 - **Ölü kod:** yorum satırına alınmış kod bırakılmaz; eski hali git'te durur. Planlanan iş `// TODO:` satırıyla belirtilir.
-- **Bilinen ama bilerek dokunulmayan bir mantık hatası** `// NOT:` ile açıklanır (fonksiyonun doc yorumundaysa `/// NOT:`).
+- **Bilinen ama bilerek dokunulmayan bir mantık hatası** `// NOT:` ile açıklanır.
 - Kodu değiştiren, ilgili yorumu aynı değişiklikte günceller.
 
 ## 10. Biçim

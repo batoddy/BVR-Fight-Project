@@ -28,8 +28,7 @@ void StateReader::read_world(const Json& data, World& world)
         }
     }
 
-    // Biri eksikse sessizce 0'larla devam etme: otonomi 0,0 koordinatına göre karar verirdi.
-    if (!fighter_found || !hostile_found)
+    if (!fighter_found || !hostile_found)   // sessizce 0'larla devam etme: otonomi 0,0 koordinatına göre karar verirdi
     {
         throw std::runtime_error(std::string("aircraft icinde ") + FIGHTER_ID + " veya " + HOSTILE_ID + " yok");
     }
@@ -47,8 +46,7 @@ FlightCommand StateReader::read_flight_command(const Json& data, const std::stri
     {
         if (json.at("id").get<std::string>() == id)
         {
-            // Python g_limit'i geri göndermez: her step g sınırı yok başlar, manevra gerekirse koyar.
-            FlightCommand command;
+            FlightCommand command;   // g_limit Python'dan gelmez: her step yok başlar, manevra koyar
             command.set_heading_deg(json.at("heading_deg").get<double>())                // 0..360 -> ±180
                    .set_altitude_ft(meter_to_feet(json.at("altitude_m").get<double>()))  // m → ft
                    .set_throttle(json.at("throttle").get<double>());                    // 0..1
@@ -56,8 +54,7 @@ FlightCommand StateReader::read_flight_command(const Json& data, const std::stri
         }
     }
 
-    // Bulunamazsa sessizce 0 bırakma: uçak 0 yöne, 0 irtifaya giderdi.
-    throw std::runtime_error("flight_commands icinde ucak yok: " + id);
+    throw std::runtime_error("flight_commands icinde ucak yok: " + id);   // 0 bırakılsa uçak 0 yöne, 0 irtifaya giderdi
 }
 
 void StateReader::read_aircraft(const Json& json, Aircraft& aircraft)
@@ -67,9 +64,8 @@ void StateReader::read_aircraft(const Json& json, Aircraft& aircraft)
     aircraft.team = json.at("team").get<std::string>();
     aircraft.health = json.at("health").get<double>();   // 0..1
 
-    // Profil JSON'dan değil: type ile tablodan. Yalnız tip değişince (ilk step) kopyalanır.
     const std::string type = json.at("type").get<std::string>();
-    if (type != aircraft.type)
+    if (type != aircraft.type)   // profil JSON'dan değil, tablodan; yalnız tip değişince (ilk step) kopyalanır
     {
         aircraft.type = type;
         aircraft.profile = aircraft_profile(type);
@@ -89,8 +85,7 @@ void StateReader::read_kinematics(const Json& json, Kinematics& kinematics)
     kinematics.tas_kt = mps_to_knot(json.at("tas_mps").get<double>());          // m/s → kt
     kinematics.mach = json.at("mach").get<double>();                            // birimsiz
 
-    // Python m/s gönderir; üç NED hız bileşenini de knot'a çevir.
-    const Json& velocity = json.at("velocity_ned_mps");
+    const Json& velocity = json.at("velocity_ned_mps");                         // m/s → kt, üç bileşen
     kinematics.velocity_ned_kt.north = mps_to_knot(velocity.at(0).get<double>());
     kinematics.velocity_ned_kt.east = mps_to_knot(velocity.at(1).get<double>());
     kinematics.velocity_ned_kt.down = mps_to_knot(velocity.at(2).get<double>());
@@ -98,8 +93,7 @@ void StateReader::read_kinematics(const Json& json, Kinematics& kinematics)
 
 void StateReader::read_missiles(const Json& data, Aircraft& aircraft)
 {
-    // İlk step: slotları kur. Sayı Python'dan (scenario.yaml ammo), tipler uçak profilinin yükünden.
-    if (aircraft.weapons.missiles.empty())
+    if (aircraft.weapons.missiles.empty())   // ilk step: slotları kur; sayı Python'dan (ammo), tipler profilin yükünden
     {
         int count = 0;
         for (const Json& json : data.at("missiles"))
@@ -127,33 +121,29 @@ void StateReader::read_missiles(const Json& data, Aircraft& aircraft)
         }
     }
 
-    // Her step: Python'da uçan ya da bitmiş füzeleri slotlarımıza eşleştir ve doldur.
-    for (const Json& json : data.at("missiles"))
+    for (const Json& json : data.at("missiles"))   // her step: uçan ya da bitmiş füzeleri slotlara eşleştir
     {
-        // Başka uçağın füzesi bizi ilgilendirmez; atılmamış füzenin bilgisi zaten slotta.
-        if (json.at("owner_id").get<std::string>() != aircraft.id)
+        if (json.at("owner_id").get<std::string>() != aircraft.id)   // başka uçağın füzesi
         {
             continue;
         }
         const MissileState state = read_missile_state(json.at("state").get<std::string>());
-        if (state == MissileState::Ready)
+        if (state == MissileState::Ready)                             // atılmamış füzenin bilgisi zaten slotta
         {
             continue;
         }
 
-        // Bu Python füzesi hangi slotumuz? Önce daha önce eşleşmiş mi diye bak.
         const std::string python_id = json.at("id").get<std::string>();
-        Missile* match = nullptr;   // yalnız bu fonksiyon içinde kullanılır; saklanmaz
+        Missile* match = nullptr;                                     // yalnız bu fonksiyonda; saklanmaz
         for (Missile& missile : aircraft.weapons.missiles)
         {
-            if (missile.python_id == python_id)
+            if (missile.python_id == python_id)                       // daha önce eşleşmiş
             {
                 match = &missile;
             }
         }
 
-        // Eşleşmemişse yeni uçmaya başlamıştır: atılmış ama henüz eşleşmemiş en eski atışa bağla.
-        if (match == nullptr)
+        if (match == nullptr)                                         // yeni uçmaya başladı: eşleşmemiş en eski atışa bağla
         {
             for (Missile& missile : aircraft.weapons.missiles)
             {
@@ -169,8 +159,7 @@ void StateReader::read_missiles(const Json& data, Aircraft& aircraft)
             }
         }
 
-        // Hâlâ eşleşmediyse bizim weapons.fire ile atmadığımız bir füzedir: yok say.
-        if (match == nullptr)
+        if (match == nullptr)                                         // weapons.fire ile atmadığımız füze: yok say
         {
             continue;
         }

@@ -12,11 +12,10 @@ Json CalculationWriter::write(const World& world)
     return data;
 }
 
+// Anahtar adları CSV sütun adı olur; birim adın sonunda (_nm, _kt, _deg). Sütunlar her step aynı kalmalı (recorder.py).
+// Tel biçimi şimdilik eski adlarla: aspect_deg, rate_of_closure_kt, enemy_closing_kt, stern_wez_nm. Değeri olmayan hesap 0 yazılır.
 Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
 {
-    // Anahtar adları CSV sütun adı olur; birim adın sonunda (_nm, _kt, _deg).
-    // Tel biçimi şimdilik eski adlarla: rate_of_closure_kt, enemy_closing_kt, stern_wez_nm.
-    // Değeri olmayan (optional) hesaplar 0 yazılır.
     const Picture& picture = own.picture;
 
     Json json;
@@ -45,19 +44,17 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
     json["f_pole_nm"] = own.weapons.f_pole_nm.value_or(0.0);
     json["tr_nm"] = own.weapons.tr_nm.value_or(0.0);
 
-    // Tehdit: füze yoksa 0. Sütunlar her step aynı kalmalı (recorder.py); pitbull 0/1, okuyucu sayı bekler.
-    const Missile* threat = picture.threat;
+    const Missile* threat = picture.threat;                                    // füze yoksa 0
     json["threat_range_nm"] = threat ? threat->target.range_nm : 0.0;
     json["threat_mach"] = threat ? threat->kinematics.mach : 0.0;
-    json["threat_pitbull"] = (threat && threat->target.is_pitbull) ? 1 : 0;
+    json["threat_pitbull"] = (threat && threat->target.is_pitbull) ? 1 : 0;   // 0/1: okuyucu sayı bekler
 
-    // Sabit: profil. Görüntüleyici radar açısını ve WEZ'i bunlarla çizer.
-    json["radar_gimbal_deg"] = own.profile.radar_gimbal_deg;   // yarım açı (60 = ±60)
+    json["radar_gimbal_deg"] = own.profile.radar_gimbal_deg;   // görüntüleyici radar konisini çizer; yarım açı (60 = ±60)
     json["radar_range_nm"] = own.profile.radar_range_nm;
     json["wez_min_range_nm"] = own.weapons.wez.min_nm;         // main_weapon'a göre, bu step'in WEZ'i
     json["wez_max_range_nm"] = own.weapons.wez.max_nm;         // düşmanın yönüne göre değişir
-    // Sabit CSV alanı: farklı mühimmat sayılarında da sütunlar değişmez.
-    Json pitbull_slots = Json::array();
+
+    Json pitbull_slots = Json::array();                        // tek metin alanı: mühimmat sayısı değişse de sütunlar sabit
     for (const Missile& missile : own.weapons.missiles)
     {
         if (missile.target.is_pitbull)
@@ -67,8 +64,7 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
     }
     json["pitbull_missile_slots"] = pitbull_slots.dump();
 
-    // Havadaki füzelerimin hedefe yetişmesine kalan süre: {"slot": s}. Değeri olmayan füze yazılmaz.
-    Json catch_times = Json::object();
+    Json catch_times = Json::object();                         // havadaki füzelerimin kalan süresi {"slot": s}; değeri yoksa yazılmaz
     for (const Missile& missile : own.weapons.missiles)
     {
         if (missile.in_flight() && missile.target.catch_time_left_s.has_value())

@@ -4,8 +4,6 @@
 
 bool Weapons::fire(const MissileProfile& profile)
 {
-    // Emri verilmiş ama Python'un henüz uçurmadığı bir füzemiz varken yenisini verme:
-    // iki emir aynı step'te giderse tek launch gider, eşleştirme kayar. Havadaki füze engel değil.
     int fired_count = 0;
     for (const Missile& missile : missiles)
     {
@@ -14,7 +12,7 @@ bool Weapons::fire(const MissileProfile& profile)
             fired_count += 1;
             if (missile.python_id.empty())
             {
-                return false;   // emri verilmiş ama henüz uçmamış
+                return false;   // emri verilmiş ama henüz uçmamış: ikinci emir eşleştirmeyi kaydırırdı
             }
         }
     }
@@ -25,8 +23,7 @@ bool Weapons::fire(const MissileProfile& profile)
         {
             missile.is_fired = true;
             missile.fire_order = fired_count + 1;
-            // Atış anındaki tahmin füzeyle gider; uçuş boyunca güncellenmez.
-            missile.target.a_pole_nm = a_pole_nm;
+            missile.target.a_pole_nm = a_pole_nm;   // atış anındaki tahmin; uçuşta güncellenmez
             missile.target.f_pole_nm = f_pole_nm;
             has_launch_order = true;
             return true;

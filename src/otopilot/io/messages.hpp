@@ -20,8 +20,7 @@ struct Message
     std::uint64_t tick = 0;  // adım numarası
     Json data;
 
-    /// Mesajı tek satır JSON'a çevir.
-    std::string encode() const
+    std::string encode() const                           // tek satır JSON
     {
         Json value;
         value["kind"] = kind;
@@ -30,13 +29,11 @@ struct Message
         return value.dump() + "\n";
     }
 
-    /// Tek satır JSON'u mesaja çevir; biçim yanlışsa hata ver.
-    static Message decode(const std::string& line)
+    static Message decode(const std::string& line)       // tek satır JSON'dan; biçim yanlışsa hata
     {
         Json value = Json::parse(line);
 
-        // Mesaj tam olarak kind, tick ve data alanlarından oluşmalı.
-        bool shape_ok = value.is_object() && value.size() == 3;
+        bool shape_ok = value.is_object() && value.size() == 3;   // tam olarak kind, tick ve data
         bool kind_ok = value.contains("kind") && value.at("kind").is_string();
         bool tick_ok = value.contains("tick") && value.at("tick").is_number_unsigned();
         bool data_ok = value.contains("data") && value.at("data").is_object();

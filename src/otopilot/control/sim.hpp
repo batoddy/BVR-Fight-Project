@@ -10,8 +10,7 @@
 class Sim
 {
 public:
-    /// Bir step: state mesajını işler, Python'a gidecek command mesajını döner.
-    Message step(const Message& state);
+    Message step(const Message& state);   // state mesajını işler, Python'a gidecek command mesajını döner
 
 private:
     static constexpr bool PRINT_LOG = false;   // true: terminale saniyede bir durum satırı (ConsoleLog)

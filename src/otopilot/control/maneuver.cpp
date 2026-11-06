@@ -2,14 +2,11 @@
 
 #include <cmath>
 
-#include "calculations/geometry.hpp"
 #include "common/angles.hpp"
+#include "calculations/geometry.hpp"
 
 // ========================================================================================================
 // ORTAK
-//
-//   los_lead_deg(own)               yön kontrolünün gecikmesine karşı hedef yönün ne kadar ileri alınacağı
-//   Maneuvers::fly(own, maneuver)   değişen manevraya giriş yapar, ardından fazı ve komutu yazar
 // ========================================================================================================
 
 namespace
@@ -17,17 +14,16 @@ namespace
     constexpr double HEADING_LAG_S = 2.0;   // s, yön kontrolünün gecikmesi (flight_control.py TAU_HEAD)
     constexpr double LOS_RATE_KP = 1.3;     // birimsiz, gecikme payının çarpanı
 
-    // Düşmana göre açı tutan manevralar (Crank, Recommit) için: bearing kaydıkça uçak geride kalır.
-    //   gecikme payı = LOS_RATE_KP × HEADING_LAG_S × LOS hızı
+    // Bearing kaydıkça uçak hedef yönün gerisinde kalır; düşmana göre açı tutan manevralar hedefi bu kadar ileri alır.
     double los_lead_deg(const Aircraft& own)
     {
-        return LOS_RATE_KP * HEADING_LAG_S * own.picture.los_rate_deg_s;
+        return LOS_RATE_KP * HEADING_LAG_S * own.picture.los_rate_deg_s;   // gecikme payı = KP × gecikme × LOS hızı
     }
 }
 
 void Maneuvers::fly(Aircraft& own, Maneuver& maneuver)
 {
-    if (active_ != &maneuver)
+    if (active_ != &maneuver)   // yeni manevra: girişe bağlı hedefleri kilitle
     {
         maneuver.enter(own);
         active_ = &maneuver;
@@ -37,32 +33,22 @@ void Maneuvers::fly(Aircraft& own, Maneuver& maneuver)
 }
 
 // ========================================================================================================
-// HOLD  —  şu anki yön ve irtifayla, aynı gazla devam
-//
-//   update(own)   yön ve irtifa = şu anki ölçüm; g sınırı kaldırılır
+// HOLD  —  şu anki yön ve irtifayla, seyir gazıyla devam
 // ========================================================================================================
 
 FlightCommand Hold::update(const Aircraft& own)
 {
-    FlightCommand command = own.command;   // gaz aynı kalır
+    FlightCommand command = own.command;
     command.set_heading_deg(own.kinematics.heading_deg)
            .set_altitude_ft(own.kinematics.altitude_ft)
-           .clear_g_limit();
+           .set_throttle(THROTTLE);
     return command;
 }
 
 // ========================================================================================================
 // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
-//
-//   enter(own)    girişte bir kez: hedef irtifayı kilitler (DESCEND_FT alçal, FLOOR_FT altına inme)
-//   update(own)   her step: bearing − 180'e dön, hedef irtifaya in, tam art yakıcı, out g'si
-//   status(own)   düşman arkamda kaldıysa (|ATA| > DONE_ATA_DEG) Done
 // ========================================================================================================
 
-// Hedef irtifa, girişte bir kez:
-//   Zaten FLOOR_FT'de ya da altındaysam:           irtifamı koru.
-//   DESCEND_FT inince FLOOR_FT'nin altına düşersem: FLOOR_FT'de dur.
-//   Diğer durumda:                                  DESCEND_FT alçal.
 void Out::enter(const Aircraft& own)
 {
     const double entry_ft = own.kinematics.altitude_ft;
@@ -70,36 +56,40 @@ void Out::enter(const Aircraft& own)
 
     if (entry_ft <= FLOOR_FT)
     {
-        target_altitude_ft_ = entry_ft;
+        target_altitude_ft_ = entry_ft;       // zaten tabanda ya da altında: irtifamı koru
     }
     else if (descended_ft < FLOOR_FT)
     {
-        target_altitude_ft_ = FLOOR_FT;
+        target_altitude_ft_ = FLOOR_FT;       // tam alçalırsam tabanın altına düşerim: tabanda dur
     }
     else
     {
-        target_altitude_ft_ = descended_ft;
+        target_altitude_ft_ = descended_ft;   // DESCEND_FT alçal
     }
 }
 
-// Düşmanı tam arkama alacak yöne dön (bearing − 180), alçal, tam art yakıcı, out g'siyle.
 FlightCommand Out::update(const Aircraft& own)
 {
-    const double away_from_enemy_deg = own.picture.bearing_deg - 180.0;
+    const double away_from_enemy_deg = own.picture.bearing_deg - 180.0 + los_lead_deg(own);   // düşman tam arkamda
+
+    double out_throttle = THROTTLE;
+    if (status(own) == ManeuverStatus::Done)
+    {
+        out_throttle = EXIT_THROTTLE;   // düşman arkada: art yakıcıyı bırak
+    }
 
     FlightCommand command = own.command;
     command.set_heading_deg(away_from_enemy_deg)
            .set_altitude_ft(target_altitude_ft_)
-           .set_throttle(THROTTLE)
-           .set_g_limit(own.profile.out_g, own.profile.max_g);   // NEZ/MAR ile aynı g
+           .set_throttle(out_throttle)
+           .set_g_limit(own.profile.out_g, own.profile.max_g);   // NEZ/MAR hesabıyla aynı g
     return command;
 }
 
-// Bitti mi: düşman arkamda kaldı. Burnuma göre açısı (sağdan ya da soldan) DONE_ATA_DEG'den büyük.
 ManeuverStatus Out::status(const Aircraft& own) const
 {
     const double enemy_angle_off_nose_deg = std::abs(own.picture.ata_deg);
-    if (enemy_angle_off_nose_deg > DONE_ATA_DEG)
+    if (enemy_angle_off_nose_deg > DONE_ATA_DEG)   // düşman arkamda kaldı
     {
         return ManeuverStatus::Done;
     }
@@ -108,31 +98,24 @@ ManeuverStatus Out::status(const Aircraft& own) const
 
 // ========================================================================================================
 // COMMIT  —  düşmana doğru düz uç (saf takip)
-//
-//   update(own)   yön = düşmanın bearing'i; irtifa aynı, gaz THROTTLE
 // ========================================================================================================
 
 FlightCommand Commit::update(const Aircraft& own)
 {
     FlightCommand command = own.command;   // irtifa aynı
     command.set_heading_deg(own.picture.bearing_deg)
-           .set_throttle(THROTTLE);
+           .set_throttle(THROTTLE)
+           .set_g_limit(G_LIMIT, own.profile.max_g);
     return command;
 }
 
 // ========================================================================================================
 // RECOMMIT  —  düşmana dönüp atış açısına gel
-//
-//   recommit_side_for(own)     kısa dönüş tarafı: düşman sağımdaysa (ATA ≥ 0) sağa, solumdaysa sola
-//   enter(own)                 girişte bir kez: tarafı seçer (recommit_side_for)
-//   update(own)                yön = bearing ∓ hedef ATA (Right −, Left +) + gecikme payı; irtifa aynı, gaz THROTTLE
-//   status(own)                atış açısına geldiyse (|ATA| ≤ recommit_fire_ata_deg + DONE_TOLERANCE_DEG) Done
 // ========================================================================================================
 
 namespace
 {
-    // Dönüş, hesaplardaki gibi kısa taraftan: düşman hangi tarafımdaysa o tarafa dönerim.
-    ManeuverSide recommit_side_for(const Aircraft& own)
+    ManeuverSide recommit_side_for(const Aircraft& own)   // kısa taraf: düşman hangi tarafımdaysa o tarafa dön
     {
         if (own.picture.ata_deg >= 0.0)
         {
@@ -142,29 +125,32 @@ namespace
     }
 }
 
-// Taraf girişte bir kez seçilir.
 void Recommit::enter(const Aircraft& own)
 {
     side_ = recommit_side_for(own);
+    has_reached_ = false;
 }
 
-// Sağa dönüşte düşman burnun sağında kalır (ATA +), sola dönüşte solunda (ATA −). ATA = bearing − heading.
-// Bearing kaydıkça uçak geride kalır; hedef, bu gecikme kadar ileri alınır (los_lead_deg).
+// ATA = bearing − heading. Right: düşman burnun sağında kalır (ATA +), Left: solunda (ATA −).
 FlightCommand Recommit::update(const Aircraft& own)
 {
     const double fire_ata_deg = own.profile.recommit_fire_ata_deg;
 
-    // Atış açısına gelene kadar 20°'yi hedefle: dönüş 30°'ye kadar sert kalsın. Gelince 30°'de dur.
-    double target_ata_deg = fire_ata_deg - TURN_INSIDE_DEG;   // 30 − 10 = 20
     if (status(own) == ManeuverStatus::Done)
     {
-        target_ata_deg = fire_ata_deg;
+        has_reached_ = true;   // bir kez vardıktan sonra 20°'ye geri dönülmez
+    }
+    double target_ata_deg = fire_ata_deg - TURN_INSIDE_DEG;   // 30 − 10 = 20: dönüş 30°'ye kadar sert kalsın
+    if (has_reached_)
+    {
+        target_ata_deg = fire_ata_deg;                         // 30°'de dur
     }
 
     const double lead_deg = los_lead_deg(own);
 
     FlightCommand command = own.command;   // irtifa aynı
-    command.set_throttle(THROTTLE);
+    command.set_throttle(THROTTLE)
+           .set_g_limit(own.profile.out_g, own.profile.max_g);   // sert dönüş: out ile aynı g
     if (side_ == ManeuverSide::Right)
     {
         command.set_heading_deg(own.picture.bearing_deg - target_ata_deg + lead_deg);
@@ -176,12 +162,10 @@ FlightCommand Recommit::update(const Aircraft& own)
     return command;
 }
 
-
-// Bitti mi: düşmanın burnuma göre açısı (sağdan ya da soldan) atış açısına indi.
 ManeuverStatus Recommit::status(const Aircraft& own) const
 {
     const double enemy_angle_off_nose_deg = std::abs(own.picture.ata_deg);
-    if (enemy_angle_off_nose_deg <= own.profile.recommit_fire_ata_deg + DONE_TOLERANCE_DEG)
+    if (enemy_angle_off_nose_deg <= own.profile.recommit_fire_ata_deg + DONE_TOLERANCE_DEG)   // atış açısına indi
     {
         return ManeuverStatus::Done;
     }
@@ -190,11 +174,6 @@ ManeuverStatus Recommit::status(const Aircraft& own) const
 
 // ========================================================================================================
 // CRANK  —  düşmanı radar gimbal sınırının biraz içinde tutarak yanal kaçış
-//
-//   crank_side_for(own)        düşmanın burnunun sağındaysam (TA ≥ 0) sola, solundaysam sağa crank
-//   enter(own)                 girişte bir kez: tarafı seçer (crank_side_for)
-//   update(own)                yön = bearing ± (gimbal − OFFSET_DEG) (Right +, Left −) + gecikme payı; irtifa aynı, gaz THROTTLE
-//   in_radar_sight(own)        düşman radarın görüş konisinde mi (|ATA| < gimbal)
 // ========================================================================================================
 
 namespace
@@ -209,21 +188,20 @@ namespace
     }
 }
 
-// Taraf girişte bir kez seçilir.
 void Crank::enter(const Aircraft& own)
 {
     side_ = crank_side_for(own);
 }
 
-// Sağa crank'te düşman burnun solunda kalır (ATA −), sola crank'te sağında (ATA +). ATA = bearing − heading.
-// Bearing kaydıkça uçak geride kalır; hedef, bu gecikme kadar ileri alınır (los_lead_deg).
+// ATA = bearing − heading. Right: düşman burnun solunda kalır (ATA −), Left: sağında (ATA +).
 FlightCommand Crank::update(const Aircraft& own)
 {
     const double limit_deg = own.profile.radar_gimbal_deg - OFFSET_DEG;
     const double lead_deg = los_lead_deg(own);
 
     FlightCommand command = own.command;   // irtifa aynı
-    command.set_throttle(THROTTLE);
+    command.set_throttle(THROTTLE)
+           .set_g_limit(G_LIMIT, own.profile.max_g);
     if (side_ == ManeuverSide::Right)
     {
         command.set_heading_deg(own.picture.bearing_deg + limit_deg + lead_deg);
@@ -235,58 +213,57 @@ FlightCommand Crank::update(const Aircraft& own)
     return command;
 }
 
-// Radarın görüş konisinde mi: düşmanın burnuma göre açısı (sağdan ya da soldan) gimbal sınırından küçük.
 bool Crank::in_radar_sight(const Aircraft& own) const
 {
-    return (std::fabs(own.picture.ata_deg) < own.profile.radar_gimbal_deg);
+    return std::abs(own.picture.ata_deg) < own.profile.radar_gimbal_deg;
 }
 
 // ========================================================================================================
 // BEAM  —  düşman uçağa dik uç (3/9 hattı)
-//
-//   update(own)   yön = bearing ∓ 90 (taraf burnuma göre); irtifa aynı, gaz THROTTLE
 // ========================================================================================================
 
-// Düşmana dik uç: düşman 3 ya da 9 hizamda kalsın.
-//   Düşman sağımdaysa (ATA > 0) sola dönerim: yön = bearing − 90, düşman 3 hizamda.
-//   Düşman solumdaysa sağa dönerim:          yön = bearing + 90, düşman 9 hizamda.
-// Taraf burnuma göre seçildiği için dönüş hep 90°'den kısadır.
-FlightCommand Beam::update(const Aircraft& own)
+void Beam::enter(const Aircraft& own)
 {
-    const double bearing_deg = own.picture.bearing_deg;
-
-    double beam_heading_deg = bearing_deg + 90.0;   // düşman solumda
+    side_ = ManeuverSide::Right;      // düşman solumda: sağa dönerim
     if (own.picture.ata_deg > 0.0)
     {
-        beam_heading_deg = bearing_deg - 90.0;      // düşman sağımda
+        side_ = ManeuverSide::Left;   // düşman sağımda: sola dönerim
+    }
+}
+
+FlightCommand Beam::update(const Aircraft& own)
+{
+    const double lead_deg = los_lead_deg(own);
+
+    double beam_heading_deg = own.picture.bearing_deg + 90.0 + lead_deg;   // Right: düşman 9 hizamda (ATA −90)
+    if (side_ == ManeuverSide::Left)
+    {
+        beam_heading_deg = own.picture.bearing_deg - 90.0 + lead_deg;      // Left: düşman 3 hizamda (ATA +90)
     }
 
     FlightCommand command = own.command;   // irtifa aynı
     command.set_heading_deg(beam_heading_deg)
-           .set_throttle(THROTTLE);
+           .set_throttle(THROTTLE)
+           .set_g_limit(G_LIMIT, own.profile.max_g);
     return command;
 }
 
 // ========================================================================================================
 // NOTCH  —  füzeye dik uç (İSKELET)
-//
-//   update(own)   örnek: yön = füzenin bearing'i ∓ 90 (taraf füzenin burnuma göre yerinden)
 // ========================================================================================================
 
 FlightCommand Notch::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
+    // Gövde yazılınca: #include "calculations/geometry.hpp"
     // const Missile* threat = own.picture.threat;
-    // if (threat == nullptr) { return command; }   // füze yok: komut değişmez
-    //
+    // if (threat == nullptr) { return command; }                                                     // füze yok
     // const double threat_bearing_deg = geometry::bearing_deg(own.kinematics, threat->kinematics);
     // const double threat_ata_deg = geometry::ata_deg(own.kinematics, threat->kinematics);
-    // double notch_heading_deg = threat_bearing_deg + 90.0;   // füze solumda
-    // if (threat_ata_deg > 0.0)
-    // {
-    //     notch_heading_deg = threat_bearing_deg - 90.0;      // füze sağımda
-    // }
+    // double notch_heading_deg = threat_bearing_deg + 90.0;                                           // füze solumda
+    // if (threat_ata_deg > 0.0) { notch_heading_deg = threat_bearing_deg - 90.0; }                    // füze sağımda
     // command.set_heading_deg(notch_heading_deg);
 
     return command;
@@ -294,27 +271,36 @@ FlightCommand Notch::update(const Aircraft& own)
 
 // ========================================================================================================
 // DRAG  —  füzeye sırt dön (İSKELET)
-//
-//   update(own)   örnek: yön = füzenin bearing'i − 180
 // ========================================================================================================
 
 FlightCommand Drag::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
-    // const Missile* threat = own.picture.threat;
-    // if (threat == nullptr) { return command; }
-    // command.set_heading_deg(geometry::bearing_deg(own.kinematics, threat->kinematics) - 180.0)
-    //        .set_throttle(throttle::MRT);   // P-1290: drag MRT ile
+    const Missile* threat = own.picture.threat;
+    if (threat == nullptr) 
+    {
+        return command;
+    }
+
+    command.set_heading_deg(geometry::bearing_deg(own.kinematics, threat->kinematics) - 180.0);   // füze tam arkamda
 
     return command;
 }
 
+ManeuverStatus  Drag::status(const Aircraft& own)
+{
+    ManeuverStatus  success = false;
+    if(std::fabs(geometry::ata_deg(own.kinematics, own.picture.threat->kinematics)) > 180 - DRAG_OFFSET_DEG)
+    {
+        success = true;
+    }
+    return success;
+}
+
 // ========================================================================================================
 // OFFSET  —  düşman yönünden verilen açı kadar yana uç (İSKELET)
-//
-//   set(offset_deg, side)   açıyı ve tarafı ayarlar
-//   update(own)             örnek: yön = bearing ± offset (Right +, Left −)
 // ========================================================================================================
 
 void Offset::set(double offset_deg, ManeuverSide side)
@@ -326,40 +312,29 @@ void Offset::set(double offset_deg, ManeuverSide side)
 FlightCommand Offset::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
-    // if (side_ == ManeuverSide::Right)
-    // {
-    //     command.set_heading_deg(own.picture.bearing_deg + offset_deg_);
-    // }
-    // else
-    // {
-    //     command.set_heading_deg(own.picture.bearing_deg - offset_deg_);
-    // }
+    // if (side_ == ManeuverSide::Right) { command.set_heading_deg(own.picture.bearing_deg + offset_deg_); }
+    // else                              { command.set_heading_deg(own.picture.bearing_deg - offset_deg_); }
 
     return command;
 }
 
 // ========================================================================================================
 // FLANK  —  düşmanın burnuna göre yan açıda kal (İSKELET)
-//
-//   update(own)   örnek: düşmanın burnundan uzaklaşan tarafa offset
-//   status(own)   örnek: |ta| Flank aralığına girince Done
 // ========================================================================================================
 
+// |ta| büyümeli: düşmanın etrafında burnundan uzaklaşan yöne dolanırım. Düşman kuzeye uçarken ben onun 30° sağındaysam
+// (ta = +30) saat yönünde ilerlemeliyim; bu yön benden düşmana bearing'in 90° solu. Yani ta ≥ 0 iken offset ÇIKARILIR.
+// Düşmanın kendi hareketi hesaba katılmadı; gövde yazılırken simülasyonda doğrulanacak.
 FlightCommand Flank::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
-    // Düşmanın burnunun sağındaysam (ta ≥ 0) daha sağa açılmak için düşman solumda kalacak şekilde uçarım.
-    // const double offset_deg = 40.0;   // ya da ta hatasıyla orantılı
-    // if (own.picture.ta_deg >= 0.0)
-    // {
-    //     command.set_heading_deg(own.picture.bearing_deg + offset_deg);
-    // }
-    // else
-    // {
-    //     command.set_heading_deg(own.picture.bearing_deg - offset_deg);
-    // }
+    // const double offset_deg = 40.0;                                                                          // ya da ta hatasıyla orantılı
+    // if (own.picture.ta_deg >= 0.0) { command.set_heading_deg(own.picture.bearing_deg - offset_deg); }       // düşman sağımda kalır
+    // else                           { command.set_heading_deg(own.picture.bearing_deg + offset_deg); }       // düşman solumda kalır
 
     return command;
 }
@@ -368,36 +343,28 @@ ManeuverStatus Flank::status(const Aircraft& own) const
 {
     (void)own;
 
-    // if (std::abs(own.picture.ta_deg) >= TARGET_TA_DEG)
-    // {
-    //     return ManeuverStatus::Done;
-    // }
+    // if (std::abs(own.picture.ta_deg) >= TARGET_TA_DEG) { return ManeuverStatus::Done; }
 
     return ManeuverStatus::Running;
 }
 
 // ========================================================================================================
 // COLLISION  —  LOS hızını sıfırla: çarpışma rotası (İSKELET)
-//
-//   update(own)   örnek: yön = bearing + KP × LOS hızı
 // ========================================================================================================
 
 FlightCommand Collision::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
-    // Bearing saat yönünde kayıyorsa (+) düşman önüme geçiyor: ben de o tarafa dönerim.
-    // const double kp_s = 10.0;   // s, LOS hızını açıya çeviren kazanç; denenecek
-    // command.set_heading_deg(own.picture.bearing_deg + kp_s * own.picture.los_rate_deg_s);
+    // const double kp_s = 10.0;                                                                   // s, LOS hızını açıya çeviren kazanç; denenecek
+    // command.set_heading_deg(own.picture.bearing_deg + kp_s * own.picture.los_rate_deg_s);    // bearing kayan tarafa dön
 
     return command;
 }
 
 // ========================================================================================================
 // FLY HEADING  —  verilen sabit yöne uç (İSKELET)
-//
-//   set(heading_deg)   yönü ayarlar
-//   update(own)        örnek: yön = heading_deg_
 // ========================================================================================================
 
 void FlyHeading::set(double heading_deg)
@@ -408,6 +375,7 @@ void FlyHeading::set(double heading_deg)
 FlightCommand FlyHeading::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
     // command.set_heading_deg(heading_deg_);
 
@@ -416,9 +384,6 @@ FlightCommand FlyHeading::update(const Aircraft& own)
 
 // ========================================================================================================
 // SNAKE  —  periyodik sağ-sol (İSKELET)
-//
-//   enter(own)    örnek: girişteki yönü kilitler
-//   update(own)   örnek: her HALF_PERIOD_S'de taraf değiştir
 // ========================================================================================================
 
 void Snake::enter(const Aircraft& own)
@@ -430,26 +395,18 @@ void Snake::enter(const Aircraft& own)
 FlightCommand Snake::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
     // const double elapsed_s = now_s - start_s_;
     // const bool right_half = static_cast<int>(elapsed_s / HALF_PERIOD_S) % 2 == 0;
-    // if (right_half)
-    // {
-    //     command.set_heading_deg(base_heading_deg_ + AMPLITUDE_DEG);
-    // }
-    // else
-    // {
-    //     command.set_heading_deg(base_heading_deg_ - AMPLITUDE_DEG);
-    // }
+    // if (right_half) { command.set_heading_deg(base_heading_deg_ + AMPLITUDE_DEG); }
+    // else            { command.set_heading_deg(base_heading_deg_ - AMPLITUDE_DEG); }
 
     return command;
 }
 
 // ========================================================================================================
 // PURSUIT  —  pure, lag, lead takip (İSKELET)
-//
-//   phase()       moda göre PurePursuit, LagPursuit, LeadPursuit
-//   update(own)   örnek: moda göre yön
 // ========================================================================================================
 
 Phase Pursuit::phase() const
@@ -466,29 +423,15 @@ Phase Pursuit::phase() const
 FlightCommand Pursuit::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
+    command.set_throttle(THROTTLE);
 
     // const double bearing_deg = own.picture.bearing_deg;
-    // // Düşman bana göre saat yönünde kayıyorsa (LOS hızı +) önü bearing'in + tarafında, gerisi − tarafında.
-    // const double ahead_sign = (own.picture.los_rate_deg_s >= 0.0) ? 1.0 : -1.0;
-    //
+    // const double ahead_sign = (own.picture.los_rate_deg_s >= 0.0) ? 1.0 : -1.0;   // LOS + ise düşmanın önü bearing'in + tarafında
     // switch (mode_)
     // {
-    // case PursuitMode::Pure:
-    //     command.set_heading_deg(bearing_deg);
-    //     break;
-    //
-    // case PursuitMode::Lag:
-    //     command.set_heading_deg(bearing_deg - ahead_sign * LAG_DEG);
-    //     break;
-    //
-    // case PursuitMode::Lead:
-    // {
-    //     // Öncü açı: düşmanın LOS'a dik hızını benim hızımla karşıla (sin(lead) = V_düşman × sin(TA) / V_ben).
-    //     // Düşmanın hızı picture'da yok; enemy.kinematics.tas_kt gerekir (konuşulacak).
-    //     const double lead_deg = 20.0;
-    //     command.set_heading_deg(bearing_deg + ahead_sign * lead_deg);
-    //     break;
-    // }
+    // case PursuitMode::Pure: command.set_heading_deg(bearing_deg); break;
+    // case PursuitMode::Lag:  command.set_heading_deg(bearing_deg - ahead_sign * LAG_DEG); break;
+    // case PursuitMode::Lead: command.set_heading_deg(bearing_deg + ahead_sign * 20.0); break;   // öncü açı: sin = V_düşman × sin(TA) / V_ben
     // }
 
     return command;

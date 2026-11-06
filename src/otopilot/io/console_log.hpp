@@ -7,8 +7,7 @@
 class ConsoleLog
 {
 public:
-    /// Yeni bir simülasyon saniyesine geçildiyse bir satır yaz; değilse bir şey yapmaz.
-    void print(const World& world);
+    void print(const World& world);   // yeni bir simülasyon saniyesine geçildiyse bir satır yaz
 
 private:
     int last_print_s_ = -1;   // terminale en son yazılan simülasyon saniyesi

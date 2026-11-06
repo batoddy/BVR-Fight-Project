@@ -5,9 +5,7 @@
 
 #include <cmath>
 
-/// Herhangi bir açıyı (-180, 180] aralığına getirir.   270 -> -90,  -200 -> 160,  180 -> 180
-/// Okunan yönde de, hesaptaki açı farklarında da (ör. bearing - heading) bunu kullan.
-inline double wrap_180(double deg)
+inline double wrap_180(double deg)   // (-180, 180]: 270 → -90, -200 → 160. Okunan yönde ve açı farklarında (bearing − heading)
 {
     double wrapped = std::fmod(deg, 360.0);   // sonuç (-360, 360) aralığında
 
@@ -23,9 +21,7 @@ inline double wrap_180(double deg)
     return wrapped;
 }
 
-/// Herhangi bir açıyı [0, 360) aralığına getirir.   -90 -> 270
-/// Yalnızca Python'a yön gönderirken kullanılır.
-inline double wrap_360(double deg)
+inline double wrap_360(double deg)   // [0, 360): -90 → 270. Yalnız Python'a yön gönderirken
 {
     double wrapped = std::fmod(deg, 360.0);
 

@@ -6,16 +6,14 @@
 
 // Durum makinesi. Her step: o durumun manevrası uçulur, sonra çıkış koşullarına bakılır.
 // go_to yalnız state'i değiştirir; Maneuvers::fly değişen manevranın enter()'ını ilk kullanımda çağırır.
-// Şu an deneme: yalnız Commit uçulur, atış yapılmaz.
+// Akış: Commit → fighter kendi MAR'ına girince atış → Out → kaçış rotasını koru (HoldAfterOut).
 class OtopilotHostile
 {
 public:
-    // Yazdıkları: own.command, own.phase, (geçişte) atış emri.
-    void step(Aircraft& own, const Aircraft& enemy);
+    void step(Aircraft& own, const Aircraft& enemy);   // yazdıkları: own.command, own.phase, atış emri
 
 private:
-    // Yalnız yeni duruma geç; manevra o durumun bloğunda seçilir.
-    void go_to(OtopilotState next);
+    void go_to(OtopilotState next);                    // yalnız durumu değiştirir; manevra o durumun bloğunda seçilir
 
     OtopilotState state_ = OtopilotState::Commit;
     Maneuvers maneuvers_;

@@ -10,9 +10,7 @@ struct Ned
     double down = 0;
 };
 
-/// İç çarpım: a'nın b yönündeki bileşeni (b birim vektörse).
-/// Ör. hız · los_unit = hızın düşmana doğru kısmı.
-inline double dot(const Ned& a, const Ned& b)
+inline double dot(const Ned& a, const Ned& b)   // iç çarpım: b birim vektörse a'nın b yönündeki bileşeni (hız · los_unit)
 {
     return a.north * b.north + a.east * b.east + a.down * b.down;
 }

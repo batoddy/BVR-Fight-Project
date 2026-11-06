@@ -19,33 +19,23 @@ struct Wez
 // Kaçış tarafı (düşmanın füzesine karşı R_cold, NEZ, MAR, tehdit) own.picture'dadır.
 struct Weapons
 {
-    // Füze slotları, slot sırasıyla; boyutu sabit.
-    // İlk step'te StateReader kurar (sayı Python'dan, tipler profile.loadout'tan), sonra uçanları doldurur.
-    std::vector<Missile> missiles;
+    std::vector<Missile> missiles;     // slot sırasıyla, boyutu sabit | StateReader (ilk step kurar: sayı Python'dan, tip loadout'tan)
 
-    bool has_launch_order = false;   // bu step atış emri var mı; her step otopilottan önce false yapılır (Sim::step) | fire
+    bool has_launch_order = false;     // bu step atış emri var mı | fire; her step otopilottan önce false (Sim::step)
 
     // Ana silahımın (profile.main_weapon) düşmana karşı durumu | World::update
     Wez wez;                           // benim WEZ'im
     double nez_nm = 0;                 // NM, benim NEZ'im: düşman şimdi out yapsa füzemden kaçamayacağı mesafe
-    std::optional<double> a_pole_nm;   // NM, A-pole; çözüm yoksa değer yok
-    std::optional<double> f_pole_nm;   // NM, F-pole; çözüm yoksa değer yok
-    std::optional<double> tr_nm;       // NM, TR; çözüm yoksa değer yok
+    std::optional<double> a_pole_nm;   // NM, A-pole; çözüm yoksa yok
+    std::optional<double> f_pole_nm;   // NM, F-pole; çözüm yoksa yok
+    std::optional<double> tr_nm;       // NM, TR; çözüm yoksa yok
     bool enemy_in_wez = false;         // düşman benim WEZ'imde mi
-    bool enemy_in_nez = false;         // düşman benim NEZ'imde mi: wez.min_nm < menzil <= nez_nm
+    bool enemy_in_nez = false;         // düşman benim NEZ'imde mi: wez.min_nm < menzil ≤ nez_nm
+    bool enemy_in_tr = false;          // menzil ≤ TR mi; TR yoksa false
     // TODO: m_pole_nm
 
-    /// Füze at: bu profildeki (ör. AIM120C) ilk atılmamış slot. Bu step launch emri gider.
-    /// O profilde füze kalmadıysa ya da emri verilmiş ama henüz uçmamış füze varsa false; havadaki füze engel değil.
-    bool fire(const MissileProfile& profile);
-
-    /// adet: atılmamış füze sayısı
-    int missiles_left() const;
-
-    /// Havadaki bütün füzelerim, atış sırasıyla (fire_order); yoksa boş. Pitbull, kalan süre: missile->target.
-    /// İşaretçileri bu step içinde kullan, saklama.
-    std::vector<const Missile*> active_missiles() const;
-
-    /// Havadaki füzelerimden en son atılanı (desteklediğim füze); yoksa nullptr. Bu step içinde kullan.
-    const Missile* active_missile() const;
+    bool fire(const MissileProfile& profile);               // bu profilin ilk atılmamış slotu; füze yoksa ya da önceki emir henüz uçmadıysa false
+    int missiles_left() const;                              // adet, atılmamış füze
+    std::vector<const Missile*> active_missiles() const;    // havadaki füzelerim, atış sırasıyla; yoksa boş. Bu step içinde kullan
+    const Missile* active_missile() const;                  // havadaki en son atılan (desteklediğim) füze; yoksa nullptr
 };

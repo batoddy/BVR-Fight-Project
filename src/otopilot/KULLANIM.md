@@ -109,14 +109,16 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 
 ## Manevralar
 
-| Manevra | Faz | Gaz | Bitişi |
-|---|---|---|---|
-| `hold` | Hold | dokunmaz | sürekli |
-| `out` | Out | MAX_THRUST | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
-| `commit` | Commit | DEFAULT | sürekli |
-| `recommit` | Recommit | MAX_THRUST | `status()` → Done: \|ATA\| atış açısına (30° + 1°) indi |
-| `crank` | Crank | DEFAULT | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) seçilir, `side()` ile okunur |
-| `beam` | Beam | DEFAULT | sürekli |
+| Manevra | Faz | Gaz | g sınırı | Bitişi |
+|---|---|---|---|---|
+| `hold` | Hold | DEFAULT | yok (Python varsayılanı) | sürekli |
+| `out` | Out | MAX_THRUST, bitince DEFAULT | `out_g` | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
+| `commit` | Commit | DEFAULT | 4 | sürekli |
+| `recommit` | Recommit | MAX_THRUST | `out_g` | `status()` → Done: \|ATA\| atış açısına (30° + 1°) indi; ilk varıştan sonra hedef 30°'de kalır |
+| `crank` | Crank | DEFAULT | 3 | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) seçilir, `side()` ile okunur |
+| `beam` | Beam | DEFAULT | 4 | sürekli; taraf girişte seçilir, `side()` ile okunur |
+
+g sınırları profildeki `max_g`'yi aşamaz (`set_g_limit(g, own.profile.max_g)`).
 
 Notch, Drag, Offset, Flank, Collision, FlyHeading, Snake ve Pursuit (pure/lag/lead) iskelet olarak durur; gövdeleri komutu değiştirmez. Sürekli manevraları otopilot bitirir. Karara yardım eden sorgular (`Crank::in_radar_sight` gibi) manevranın kendisinde durur.
 

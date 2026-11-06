@@ -9,8 +9,7 @@ namespace
     constexpr double BEAM_MAX_DEG = 110.0;   // derece, bu açıya kadar beam; ötesi cold
     constexpr double NOSE_ON_TARGET_MAX_DEG = 3.0;    // derece, burun hizalama toleransı
 
-    // Açıyı (±180) sınıfa çevirir; yön değil büyüklük kullanılır.
-    Aspect aspect_of(double angle_deg)
+    Aspect aspect_of(double angle_deg)   // açıyı (±180) sınıfa çevirir; yön değil büyüklük
     {
         const double size_deg = std::abs(angle_deg);
 
@@ -58,6 +57,11 @@ bool condition::enemy_in_my_wez(const Aircraft& own)
 bool condition::enemy_in_my_nez(const Aircraft& own)
 {
     return own.weapons.enemy_in_nez;
+}
+
+bool condition::enemy_in_my_tr(const Aircraft& own)
+{
+    return own.weapons.enemy_in_tr;
 }
 
 Aspect condition::enemy_aspect(const Aircraft& own)

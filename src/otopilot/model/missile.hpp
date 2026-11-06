@@ -43,9 +43,9 @@ struct Missile
     MissileProfile profile;        // tipi, menzili, hızı (loadout'tan)            | StateReader
 
     bool is_fired = false;         // atış emri verildi mi                         | Weapons::fire
-    int fire_order = 0;            // kaçıncı atış: 1, 2, ...; atılmadıysa 0       | Weapons::fire        
+    int fire_order = 0;            // kaçıncı atış: 1, 2, ...; atılmadıysa 0       | Weapons::fire
 
-    // Python'dan: aşağıdakiler ancak has_kinematics true olunca anlamlı.        | StateReader
+    // Python'dan; ancak has_kinematics true olunca anlamlı                       | StateReader
     std::string python_id;         // "blue/missile/0"; eşleşene kadar boş          | id
     std::string target_id;         // hedef uçağın id'si; atılmadan önce boş        | target_id
     bool has_kinematics = false;   // eşleşip ilk ölçüm gelince true
@@ -54,11 +54,8 @@ struct Missile
     Kinematics kinematics;         // füzenin konumu                               | kinematics
 
     MissileTargetInfo target;      // hedefe göre                                  | World::update
-    
-    /// Havada mı (state InFlight)
-    bool in_flight() const { return state == MissileState::InFlight; }
-    /// Hedefi vurdu mu
-    bool hit() const { return outcome == MissileOutcome::Hit; }
-    /// Iskaladı ya da enerjisi bitti mi
-    bool lost() const { return outcome == MissileOutcome::Lost; }
+
+    bool in_flight() const { return state == MissileState::InFlight; }   // havada mı
+    bool hit() const { return outcome == MissileOutcome::Hit; }          // hedefi vurdu mu
+    bool lost() const { return outcome == MissileOutcome::Lost; }        // ıskaladı ya da enerjisi bitti mi
 };

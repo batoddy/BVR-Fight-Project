@@ -9,19 +9,14 @@
 class Connection
 {
 public:
-    /// Python sunucusuna bağlanır. host: IPv4 adresi; port: 1..65535 (main.cpp komut satırından okur).
-    Connection(const std::string& host, unsigned short port);
+    Connection(const std::string& host, unsigned short port);   // Python sunucusuna bağlanır (main.cpp adresi komut satırından okur)
     ~Connection();
 
-    // Kopyalanamaz: tek bir TCP bağlantısını temsil eder.
-    Connection(const Connection&) = delete;
+    Connection(const Connection&) = delete;                      // kopyalanamaz: tek bir TCP bağlantısı
     Connection& operator=(const Connection&) = delete;
 
-    /// Ölçüm al; uçuş bittiyse ("end") false döner.
-    bool receive(Message& message);
-
-    /// Mesajı Python'a gönder.
-    void send(const Message& message);
+    bool receive(Message& message);                              // ölçüm al; uçuş bittiyse ("end") false
+    void send(const Message& message);                           // mesajı Python'a gönder
 
 private:
     struct Impl;

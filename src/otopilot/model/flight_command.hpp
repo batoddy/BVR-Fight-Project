@@ -8,7 +8,7 @@
 // Manevralar gazı sayıyla değil bu adlarla yazar: command.set_throttle(throttle::MAX_THRUST)
 namespace throttle
 {
-    inline constexpr double IDLE = 0.0;         // rölanti
+    inline constexpr double IDLE = 0.1;         // rölanti
     inline constexpr double DEFAULT = 0.45;     // seyir: askeri gücün biraz altı (scenario.yaml başlangıç gazı)
     inline constexpr double MRT = 0.5;          // askeri güç (Military Rated Thrust): art yakıcısız en yüksek
     inline constexpr double MAX_THRUST = 1.0;   // tam art yakıcı
@@ -20,22 +20,19 @@ namespace throttle
 class FlightCommand
 {
 public:
-    /// derece, herhangi bir açı; ±180'e sarılır
-    FlightCommand& set_heading_deg(double deg)
+    FlightCommand& set_heading_deg(double deg)          // derece, herhangi bir açı; ±180'e sarılır
     {
         heading_deg_ = wrap_180(deg);
         return *this;
     }
 
-    /// ft, MSL
-    FlightCommand& set_altitude_ft(double ft)
+    FlightCommand& set_altitude_ft(double ft)           // ft, MSL
     {
         altitude_ft_ = ft;
         return *this;
     }
 
-    /// 0..1; 0..0.5 rölantiden askeri güce, 0.5..1 art yakıcı. Aralık dışı en yakın sınıra çekilir.
-    FlightCommand& set_throttle(double throttle)
+    FlightCommand& set_throttle(double throttle)        // 0..1 (throttle:: seviyeleri); aralık dışı en yakın sınıra çekilir
     {
         if (throttle < 0.0)
         {
@@ -49,8 +46,7 @@ public:
         return *this;
     }
 
-    /// g, dönüşte çekilecek en büyük yük. @param max_g uçağın sınırı (profile.max_g); g bunu aşarsa max_g'ye çekilir.
-    FlightCommand& set_g_limit(double g, double max_g)
+    FlightCommand& set_g_limit(double g, double max_g)  // g, dönüşte en büyük yük; max_g (profile.max_g) aşılırsa ona çekilir
     {
         if (g > max_g)
         {
@@ -60,18 +56,16 @@ public:
         return *this;
     }
 
-    /// g sınırını kaldır: Python kendi varsayılanını kullanır.
-    FlightCommand& clear_g_limit()
+    FlightCommand& clear_g_limit()                      // g sınırını kaldır: Python kendi varsayılanını kullanır
     {
         g_limit_.reset();
         return *this;
     }
 
-    // Okuyucular: setter'ların yazdığı değerler; g_limit yoksa Python varsayılanı.
     double heading_deg() const { return heading_deg_; }
     double altitude_ft() const { return altitude_ft_; }
     double throttle() const { return throttle_; }
-    std::optional<double> g_limit() const { return g_limit_; }
+    std::optional<double> g_limit() const { return g_limit_; }   // yoksa Python varsayılanı
 
 private:
     double heading_deg_ = 0;          // derece ±180, 0 kuzey, + doğu | heading_deg (0..360, IO'da çevrilir)

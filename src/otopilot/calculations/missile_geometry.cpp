@@ -43,8 +43,7 @@ std::optional<double> missile_geometry::time_at_distance_s(const MissileProfile&
         return std::nullopt;   // negatif yol: füze zaten geçmiş
     }
 
-    // Füze hız sıfıra inmeden bu yola erişemezse formül std::nullopt döner.
-    return accel_travel_time_s(distance_nm, missile_profile.start_speed_kt, missile_profile.slowing_accel_kt_s);
+    return accel_travel_time_s(distance_nm, missile_profile.start_speed_kt, missile_profile.slowing_accel_kt_s);   // hız sıfıra inmeden erişemezse yok
 }
 
 // Füzenin hedefe yetişmesine kalan süre. Hedefin hareketi kapanma hızıyla hesaba girer:

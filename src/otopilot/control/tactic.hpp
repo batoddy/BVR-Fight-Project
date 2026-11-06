@@ -9,7 +9,6 @@
 // ORTAK  —  bütün taktiklerin arayüzü
 // =============================================================================
 
-// Taktiğin durumu.
 enum class TacticStatus
 {
     Running,   // sürüyor
@@ -26,30 +25,19 @@ class Tactic
 public:
     virtual ~Tactic() = default;
 
-    // Bu taktiğin kimliği.
     virtual TacticId id() const = 0;
-
-    // Taktiği baştan başlatır: durum Running, sonra enter(). Tactics::start çağırır.
-    void start(const Aircraft& own)
+    void start(const Aircraft& own)                                  // baştan başlat: Running, sonra enter(); Tactics::start çağırır
     {
         status_ = TacticStatus::Running;
         enter(own);
     }
-
-    // Her step: o adımın manevrasını uçurur, geçiş kurallarına bakar.
-    virtual void update(Aircraft& own, Maneuvers& maneuvers) = 0;
-
-    // Taktik bitmeden başka taktiğe geçilirken bir kez: kalıcı komutları (ör. g sınırı) temizler.
-    virtual void exit(Aircraft& own) { (void)own; }
-
+    virtual void update(Aircraft& own, Maneuvers& maneuvers) = 0;    // her step: adımın manevrasını uçur, geçişlere bak
+    virtual void exit(Aircraft& own) { (void)own; }                  // bitmeden başka taktiğe geçilirken bir kez: kalıcı komutları temizle
     TacticStatus status() const { return status_; }
 
 protected:
-    // Başlarken bir kez: ilk adımı seçer, girişe bağlı değerleri kilitler.
-    virtual void enter(const Aircraft& own) { (void)own; }
-
-    // Taktiği bitir; Tactics bir sonrakini seçene kadar update çağrılmaya devam edebilir.
-    void finish() { status_ = TacticStatus::Done; }
+    virtual void enter(const Aircraft& own) { (void)own; }           // başlarken bir kez: ilk adımı seç, girişe bağlı değerleri kilitle
+    void finish() { status_ = TacticStatus::Done; }                  // Tactics sıradakini seçene kadar update sürebilir
 
 private:
     TacticStatus status_ = TacticStatus::Running;
@@ -66,9 +54,7 @@ class Commit : public Tactic
 {
 public:
     TacticId id() const override { return TacticId::Commit; }
-
-    // Commit manevrasını uçar.
-    void update(Aircraft& own, Maneuvers& maneuvers) override;
+    void update(Aircraft& own, Maneuvers& maneuvers) override;   // Commit manevrasını uçar
 };
 
 // =============================================================================
@@ -78,18 +64,12 @@ public:
 // Ailenin geçiş kuralları. Yalnız bu aileye özel; ortak olanlar condition:: içinde.
 namespace skate_rule
 {
-    // Hemen at: recommit burnu atış açısına getirdi (otopilot_fighter'daki SecondShot).
-    bool shoot_now(const Aircraft& own);
-
-    // İSKELET: Long Skate atış menzili. Şimdilik hep false.
-    bool long_shot_range(const Aircraft& own);
-
-    // İSKELET: Long Skate out menzili. Şimdilik hep false.
-    bool long_out_range(const Aircraft& own);
+    bool shoot_now(const Aircraft& own);         // hemen at: recommit burnu atış açısına getirdi
+    bool long_shot_range(const Aircraft& own);   // İSKELET: Long Skate atış menzili; şimdilik hep false
+    bool long_out_range(const Aircraft& own);    // İSKELET: Long Skate out menzili; şimdilik hep false
 }
 
-// Skate ailesinin bir üyesini tanımlar.
-struct SkateParams
+struct SkateParams   // Skate ailesinin bir üyesi
 {
     TacticId id;
     bool (*shot_ready)(const Aircraft& own);   // Approach → Shoot
@@ -118,12 +98,8 @@ public:
 
     TacticId id() const override { return params_.id; }
     void update(Aircraft& own, Maneuvers& maneuvers) override;
-
-    // İSKELET: out yarıda kesilirse g sınırını bırak.
-    void exit(Aircraft& own) override;
-
-    // Şu anki adım.
-    Step step() const { return step_; }
+    void exit(Aircraft& own) override;           // İSKELET: out yarıda kesilirse g sınırını bırak
+    Step step() const { return step_; }          // şu anki adım
 
 protected:
     void enter(const Aircraft& own) override;
@@ -175,9 +151,7 @@ class Recommit : public Tactic
 {
 public:
     TacticId id() const override { return TacticId::Recommit; }
-
-    // Recommit manevrası; atış açısına gelince bitti.
-    void update(Aircraft& own, Maneuvers& maneuvers) override;
+    void update(Aircraft& own, Maneuvers& maneuvers) override;   // Recommit manevrası; atış açısına gelince bitti
 };
 
 // =============================================================================
@@ -188,9 +162,7 @@ class Abort : public Tactic
 {
 public:
     TacticId id() const override { return TacticId::Abort; }
-
-    // Out manevrası; bitince bitti.
-    void update(Aircraft& own, Maneuvers& maneuvers) override;
+    void update(Aircraft& own, Maneuvers& maneuvers) override;   // Out manevrası; bitince bitti
 };
 
 // =============================================================================
@@ -229,9 +201,7 @@ class BeamDefense : public Tactic
 {
 public:
     TacticId id() const override { return TacticId::BeamDefense; }
-
-    // Örnek: Beam; süre dolunca ya da spike kalkınca bitti.
-    void update(Aircraft& own, Maneuvers& maneuvers) override;
+    void update(Aircraft& own, Maneuvers& maneuvers) override;   // örnek: Beam; süre dolunca ya da spike kalkınca bitti
 };
 
 // =============================================================================
@@ -242,9 +212,7 @@ class NotchDefense : public Tactic
 {
 public:
     TacticId id() const override { return TacticId::NotchDefense; }
-
-    // Örnek: Notch; füze geçince ya da bitince bitti.
-    void update(Aircraft& own, Maneuvers& maneuvers) override;
+    void update(Aircraft& own, Maneuvers& maneuvers) override;   // örnek: Notch; füze geçince ya da bitince bitti
 };
 
 // =============================================================================
@@ -255,9 +223,7 @@ class DragDefense : public Tactic
 {
 public:
     TacticId id() const override { return TacticId::DragDefense; }
-
-    // Örnek: Drag; füze bitince bitti.
-    void update(Aircraft& own, Maneuvers& maneuvers) override;
+    void update(Aircraft& own, Maneuvers& maneuvers) override;   // örnek: Drag; füze bitince bitti
 };
 
 // =============================================================================
@@ -303,14 +269,9 @@ private:
 class Tactics
 {
 public:
-    // Önceki taktik başkaysa exit()'ini çağırır, sonra bu taktiği baştan başlatır. Aynı taktik de baştan başlar.
-    void start(Aircraft& own, Tactic& tactic);
-
-    // Çalışan taktiğin update()'i; taktik yoksa hiçbir şey yapmaz.
-    void update(Aircraft& own, Maneuvers& maneuvers);
-
-    // Çalışan taktik; hiç başlatılmadıysa nullptr.
-    const Tactic* active() const { return active_; }
+    void start(Aircraft& own, Tactic& tactic);            // önceki başkaysa exit(), sonra bu taktik baştan; aynı taktik de baştan başlar
+    void update(Aircraft& own, Maneuvers& maneuvers);     // çalışan taktiğin update()'i; yoksa bir şey yapmaz
+    const Tactic* active() const { return active_; }      // çalışan taktik; hiç başlatılmadıysa nullptr
 
     tactic::Commit commit;                          // düşmana uç
     tactic::Skate long_skate{tactic::LONG_SKATE};   // İSKELET kurallar

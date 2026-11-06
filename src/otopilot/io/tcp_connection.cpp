@@ -32,8 +32,7 @@ struct Connection::Impl
     void write(const Message& message);
 };
 
-// Winsock'u başlat, Python sunucusuna bağlan.
-Connection::Impl::Impl(const std::string& host, unsigned short port)
+Connection::Impl::Impl(const std::string& host, unsigned short port)   // Winsock'u başlat, Python sunucusuna bağlan
 {
     WSADATA information{};
     int result = WSAStartup(MAKEWORD(2, 2), &information);
@@ -66,8 +65,7 @@ Connection::Impl::Impl(const std::string& host, unsigned short port)
             throw std::runtime_error("Python'a baglanilamadi (" + code + "). Once sim_main.py'yi baslat.");
         }
 
-        // Küçük mesajlar beklemeden gitsin (Nagle kapalı).
-        int enabled = 1;
+        int enabled = 1;   // TCP_NODELAY: küçük mesajlar beklemeden gitsin (Nagle kapalı)
         const char* option = reinterpret_cast<const char*>(&enabled);
         if (setsockopt(socket_, IPPROTO_TCP, TCP_NODELAY, option, sizeof(enabled)) == SOCKET_ERROR)
         {
@@ -83,8 +81,7 @@ Connection::Impl::Impl(const std::string& host, unsigned short port)
     }
 }
 
-// Socket'i ve Winsock'u kapat. İki kez çağrılması sorun değil.
-void Connection::Impl::close()
+void Connection::Impl::close()   // socket'i ve Winsock'u kapat; iki kez çağrılması sorun değil
 {
     if (socket_ != INVALID_SOCKET)
     {
@@ -99,8 +96,7 @@ void Connection::Impl::close()
     }
 }
 
-// Mesajı tek satır JSON olarak tamamen gönder.
-void Connection::Impl::write(const Message& message)
+void Connection::Impl::write(const Message& message)   // tek satır JSON, tamamı gidene kadar
 {
     std::string line = message.encode();
     if (line.size() > MAX_MESSAGE_BYTES)
@@ -108,9 +104,8 @@ void Connection::Impl::write(const Message& message)
         throw std::runtime_error("Mesaj 1 MiB sinirini asiyor.");
     }
 
-    // send() bir seferde tamamını göndermeyebilir; kalan baytları göndermeye devam et.
     std::size_t offset = 0;
-    while (offset < line.size())
+    while (offset < line.size())   // send() bir seferde tamamını göndermeyebilir
     {
         const char* remaining = line.data() + offset;
         int length = static_cast<int>(line.size() - offset);   // en fazla 1 MiB
@@ -129,15 +124,13 @@ void Connection::Impl::write(const Message& message)
     }
 }
 
-// Bir tam satır gelene kadar oku, mesaja çevir.
-// TCP akıştır: bir satır parça parça gelebilir veya iki satır birlikte gelebilir.
+// TCP akıştır: bir satır parça parça ya da iki satır birlikte gelebilir. Tam bir satır gelene kadar okunur.
 Message Connection::Impl::read()
 {
     while (true)
     {
-        // Tamponda tam bir satır varsa onu mesaj olarak döndür, kalanı sakla.
         std::size_t newline = buffer_.find('\n');
-        if (newline != std::string::npos)
+        if (newline != std::string::npos)   // tamponda tam satır var: onu döndür, kalanı sakla
         {
             if (newline + 1 > MAX_MESSAGE_BYTES)
             {
@@ -154,8 +147,7 @@ Message Connection::Impl::read()
             throw std::runtime_error("Mesaj tamamlanmadi veya boyut sinirini asiyor.");
         }
 
-        // Satır henüz tamamlanmadı: TCP'den biraz daha oku.
-        char chunk[4096];
+        char chunk[4096];   // satır henüz tamamlanmadı: biraz daha oku
         int received = recv(socket_, chunk, sizeof(chunk), 0);
 
         if (received == SOCKET_ERROR)
@@ -178,8 +170,7 @@ Connection::Connection(const std::string& host, unsigned short port)
 
 Connection::~Connection() = default;
 
-// Ölçüm al. Python "end" gönderdiyse false döner.
-bool Connection::receive(Message& message)
+bool Connection::receive(Message& message)   // Python "end" gönderdiyse false
 {
     if (impl_->finished_)
     {
@@ -213,8 +204,7 @@ bool Connection::receive(Message& message)
     return true;
 }
 
-// Komutu gönder. Komut, son alınan ölçümün adımına ait olmalı.
-void Connection::send(const Message& message)
+void Connection::send(const Message& message)   // komut, son alınan ölçümün adımına ait olmalı
 {
     bool is_command = message.kind == "command";
     bool same_tick = message.tick == impl_->expected_tick_;

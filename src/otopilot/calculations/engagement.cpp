@@ -121,6 +121,12 @@ std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& ene
     return own.picture.dor_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s);
 }
 
+bool engagement::in_tr(const Aircraft& own, const Aircraft& enemy)
+{
+    const double range_nm = geometry::range_3d_nm(own.kinematics, enemy.kinematics);
+    return range_nm <= tr_nm(own, enemy);
+}
+
 // NEZ'imde mi: düşman şimdi out yapsa füzemden kaçamaz. NEZ benim füzeme karşı düşmanın kaçış NEZ'idir.
 bool engagement::in_nez(const Aircraft& own, const Aircraft& enemy)
 {

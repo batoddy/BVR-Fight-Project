@@ -8,15 +8,13 @@
 
 namespace
 {
-    // Python sunucusunun adresi. Varsayılan src/sim/scenario.yaml connection ile aynı.
-    struct Address
+    struct Address                           // Python sunucusunun adresi; varsayılan scenario.yaml connection ile aynı
     {
         std::string host = "127.0.0.1";
         unsigned short port = 6000;
     };
 
-    // Kullanım: main.exe [IPv4] [port]
-    Address read_address(int argc, char* argv[])
+    Address read_address(int argc, char* argv[])   // kullanım: main.exe [IPv4] [port]
     {
         if (argc > 3)
         {
@@ -34,14 +32,13 @@ namespace
             std::size_t used = 0;
             int value = 0;
 
-            // Sayı değilse stoi hata atar; o durumda aşağıdaki kontrol yakalar.
             try
             {
                 value = std::stoi(text, &used);
             }
             catch (const std::exception&)
             {
-                used = 0;
+                used = 0;   // sayı değil: aşağıdaki kontrol yakalar
             }
 
             const bool whole_text_is_number = used == text.size();
@@ -56,9 +53,7 @@ namespace
     }
 }
 
-// Ana döngü: ölçümü al -> Sim'e ver -> komutu gönder.
-// TCP ayrıntıları Connection, adımın yönetimi Sim içindedir.
-int main(int argc, char* argv[])
+int main(int argc, char* argv[])   // ana döngü: ölçümü al → Sim'e ver → komutu gönder
 {
     try
     {

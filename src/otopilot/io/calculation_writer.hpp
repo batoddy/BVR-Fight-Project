@@ -9,10 +9,8 @@
 class CalculationWriter
 {
 public:
-    /// {"aircraft": [fighter'ın hostile'e bakışı, hostile'in fighter'a bakışı]}
-    static Json write(const World& world);
+    static Json write(const World& world);                             // {"aircraft": [fighter'ın bakışı, hostile'ın bakışı]}
 
 private:
-    /// Tek uçağın karşı uçağa göre hesapları ve çizim için profil sabitleri
-    static Json to_json(const Aircraft& own, const Aircraft& enemy);
+    static Json to_json(const Aircraft& own, const Aircraft& enemy);   // bir uçağın karşı uçağa göre hesapları ve çizim sabitleri
 };
