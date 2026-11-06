@@ -1,0 +1,36 @@
+{
+  "steps": 14401,
+  "duration_s": 1200,
+  "phases": [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16
+  ],
+  "test_legs": 18,
+  "minimum_altitude_m": 8997.339506161103,
+  "shots": [
+    {
+      "time_s": 976.3412761323698,
+      "id": "red",
+      "target_id": "blue"
+    },
+    {
+      "time_s": 1066.4245734320903,
+      "id": "red",
+      "target_id": "blue"
+    }
+  ],
+  "final_hold": true
+}

@@ -120,7 +120,9 @@ SOURCE_FIELDS = {'alt_ft': ('altitude_m', METERS_PER_FOOT),
                  'load_factor_g': ('load_factor_g', 1.0),
                  'forces/load-factor': ('load_factor_g', 1.0),
                  # Bizim kayıtçının gaz komutu (0..1). Komuttur, ölçüm değil; motor buna gecikmeyle uyar.
-                 'cmd_throttle_norm': ('throttle_norm', 1.0)}
+                 'cmd_throttle_norm': ('throttle_norm', 1.0),
+                 # Otopilotun yön komutu, derece 0..360. Komuttur; burun yönü buna doğru döner.
+                 'cmd_heading_deg': ('heading_command_deg', 1.0)}
 
 # Our recorder (schema 2) names its own columns and states WGS84 geodetic
 # latitude; BVRGym's built-in TacviewLogger keeps Tacview names and geocentric
@@ -217,7 +219,7 @@ def read_csv(path, handle):
                 values[key + '_known'] = key in previous
             for key in ('roll_deg', 'pitch_deg', 'heading_deg'):
                 values.setdefault(key, 0.0)
-            for key in ('true_airspeed_mps', 'mach', 'load_factor_g', 'throttle_norm'):
+            for key in ('true_airspeed_mps', 'mach', 'load_factor_g', 'throttle_norm', 'heading_command_deg'):
                 values.setdefault(key, None)
             sample = dict(info, **values)
             if rows and rows[-1]['sim_time_s'] == sample['sim_time_s']:

@@ -33,6 +33,7 @@ struct Picture
     double closure_kt = 0;         // kt, mesafenin azalma hızı; + yaklaşıyoruz, ikimizin hareketi
     double enemy_closure_kt = 0;   // kt, yalnız düşmanın bana doğru hızı; + bana geliyor
     double los_rate_deg_s = 0;     // derece/s, bearing'in değişimi; + saat yönünde
+    Ned enemy_velocity_ned_kt;     // kt, hedefin yer hızı; hareketli yan konum takibi için | World::update
 
     // Kaçış: düşmanın füzesine karşı | engagement::
     OutPlan out;                       // şimdi out yapsam

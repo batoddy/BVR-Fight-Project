@@ -63,6 +63,7 @@ namespace
         picture.closure_kt = geometry::closure_kt(own_k, enemy_k);
         picture.enemy_closure_kt = geometry::other_closure_kt(own_k, enemy_k);
         picture.los_rate_deg_s = geometry::los_rate_deg_s(own_k, enemy_k);
+        picture.enemy_velocity_ned_kt = enemy_k.velocity_ned_kt;
 
         picture.out = engagement::out_plan(own, enemy);           // kaçış: düşmanın ana silahından
         picture.r_cold_nm = engagement::r_cold_nm(own, enemy);

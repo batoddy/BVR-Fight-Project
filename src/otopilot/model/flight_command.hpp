@@ -9,6 +9,7 @@
 namespace throttle
 {
     inline constexpr double IDLE = 0.1;         // rölanti
+    inline constexpr double CRANK = 0.35;         // rölanti
     inline constexpr double DEFAULT = 0.45;     // seyir: askeri gücün biraz altı (scenario.yaml başlangıç gazı)
     inline constexpr double MRT = 0.5;          // askeri güç (Military Rated Thrust): art yakıcısız en yüksek
     inline constexpr double MAX_THRUST = 1.0;   // tam art yakıcı

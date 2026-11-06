@@ -90,6 +90,9 @@ CMake C++17 ve Windows Winsock kullanır. Çıktı `src/otopilot/main.exe` dosya
 
 Kurulum, Python'u önce başlatma ve adres ayarları [çalıştırma kılavuzundadır](../../docs/CALISTIRMA_KILAVUZU.md).
 
+Genel manevra denemesi: Python'u `--duration 1200` ile, C++'ı `main.exe --maneuver-test` ile çalıştır.
+18 zamanlı adımın sırası ve süreleri `control/otopilot_maneuver_test.cpp` içindedir; [test kullanımını](KULLANIM.md#otopilotla-genel-manevra-testi) incele.
+
 ## Birim sözleşmesi
 
 | Büyüklük | C++ birimi / alan örneği |

@@ -3,6 +3,8 @@
 #include "common/ned.hpp"
 #include "model/kinematics.hpp"
 
+struct Picture;
+
 // İki nesne arasındaki geometri. Saf fonksiyonlar.
 // Girdi Kinematics: uçak da olabilir, atılmış füze de. own: bakan taraf, other: bakılan taraf.
 // Enlem/boylam WGS84 jeodezik derece, irtifa ft. Mesafe NM, hız kt döner.
@@ -20,4 +22,7 @@ namespace geometry
     double closure_kt(const Kinematics& own, const Kinematics& other);        // kt, aradaki mesafenin azalma hızı; + yaklaşıyoruz, ikimizin hareketi
     double other_closure_kt(const Kinematics& own, const Kinematics& other);  // kt, yalnız other'ın own'a doğru hızı; + bana geliyor
     double los_rate_deg_s(const Kinematics& own, const Kinematics& other);    // derece/s, bearing'in yatay değişimi; + saat yönünde; aynı noktada 0
+    double lateral_speed_kt(double bearing_deg, const Ned& velocity_ned_kt); // kt, verilen LOS'un yatay sağına hız bileşeni; kendi hareketimizi içermez
+    // Picture geometri alanları ve enemy_velocity_ned_kt hazır olmalıdır. Sabit yatay menzildeki hedef yan konumuna yön; konum korunması garanti edilmez.
+    double flank_heading_deg(const Kinematics& own, const Picture& picture, double target_ta_deg, double range_nm, double response_s); // derece ±180; hareketsiz hedefte sıfır hata varsa mevcut yön
 }

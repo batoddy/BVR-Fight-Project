@@ -47,6 +47,11 @@ SATURATED_S = 1.0         # s, elevator bu kadar tam çekişte kalırsa uçak tu
 
 TAU_HEAD = 2.0            # s, ince ayarda yön hatasını kapatma süresi
 
+# Yatış: küçük yön hatasında BVRGym'in ikincil roll PID'i kullanılır. Varsayılan P=0.2, F-16'nın yatış FCS'iyle
+# 2,4 Hz'lik bir yatış salınımına giriyor; aileron kuyruğa da karıştığı için g'de titreşim olarak görünüyor.
+# 0.11: 5/10 km, rölanti/tam gaz, 8°/55° dönüşte titreşim yok; 0.12'de 5 km tam gazda geri geliyor.
+ROLL_SEC_KP = 0.11
+
 
 # =============================================================================
 # BİR UÇAĞIN BVRGYM OTOPİLOTUNA BAĞLAMA
@@ -55,7 +60,8 @@ TAU_HEAD = 2.0            # s, ince ayarda yön hatasını kapatma süresi
 class FlightControl:
     """Bir uçağın kontrol durumu. Bizim alanlarımız burada durur; BVRGym nesnesine alan eklenmez.
 
-    BVRGym'e tek müdahale: AircraftPIDAutopilot.get_control_input bu nesnenin kontrolüyle değiştirilir.
+    BVRGym'e müdahale: AircraftPIDAutopilot.get_control_input bu nesnenin kontrolüyle değiştirilir,
+    ikincil roll PID'inin P kazancı ROLL_SEC_KP yapılır.
     """
 
     def __init__(self, autopilot):
@@ -70,6 +76,7 @@ def install(autopilot):
     control = FlightControl(autopilot)
     if FLIGHT_CONTROL_ENABLED:
         autopilot.get_control_input = lambda diff_head, diff_alt: _control(control, diff_head, diff_alt)
+        autopilot.roll_sec_PID.Kp = ROLL_SEC_KP   # BVRGym kaynağı değişmez; yalnız bu uçağın PID nesnesi
     # 0 ise BVRGym'in orijinal get_control_input'u yerinde kalır; g_limit yok sayılır.
     return control
 

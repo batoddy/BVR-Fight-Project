@@ -1,0 +1,3 @@
+{"seq": 1, "sim_time_s": 976.4246094323701, "agent": "red", "type": "target_assigned", "target": "KZL"}
+{"seq": 2, "sim_time_s": 976.4246094323701, "agent": "red", "type": "missile_launched", "ammo": "0", "target": "KZL"}
+{"seq": 3, "sim_time_s": 1066.5079067320894, "agent": "red", "type": "missile_launched", "ammo": "1", "target": "KZL"}

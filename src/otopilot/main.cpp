@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "control/sim.hpp"
 #include "io/connection.hpp"
@@ -12,23 +13,35 @@ namespace
     {
         std::string host = "127.0.0.1";
         unsigned short port = 6000;
+        bool maneuver_test = false;
     };
 
-    Address read_address(int argc, char* argv[])   // kullanım: main.exe [IPv4] [port]
+    Address read_address(int argc, char* argv[])   // kullanım: main.exe [--maneuver-test] [IPv4] [port]
     {
-        if (argc > 3)
+        Address address;
+        std::vector<std::string> positional;
+        for (int index = 1; index < argc; ++index)
         {
-            throw std::runtime_error("Kullanim: main.exe [IPv4] [port]");
+            const std::string argument = argv[index];
+            if (argument == "--maneuver-test") { address.maneuver_test = true; }
+            else if (argument.rfind("--", 0) == 0)
+            {
+                throw std::runtime_error("Bilinmeyen secenek: " + argument);
+            }
+            else { positional.push_back(argument); }
+        }
+        if (positional.size() > 2)
+        {
+            throw std::runtime_error("Kullanim: main.exe [--maneuver-test] [IPv4] [port]");
         }
 
-        Address address;
-        if (argc > 1)
+        if (!positional.empty())
         {
-            address.host = argv[1];
+            address.host = positional[0];
         }
-        if (argc > 2)
+        if (positional.size() > 1)
         {
-            const std::string text = argv[2];
+            const std::string text = positional[1];
             std::size_t used = 0;
             int value = 0;
 
@@ -59,7 +72,7 @@ int main(int argc, char* argv[])   // ana döngü: ölçümü al → Sim'e ver �
     {
         const Address address = read_address(argc, argv);
         Connection connection(address.host, address.port);
-        Sim sim;
+        Sim sim(address.maneuver_test);
         Message state;
 
         while (connection.receive(state))    // Python "end" gönderince false döner

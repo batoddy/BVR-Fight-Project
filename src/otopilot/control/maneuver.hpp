@@ -12,6 +12,7 @@ enum class ManeuverStatus
 {
     Running,   // sürüyor
     Done,      // kendi hedefine ulaştı (yalnız kendi içinde biten manevralar)
+    Satisfied, // sürüyor ve şu an istenen koşulu sağlıyor; koşul bozulunca Running'e döner
 };
 
 // Manevra yalnız "bu durumda nasıl uçarım" sorusunu cevaplar; hangisinin çalışacağını otopilot seçer.
@@ -24,10 +25,15 @@ public:
     virtual Phase phase() const = 0;                                   // görüntüleyicide ve CSV'de görünen ad
     virtual void enter(const Aircraft& own) { (void)own; }             // manevraya geçilince bir kez: girişe bağlı hedefleri kilitler
     virtual FlightCommand update(const Aircraft& own) = 0;             // her step: own.command'dan başlayıp yeni komutu döner
-    virtual ManeuverStatus status(const Aircraft& own) const           // Out, Recommit: hedefe varınca Done; diğerleri hep Running
+    virtual ManeuverStatus status(const Aircraft& own) const           // varsayılan Running; açı tutanlar Satisfied, bitenler Done bildirebilir
     {
         (void)own;
         return ManeuverStatus::Running;
+    }
+
+    bool is_satisfied(const Aircraft& own) const                      // yalnız mevcut koşulun sağlanması; Done ayrı bir durumdur
+    {
+        return status(own) == ManeuverStatus::Satisfied;
     }
 };
 
@@ -39,18 +45,26 @@ enum class ManeuverSide
 };
 
 // =============================================================================
-// HOLD  —  şu anki yön ve irtifayla, seyir gazıyla devam
+// HOLD  —  girişteki yön ve irtifayı koru
 // =============================================================================
 
-// NOT: her step ölçülen yön ve irtifayı hedef yapar; irtifa kayarsa düzeltilmez. Girişte kilitlemek ayrı bir karar.
 class Hold : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Hold; }
-    FlightCommand update(const Aircraft& own) override;   // yön ve irtifa = şu anki ölçüm; g sınırı yazmaz (Python varsayılanı)
+    void enter(const Aircraft& own) override;             // ölçülen yön ve irtifayı bir kez kilitler
+    FlightCommand update(const Aircraft& own) override;   // kilitlenen yön ve irtifaya geri döner
+    ManeuverStatus status(const Aircraft& own) const override; // yön ve irtifa tolerans içindeyse Satisfied
 
 private:
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
+    static constexpr double ALTITUDE_TOLERANCE_FT = 100.0;
+
+    double target_heading_deg_ = 0;                       // derece, girişteki yön | enter
+    double target_altitude_ft_ = 0;                       // ft, girişteki irtifa | enter
+    bool has_target_ = false;
 };
 
 // =============================================================================
@@ -84,10 +98,12 @@ class Commit : public Maneuver
 public:
     Phase phase() const override { return Phase::Commit; }
     FlightCommand update(const Aircraft& own) override;   // yön = düşmanın bearing'i; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override; // burun hedef yönüne tolerans içinde bakıyorsa Satisfied
 
 private:
     static constexpr double THROTTLE = throttle::DEFAULT;
     static constexpr double G_LIMIT = 4.0;                // g, yumuşak dönüş: hız ve irtifa korunur
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 };
 
 // =============================================================================
@@ -125,12 +141,14 @@ public:
     Phase phase() const override { return Phase::Crank; }
     void enter(const Aircraft& own) override;                 // taraf: TA ≥ 0 (düşmanın burnunun sağındayım) ise Left, değilse Right
     FlightCommand update(const Aircraft& own) override;       // yön = bearing ± (gimbal − OFFSET_DEG) + gecikme payı; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override; // seçilen tarafta hedef ATA tolerans içindeyse ve radar görüyorsa Satisfied
     bool in_radar_sight(const Aircraft& own) const;           // düşman radarın görüş konisinde mi (|ATA| < gimbal)
     ManeuverSide side() const { return side_; }               // girişte seçilen taraf
 
 private:
     static constexpr double OFFSET_DEG = 3.0;                 // derece, gimbal sınırından içeri pay
-    static constexpr double THROTTLE = throttle::IDLE;
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;        // derece, hedef ATA'dan izin verilen sapma
+    static constexpr double THROTTLE = throttle::CRANK;
     static constexpr double G_LIMIT = 3.0;                    // g, yumuşak dönüş (flight_control: 3 g crank 50° ≈ 14.5 s)
 
     ManeuverSide side_ = ManeuverSide::Left;                  // enter()'da seçilir
@@ -147,47 +165,54 @@ public:
     Phase phase() const override { return Phase::Beam; }
     void enter(const Aircraft& own) override;                 // taraf: düşman sağımdaysa (ATA > 0) Left, solumdaysa Right
     FlightCommand update(const Aircraft& own) override;       // yön = bearing − 90 (Left) / + 90 (Right) + gecikme payı; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override; // seçilen tarafta ATA ±90°'ye yakınsa Satisfied
     ManeuverSide side() const { return side_; }               // girişte seçilen taraf
 
 private:
     static constexpr double THROTTLE = throttle::DEFAULT;
     static constexpr double G_LIMIT = 4.0;                    // g, yumuşak dönüş
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 
     ManeuverSide side_ = ManeuverSide::Left;                  // enter()'da seçilir
 };
 
 // =============================================================================
-// NOTCH  —  füzeye dik uç (İSKELET)
+// NOTCH  —  füzeye dik uç
 // =============================================================================
 
-// Beam'in füzeye göre olanı: bana gelen füzenin (own.picture.threat) 3/9 hattı.
+// Beam'in füzeye göre olanı: bana gelen füzenin (own.picture.threat) 3/9 hattı; füze yoksa düşman uçağın.
 class Notch : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Notch; }
-    FlightCommand update(const Aircraft& own) override;   // örnek: yön = füzenin bearing'i ∓ 90; füze yoksa yön değişmez
+    FlightCommand update(const Aircraft& own) override;   // yön = tehdidin bearing'i ∓ 90, kısa dönüş; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override;   // tehdit ATA ±90°'ye yakınsa Satisfied, değilse Running
 
 private:
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 };
 
 // =============================================================================
-// DRAG  —  füzeye sırt dön (İSKELET)
+// DRAG  —  füzeye sırt dön
 // =============================================================================
 
-// Out'un füzeye göre olanı: füzeyi tam arkaya al, kapanma hızını düşür.
+// Out'un füzeye göre olanı: füzeyi tam arkaya al, kapanma hızını düşür; füze yoksa düşman uçağı arkaya alır.
 class Drag : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Drag; }
-    FlightCommand update(const Aircraft& own) override;   // örnek: yön = füzenin bearing'i − 180; füze yoksa yön değişmez
+    FlightCommand update(const Aircraft& own) override;   // yön = tehdidin bearing'i − 180; g out_g; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override;   // tehdit ATA ±180°'ye yakınsa Satisfied, değilse Running
 
 private:
     static constexpr double THROTTLE = throttle::MRT;     // P-1290: drag askeri güçle
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 };
 
 // =============================================================================
-// OFFSET  —  düşman yönünden verilen açı kadar yana uç (İSKELET)
+// OFFSET  —  düşman yönünden verilen açı kadar yana uç
 // =============================================================================
 
 // Açı ve taraf taktikten gelir: maneuvers.offset.set(40.0, ManeuverSide::Left) sonra fly.
@@ -195,50 +220,64 @@ class Offset : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Offset; }
-    void set(double offset_deg, ManeuverSide side);       // fly'dan önce çağrılır
-    FlightCommand update(const Aircraft& own) override;   // örnek: yön = bearing ± offset_deg_ (Right +, Left −)
+    void set(double offset_deg, ManeuverSide side);       // fly'dan önce çağrılır; açı sonlu ve 0..180 derece olmalıdır
+    FlightCommand update(const Aircraft& own) override;   // yön = bearing ± offset_deg_ + LOS gecikme payı (Right +, Left −)
+    ManeuverStatus status(const Aircraft& own) const override; // seçilen tarafta hedef ATA'ya yakınsa Satisfied
 
 private:
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 
     double offset_deg_ = 0;                               // derece, burnun düşman yönünden sapması
     ManeuverSide side_ = ManeuverSide::Left;
 };
 
 // =============================================================================
-// FLANK  —  düşmanın burnuna göre yan açıda kal (İSKELET)
+// FLANK  —  düşmanın burnuna göre verilen yan açıyı koru
 // =============================================================================
 
-// Aralık condition::Aspect::Flank'ten (30-70°). Açık soru: ta_deg mi (düşmanın burnu) ata_deg mi (benim burnum).
+// maneuvers.flank.set(40.0): düşmanın 40° sağı; set(-40.0): 40° solu. Açıya varınca da uçmaya devam eder.
 class Flank : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Flank; }
-    FlightCommand update(const Aircraft& own) override;           // örnek: |ta| hedefin altındaysa düşmanın burnundan uzaklaş
-    ManeuverStatus status(const Aircraft& own) const override;    // örnek: |ta| hedef aralığa girince Done
+    void set(double target_ta_deg, double tolerance_deg = 3.0);    // hedef TA ±180'e sarılır; tolerans 0..180 derece olmalıdır
+    void enter(const Aircraft& own) override;                     // girişteki yatay menzil kilitlenir
+    FlightCommand update(const Aircraft& own) override;           // hareketli hedefin verilen yan konumuna, kilitli menzilde yönelir; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override;    // TA hedefin toleransı içindeyse Satisfied, dışında Running; Done olmaz
 
 private:
-    static constexpr double TARGET_TA_DEG = 50.0;                 // derece, Flank aralığının ortası
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;                        // g, konum düzeltme dönüşü
+    static constexpr double RESPONSE_S = 20.0;                    // s, yan konum hatasını giderme süresi; simülasyon ayarı
+
+    double target_ta_deg_ = 50.0;                                // derece, düşmanın burnuna göre istenen işaretli açı | set
+    double tolerance_deg_ = 3.0;                                 // derece, hedef açı çevresindeki kabul aralığı | set
+    double range_nm_ = 0;                                        // NM, düşmandan tutulacak yatay menzil | enter
 };
 
 // =============================================================================
-// COLLISION  —  LOS hızını sıfırla: çarpışma rotası (İSKELET)
+// COLLISION  —  LOS hızını sıfırla: çarpışma rotası
 // =============================================================================
 
-// Bearing değişmiyorsa iki uçak aynı noktaya varır; en kısa yoldan kesişme.
+// Menzil kapanırken sabit bearing kesişme rotasını gösterir; LOS hızına göre öncü açı verir.
 class Collision : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::Collision; }
-    FlightCommand update(const Aircraft& own) override;   // örnek: yön = bearing + KP × los_rate_deg_s
+    FlightCommand update(const Aircraft& own) override;   // kapanırken mevcut yöne LOS düzeltmesi; uzaklaşıyorsa önce hedefe dön
+    ManeuverStatus status(const Aircraft& own) const override; // menzil kapanıyor ve yatay LOS hızı tolerans içindeyse Satisfied
 
 private:
+    static constexpr double KP_S = 10.0;                  // s, LOS hızını öncü açıya çeviren kazanç; simülasyonda ayarlanacak
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;
+    static constexpr double LOS_RATE_TOLERANCE_DEG_S = 0.1; // derece/s, sabit yatay bearing toleransı
 };
 
 // =============================================================================
-// FLY HEADING  —  verilen sabit yöne uç (İSKELET)
+// FLY HEADING  —  verilen sabit yöne uç
 // =============================================================================
 
 // Flow cold, Reset ve Departure için: yön taktikten gelir.
@@ -246,11 +285,14 @@ class FlyHeading : public Maneuver
 {
 public:
     Phase phase() const override { return Phase::FlyHeading; }
-    void set(double heading_deg);                         // fly'dan önce çağrılır
-    FlightCommand update(const Aircraft& own) override;   // örnek: yön = heading_deg_; irtifa aynı
+    void set(double heading_deg);                         // fly'dan önce çağrılır; yönü ±180'e sarıp saklar
+    FlightCommand update(const Aircraft& own) override;   // yön = heading_deg_; irtifa aynı
+    ManeuverStatus status(const Aircraft& own) const override; // ölçülen yön verilen açıya yakınsa Satisfied
 
 private:
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 
     double heading_deg_ = 0;                              // derece ±180
 };
@@ -276,7 +318,7 @@ private:
 };
 
 // =============================================================================
-// PURSUIT  —  pure, lag, lead takip (İSKELET)
+// PURSUIT  —  pure, lag, lead takip
 // =============================================================================
 
 enum class PursuitMode
@@ -293,11 +335,17 @@ public:
     explicit Pursuit(PursuitMode mode) : mode_(mode) {}
 
     Phase phase() const override;                         // moda göre PurePursuit, LagPursuit, LeadPursuit
-    FlightCommand update(const Aircraft& own) override;   // örnek: Pure bearing; Lag bearing ∓ LAG_DEG; Lead bearing ± öncü açı
+    FlightCommand update(const Aircraft& own) override;   // Pure bearing; Lag LOS yönünün gerisine LAG_DEG; Lead önüne LEAD_DEG; LOS dönmüyorsa pure
+    ManeuverStatus status(const Aircraft& own) const override; // ölçülen yön ilgili modun hedef yönüne yakınsa Satisfied
 
 private:
     static constexpr double LAG_DEG = 15.0;               // derece, Lag'de burnun düşmanın gerisinde kalacağı açı
+    static constexpr double LEAD_DEG = 20.0;              // derece, Lead'de LOS hareketi yönündeki sabit öncü açı
     static constexpr double THROTTLE = throttle::DEFAULT;
+    static constexpr double G_LIMIT = 4.0;
+    static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
+
+    double target_heading_deg(const Aircraft& own) const;  // derece, ilgili modun güncel hedef yönü
 
     PursuitMode mode_;
 };
@@ -319,17 +367,18 @@ public:
     Crank crank;                                   // radar sınırında yanal kaçış
     Beam beam;                                     // düşmana dik uç
 
-    // İskelet: gövdeleri henüz yalnız gazı yazar.
     Notch notch;                                   // füzeye dik uç
     Drag drag;                                     // füzeye sırt dön
-    Offset offset;                                 // düşman yönünden açı kadar yana
-    Flank flank;                                   // düşmanın burnuna göre yan açı
+    Pursuit pure_pursuit{PursuitMode::Pure};          // burun düşmanda
+    Pursuit lag_pursuit{PursuitMode::Lag};            // burun düşmanın gerisinde
+    Pursuit lead_pursuit{PursuitMode::Lead};          // burun düşmanın önünde
     Collision collision;                           // çarpışma rotası
     FlyHeading fly_heading;                        // sabit yön
+    Flank flank;                                   // düşmanın verilen yan açısını koru
+    Offset offset;                                 // düşman yönünden açı kadar yana
+
+    // İskelet: gövdeleri henüz yalnız gazı yazar.
     Snake snake;                                   // periyodik sağ-sol
-    Pursuit pure_pursuit{PursuitMode::Pure};       // burun düşmanda
-    Pursuit lag_pursuit{PursuitMode::Lag};         // burun düşmanın gerisinde
-    Pursuit lead_pursuit{PursuitMode::Lead};       // burun düşmanın önünde
 
 private:
     Maneuver* active_ = nullptr;                   // son uçurulan manevra; ilk fly() da giriş sayılır

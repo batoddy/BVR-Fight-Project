@@ -1,0 +1,408 @@
+{
+  "schema_version": 3,
+  "kind": "bvrgym-bvr-recording",
+  "created_at": "2026-11-06T18:24:29",
+  "snapshots": 14402,
+  "events": 3,
+  "coordinates": {
+    "latitude_reference": "WGS84 geodetic",
+    "longitude_reference": "WGS84",
+    "altitude_reference": "WGS84 ellipsoid height",
+    "note": "lat_deg jeodezik enlemdir (position/lat-geod-deg), alt_ft elipsoid yüksekliğidir (position/h-sl-ft). BVRGym içeride jeosantrik çalışır: spawn ic/lat-gc-deg'e yazılır, o değer lat_gc_deg sütunundadır. Koordinat referansına dönüşüm uygulanmaz; yalnız sütun birimleri ft/kt olarak yazılır."
+  },
+  "conversions": "irtifa ft; hız kt; C++ mesafeleri NM; NED hızları ft/s → kt; komut irtifası m → ft",
+  "columns": {
+    "time_s": {
+      "source": "record() çağrısındaki taşıyıcı saati",
+      "unit": "s",
+      "note": "Füze dosyalarında da taşıyıcı uçağın saatidir"
+    },
+    "lat_deg": {
+      "source": "position/lat-geod-deg",
+      "unit": "deg",
+      "scale": 1.0
+    },
+    "lon_deg": {
+      "source": "position/long-gc-deg",
+      "unit": "deg",
+      "scale": 1.0
+    },
+    "alt_ft": {
+      "source": "position/h-sl-ft",
+      "unit": "ft",
+      "scale": 1.0
+    },
+    "roll_deg": {
+      "source": "attitude/phi-deg",
+      "unit": "deg",
+      "scale": 1.0
+    },
+    "pitch_deg": {
+      "source": "attitude/theta-deg",
+      "unit": "deg",
+      "scale": 1.0
+    },
+    "yaw_deg": {
+      "source": "attitude/psi-deg",
+      "unit": "deg",
+      "scale": 1.0
+    },
+    "mach": {
+      "source": "velocities/mach",
+      "unit": "-",
+      "scale": 1.0
+    },
+    "lat_gc_deg": {
+      "source": "position/lat-gc-deg",
+      "unit": "deg",
+      "scale": 1.0,
+      "note": "BVRGym'in iç referansı; scenario.yaml'daki spawn enlemi bu sütunla eşleşir"
+    },
+    "tas_kt": {
+      "source": "velocities/vtrue-kts",
+      "unit": "kt",
+      "scale": 1.0
+    },
+    "vel_north_kt": {
+      "source": "velocities/v-north-fps",
+      "unit": "kt",
+      "scale": 0.5924838012958963
+    },
+    "vel_east_kt": {
+      "source": "velocities/v-east-fps",
+      "unit": "kt",
+      "scale": 0.5924838012958963
+    },
+    "vel_down_kt": {
+      "source": "velocities/v-down-fps",
+      "unit": "kt",
+      "scale": 0.5924838012958963
+    },
+    "load_factor_g": {
+      "source": "forces/load-factor",
+      "unit": "-",
+      "scale": 1.0
+    },
+    "fuel_lb": {
+      "source": "propulsion/total-fuel-lbs",
+      "unit": "lb",
+      "scale": 1.0
+    },
+    "missile_time_s": {
+      "source": "simulation/sim-time-sec",
+      "unit": "s",
+      "scale": 1.0,
+      "note": "Füzenin kendi saati; atışta sıfırlanır"
+    },
+    "cmd_heading_deg": {
+      "source": "dış uçuş komutu",
+      "unit": "deg"
+    },
+    "cmd_alt_ft": {
+      "source": "dış uçuş komutu",
+      "unit": "ft"
+    },
+    "cmd_throttle_norm": {
+      "source": "dış uçuş komutu",
+      "unit": "-"
+    },
+    "cmd_g_limit": {
+      "source": "dış uçuş komutu",
+      "unit": "g"
+    }
+  },
+  "simulation": {
+    "engine": "JSBSim",
+    "physics_dt_s": 0.00833333,
+    "aircraft_sim_time_step": 1,
+    "aircraft_control_time_step": 10,
+    "missile_sim_time_step": 1,
+    "missile_control_time_step": 10
+  },
+  "scenario": {
+    "world": {
+      "duration_s": 1200,
+      "sleep_s": 0,
+      "sim_time_step": 1
+    },
+    "connection": {
+      "host": "127.0.0.1",
+      "port": 6000
+    },
+    "agents": {
+      "blue": {
+        "name": "KZL",
+        "type": "F16",
+        "team": "Blue",
+        "ammo": 4,
+        "throttle": 0.45,
+        "spawn": {
+          "lat": 59.0,
+          "long": 18.0,
+          "alt": 10000,
+          "vel": 300,
+          "heading": 0
+        }
+      },
+      "red": {
+        "name": "Hostile",
+        "type": "F16",
+        "team": "Red",
+        "ammo": 2,
+        "throttle": 0.45,
+        "spawn": {
+          "lat": 60.2,
+          "long": 18.0,
+          "alt": 10000,
+          "vel": 300,
+          "heading": 180
+        }
+      }
+    }
+  },
+  "objects": [
+    {
+      "file": "F-16 (KZL--blue) [Blue].csv",
+      "kind": "aircraft",
+      "key": "blue",
+      "name": "KZL",
+      "team": "Blue",
+      "model": "F-16",
+      "ammo": 4,
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "cmd_heading_deg",
+        "cmd_alt_ft",
+        "cmd_throttle_norm",
+        "cmd_g_limit"
+      ]
+    },
+    {
+      "file": "AIM-120 AMRAAM (KZL--blue--0) [Blue].csv",
+      "kind": "missile",
+      "key": "blue",
+      "carrier": "blue",
+      "ammo_id": "0",
+      "name": "KZL",
+      "team": "Blue",
+      "model": "AIM-120 AMRAAM",
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "missile_time_s"
+      ]
+    },
+    {
+      "file": "AIM-120 AMRAAM (KZL--blue--1) [Blue].csv",
+      "kind": "missile",
+      "key": "blue",
+      "carrier": "blue",
+      "ammo_id": "1",
+      "name": "KZL",
+      "team": "Blue",
+      "model": "AIM-120 AMRAAM",
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "missile_time_s"
+      ]
+    },
+    {
+      "file": "AIM-120 AMRAAM (KZL--blue--2) [Blue].csv",
+      "kind": "missile",
+      "key": "blue",
+      "carrier": "blue",
+      "ammo_id": "2",
+      "name": "KZL",
+      "team": "Blue",
+      "model": "AIM-120 AMRAAM",
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "missile_time_s"
+      ]
+    },
+    {
+      "file": "AIM-120 AMRAAM (KZL--blue--3) [Blue].csv",
+      "kind": "missile",
+      "key": "blue",
+      "carrier": "blue",
+      "ammo_id": "3",
+      "name": "KZL",
+      "team": "Blue",
+      "model": "AIM-120 AMRAAM",
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "missile_time_s"
+      ]
+    },
+    {
+      "file": "F-16 (Hostile--red) [Red].csv",
+      "kind": "aircraft",
+      "key": "red",
+      "name": "Hostile",
+      "team": "Red",
+      "model": "F-16",
+      "ammo": 2,
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "cmd_heading_deg",
+        "cmd_alt_ft",
+        "cmd_throttle_norm",
+        "cmd_g_limit"
+      ]
+    },
+    {
+      "file": "AIM-120 AMRAAM (Hostile--red--0) [Red].csv",
+      "kind": "missile",
+      "key": "red",
+      "carrier": "red",
+      "ammo_id": "0",
+      "name": "Hostile",
+      "team": "Red",
+      "model": "AIM-120 AMRAAM",
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "missile_time_s"
+      ]
+    },
+    {
+      "file": "AIM-120 AMRAAM (Hostile--red--1) [Red].csv",
+      "kind": "missile",
+      "key": "red",
+      "carrier": "red",
+      "ammo_id": "1",
+      "name": "Hostile",
+      "team": "Red",
+      "model": "AIM-120 AMRAAM",
+      "columns": [
+        "time_s",
+        "lat_deg",
+        "lon_deg",
+        "alt_ft",
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg",
+        "mach",
+        "lat_gc_deg",
+        "tas_kt",
+        "vel_north_kt",
+        "vel_east_kt",
+        "vel_down_kt",
+        "load_factor_g",
+        "fuel_lb",
+        "missile_time_s"
+      ]
+    }
+  ],
+  "files": {
+    "events": "events.jsonl",
+    "calculations": "calculations.csv"
+  },
+  "calculations": {
+    "rows": 28802,
+    "source": "C++ otopilot (command mesajının calculations alanı)",
+    "units": {
+      "distance": "NM",
+      "speed": "kt",
+      "angle": "deg",
+      "time": "s"
+    },
+    "note": "Satır başına bir uçağın karşı uçağa göre hesabı. time_s, C++'ın kullandığı ölçümün zamanıdır ve uçak CSV'sindeki satırla aynıdır. Birim sütun adının sonundadır; bool alanlar (ör. me_in_enemy_wez) 1/0. Son ölçümün hesabı yoktur: simülasyon bittiği için C++'a gönderilmez."
+  }
+}

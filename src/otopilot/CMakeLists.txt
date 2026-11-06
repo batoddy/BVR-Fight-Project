@@ -41,4 +41,16 @@ if(BUILD_TESTING)
     target_link_libraries(units_test PRIVATE otopilot_core)
     target_link_options(units_test PRIVATE -static)
     add_test(NAME units COMMAND units_test)
+
+    add_executable(maneuver_test tests/maneuver_test.cpp)
+    target_compile_options(maneuver_test PRIVATE -Wall -Wextra)
+    target_link_libraries(maneuver_test PRIVATE otopilot_core)
+    target_link_options(maneuver_test PRIVATE -static)
+    add_test(NAME maneuvers COMMAND maneuver_test)
+
+    # Gerçek JSBSim ölçümlerini aynı manevralara aktaran test aracı; normal otopilot akışına girmez.
+    add_executable(maneuver_probe tests/maneuver_probe.cpp)
+    target_compile_options(maneuver_probe PRIVATE -Wall -Wextra)
+    target_link_libraries(maneuver_probe PRIVATE otopilot_core)
+    target_link_options(maneuver_probe PRIVATE -static)
 endif()

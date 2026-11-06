@@ -109,18 +109,93 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 
 ## Manevralar
 
-| Manevra | Faz | Gaz | g sınırı | Bitişi |
+| Manevra | Faz | Gaz | g sınırı | Durumu |
 |---|---|---|---|---|
-| `hold` | Hold | DEFAULT | yok (Python varsayılanı) | sürekli |
+| `hold` | Hold | DEFAULT | 4 | girişte yön/irtifayı kilitler; ±2° ve ±100 ft içinde `Satisfied`, sapınca düzeltmeye devam eder |
 | `out` | Out | MAX_THRUST, bitince DEFAULT | `out_g` | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
-| `commit` | Commit | DEFAULT | 4 | sürekli |
+| `commit` | Commit | DEFAULT | 4 | burun hedefe ±2° içinde bakıyorsa `Satisfied` |
 | `recommit` | Recommit | MAX_THRUST | `out_g` | `status()` → Done: \|ATA\| atış açısına (30° + 1°) indi; ilk varıştan sonra hedef 30°'de kalır |
-| `crank` | Crank | DEFAULT | 3 | sürekli; `in_radar_sight(own)` düşman radar konisinde mi (\|ATA\| < gimbal). Taraf girişte (`enter`) seçilir, `side()` ile okunur |
-| `beam` | Beam | DEFAULT | 4 | sürekli; taraf girişte seçilir, `side()` ile okunur |
+| `crank` | Crank | IDLE | 3 | sürekli; seçilen tarafta hedef ATA'ya ±2° yakın ve radar içindeyse `Satisfied`. Taraf girişte seçilir; `in_radar_sight(own)` ve `side()` ayrıca sorgulanabilir |
+| `beam` | Beam | DEFAULT | 4 | seçilen tarafta ATA ±90° hedefine ±2° içinde oturunca `Satisfied`; taraf girişte seçilir |
+| `flank` | Flank | DEFAULT | 4 | sürekli; `set(target_ta_deg, tolerance_deg = 3)` ile verilen işaretli TA tolerans içindeyse `Satisfied`, dışında `Running` |
+| `drag` | Drag | MRT | `out_g` | tehdit varken `Running`, kaçılacak tehdit kalmazsa `Done` |
+| `notch` | Notch | DEFAULT | 4 | tehdit varken `Running`, kaçılacak tehdit kalmazsa `Done` |
+| `offset` | Offset | DEFAULT | 4 | `set(offset_deg, side)`; seçilen tarafta hedef ATA'ya ±2° içinde `Satisfied` |
+| `fly_heading` | FlyHeading | DEFAULT | 4 | `set(heading_deg)`; hedef yöne ±2° içinde `Satisfied` |
+| `pure_pursuit`, `lag_pursuit`, `lead_pursuit` | ilgili Pursuit fazı | DEFAULT | 4 | ilgili modun güncel hedef yönüne ±2° içinde `Satisfied` |
+| `collision` | Collision | DEFAULT | 4 | yatay menzil sıfır değil, kapanma pozitif ve LOS hızı ±0,1°/s içindeyse `Satisfied` |
 
 g sınırları profildeki `max_g`'yi aşamaz (`set_g_limit(g, own.profile.max_g)`).
 
-Notch, Drag, Offset, Flank, Collision, FlyHeading, Snake ve Pursuit (pure/lag/lead) iskelet olarak durur; gövdeleri komutu değiştirmez. Sürekli manevraları otopilot bitirir. Karara yardım eden sorgular (`Crank::in_radar_sight` gibi) manevranın kendisinde durur.
+`Running`: koşul henüz sağlanmıyor; `Satisfied`: koşul şu anda sağlanıyor ve manevra devam ediyor; `Done`: bitiş koşulu oluştu. `Satisfied` kalıcı bir varış bayrağı değildir; açı bozulursa tekrar `Running` olur. `is_satisfied(own)` yalnız `Satisfied` için true döner. `status()` ve `is_satisfied()` komut üretmez, otomatik geçiş yapmaz.
+
+```cpp
+maneuvers_.flank.set(40.0);      // düşmanın burnunun 40° sağı; -40.0 soludur, varsayılan tolerans ±3°
+maneuvers_.fly(own, maneuvers_.flank);
+if (maneuvers_.flank.is_satisfied(own)) { /* yan açı şu an sağlanıyor */ }
+if (maneuvers_.drag.status(own) == ManeuverStatus::Done) { /* tehdit kalmadı */ }
+
+maneuvers_.offset.set(40.0, ManeuverSide::Right); // bearing'in 40° sağı; hedef ATA -40°
+maneuvers_.fly(own, maneuvers_.offset);
+```
+
+Flank, mevcut yatay menzilde hedefin istenen yanına bir takip noktası koyar; hedefin yer hızını ve konum hatasını kullanarak yön üretir. Tepki süresi 20 s'dir. Hız eşleme ve hedef dönüş hızını öngörme yoktur; farklı hızlarda veya sert hedef dönüşlerinde açı hatası oluşabilir ve `is_satisfied()` false döner.
+
+Pursuit, otopilotla yeniden denemek için eski LOS işaretiyle taraf seçimine alınmıştır. Lag LOS hareketinin gerisine 15°, Lead önüne 20° sabit sapma kullanır; LOS hızı tam sıfırsa Pure yönü kullanılır. Bunlar hız oranından hesaplanan kesin önleme açıları değildir. Collision kapanırken mevcut yöne LOS hızıyla orantılı düzeltme ekler; LOS sıfırlanınca edinilmiş kesişme yönünü korur. Kapanma yoksa önce hedefe yönelir. Kontrol ve durum sorgusu yatay geometriye aittir; dikey kesişme koşulu aranmaz. Snake hâlâ iskelettir.
+
+Manevralar hazırdır. Mevcut gösterim otopilotunun seçim/geçiş kuralları ayrıca belirlenir; yeni manevralar kendiliğinden akışa girmez.
+
+### Otopilotla genel manevra testi
+
+İlk terminalde Python sunucusunu, ikinci terminalde test otopilotunu başlat:
+
+```powershell
+.venv/Scripts/python.exe src/sim/sim_main.py --duration 1200 --name manevra_deneme
+```
+
+```powershell
+src/otopilot/main.exe --maneuver-test
+```
+
+Test planı [control/otopilot_maneuver_test.cpp](control/otopilot_maneuver_test.cpp) içindeki `LEGS` tablosundadır. Her adım fizik saatine göre sabit süre uçar; `Satisfied` veya `Done` erken geçiş yapmaz. Hedef sağlanamazsa da sıra ilerler. Toplam plan 1155 s sürer ve sonrasında Hold devam eder; 1200 s simülasyon tamamını kaydeder.
+
+| Sıra | Manevra | Süre (s) |
+|---|---|---|
+| 1 | Hold | 10 |
+| 2–3 | Başlangıç yönüne göre FlyHeading +60° ve −60° | 60 + 60 |
+| 4 | Commit | 40 |
+| 5 | Crank | 45 |
+| 6 | Beam | 60 |
+| 7–8 | Offset 40° sağ ve sol | 45 + 45 |
+| 9 | Pure Pursuit | 40 |
+| 10–11 | Lag ve Lead Pursuit | 60 + 60 |
+| 12–13 | Flank +40° ve −40° | 120 + 120 |
+| 14 | Collision | 90 |
+| 15–16 | Out ve Recommit | 60 + 60 |
+| 17–18 | Notch ve Drag | 90 + 90 |
+
+Karşı uçak başlangıç yönü ve irtifasında Hold uçar. Notch ve Drag girişlerinde birer füze atar; bu iki adım için red'de en az iki hazır füze gerekir. Atışın ölçüme yansıması sonraki adımdadır; ilk satırda henüz tehdit görülmediği için `Done` görünebilir. Mühimmat yoksa terminal `NO_TEST_MISSILE` bildirir. Snake test planında yoktur.
+
+Terminal saniyede bir test adını, geçen/sınır süreyi, `Running/Satisfied/Done`, ölçülen/komut yönünü, ATA, TA ve LOS hızını gösterir. CSV'deki `phase` alanı uçulan manevrayı belirtir. Test `Satisfied` göründüğünde de aynı manevrayı sürdürdüğünden açının korunmasını inceleyebilirsin. Akış boyunca uçaklar sıfırlanmaz; her manevra öncekinin bıraktığı konum ve hızdan başlar. `main.exe` parametresiz çalıştırıldığında mevcut muharebe akışı seçilir.
+
+### Doğrulama
+
+```powershell
+cmake -S src/otopilot -B src/otopilot/build
+cmake --build src/otopilot/build
+ctest --test-dir src/otopilot/build --output-on-failure
+.venv/Scripts/python.exe src/otopilot/tests/jsbsim_maneuvers.py
+```
+
+`maneuver_probe`, Python'un gerçek JSBSim ölçümlerini üretim kodundaki `StateReader`, `World`, `Maneuvers` ve `CommandWriter` üzerinden geçirir. Python scripti 17 başlangıç/açı durumunda sonlu komutları, g sınırlarını, irtifa kaybını ve ilgili `Satisfied`/`Done` durumlarını kontrol eder; Notch/Drag denemelerinde gerçek simülasyon füzesi bulunur. Sonuçlar `tmp/maneuver-validation/results.json` içine yazılır. `--mode flank` gibi bir seçenek yalnız ilgili denemeleri çalıştırır. Bu kontroller belirli başlangıç koşulları içindir; her hız, irtifa ve hedef hareketini kapsamaz.
+
+Genel test planının tamamını gerçek `main.exe --maneuver-test`, TCP ve kayıt üzerinden doğrulamak için:
+
+```powershell
+.venv/Scripts/python.exe src/otopilot/tests/autopilot_maneuvers.py
+```
+
+Bu doğrulama 1200 s uçar, 18 adımı ve son Hold'u, iki test atışını ve sonlu uçuş durumunu kontrol eder. Loglar, sonuç JSON'u ve görüntüleyicide açılabilen kayıt `tmp/autopilot-maneuver-test/<deneme>/` altına yazılır. Boş bir yerel port seçer; normal sunucunun 6000 portunu kullanmaz. Bu kontrol bir akış testidir; her manevranın her başlangıç koşulunda `Satisfied` olmasını beklemez. Eski LOS işaretli Lead davranışı da bu akışta gözlenebilir.
 
 ## Atış ve füzeler
 

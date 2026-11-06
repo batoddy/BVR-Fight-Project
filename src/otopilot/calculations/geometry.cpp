@@ -1,9 +1,11 @@
 #include "calculations/geometry.hpp"
 
 #include <cmath>
+#include <stdexcept>
 
 #include "common/angles.hpp"
 #include "common/units.hpp"
+#include "model/picture.hpp"
 
 namespace
 {
@@ -12,6 +14,7 @@ namespace
     // sınırlar için yeterli. Daha hassası gerekirse WGS84 ECEF dönüşümüyle yapılır (eski common/geodesy.hpp
     // git geçmişinde); fonksiyonların dışarıdan görünüşü değişmez.
     constexpr double EARTH_RADIUS_NM = meter_to_nmile(6371000.0);
+    constexpr double MIN_GUIDANCE_SPEED_KT = 1e-9;   // kt, yönü tanımsız sayılan sıfıra yakın hız
 }
 
 // own'dan other'a vektör, NM: kuzey, doğu, aşağı.
@@ -64,6 +67,13 @@ double geometry::los_rate_deg_s(const Kinematics& own, const Kinematics& other)
     return v_dik_kt / range_nm / SECONDS_PER_HOUR * RAD_TO_DEG;
 }
 
+// LOS'un sağındaki yatay birim vektör (-sin bearing, cos bearing) ile hızın skaler çarpımı.
+double geometry::lateral_speed_kt(double bearing_deg, const Ned& velocity_ned_kt)
+{
+    const double bearing_rad = bearing_deg * DEG_TO_RAD;
+    return velocity_ned_kt.east * std::cos(bearing_rad) - velocity_ned_kt.north * std::sin(bearing_rad);
+}
+
 // Yatay mesafe, Pisagor: √(kuzey² + doğu²)
 double geometry::range_2d_nm(const Kinematics& own, const Kinematics& other)
 {
@@ -98,6 +108,30 @@ double geometry::ta_deg(const Kinematics& own, const Kinematics& other)
     // other'ın gözünden ATA: other'dan bana bearing − other'ın burun yönü. 0: burnu bana dönük (hot).
     const double other_to_own_bearing_deg = bearing_deg(other, own);
     return wrap_180(other_to_own_bearing_deg - other.heading_deg);
+}
+
+// Hedef nokta = düşman konumu + range_nm uzaklıkta hedef TA yönündeki vektör.
+// İstenen hız = düşmanın yer hızı + (hedef nokta − kendi konumum) / tepki süresi.
+double geometry::flank_heading_deg(const Kinematics& own, const Picture& picture, double target_ta_deg, double range_nm, double response_s)
+{
+    if (!std::isfinite(response_s) || response_s <= 0.0)
+    {
+        throw std::invalid_argument("Flank tepki suresi pozitif ve sonlu olmalidir");
+    }
+    const double enemy_heading_deg = wrap_180(picture.bearing_deg + 180.0 - picture.ta_deg);
+    const double target_bearing_rad = (enemy_heading_deg + target_ta_deg) * DEG_TO_RAD;
+    const double target_north_nm = picture.los_nm.north + range_nm * std::cos(target_bearing_rad);
+    const double target_east_nm = picture.los_nm.east + range_nm * std::sin(target_bearing_rad);
+    const double correction_north_kt = target_north_nm / response_s * SECONDS_PER_HOUR;
+    const double correction_east_kt = target_east_nm / response_s * SECONDS_PER_HOUR;
+    const double desired_north_kt = picture.enemy_velocity_ned_kt.north + correction_north_kt;
+    const double desired_east_kt = picture.enemy_velocity_ned_kt.east + correction_east_kt;
+
+    if (std::abs(desired_north_kt) < MIN_GUIDANCE_SPEED_KT && std::abs(desired_east_kt) < MIN_GUIDANCE_SPEED_KT)
+    {
+        return own.heading_deg;
+    }
+    return std::atan2(desired_east_kt, desired_north_kt) * RAD_TO_DEG;
 }
 
 double geometry::closure_kt(const Kinematics& own, const Kinematics& other)

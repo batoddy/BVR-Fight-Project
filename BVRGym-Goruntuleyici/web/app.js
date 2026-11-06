@@ -411,7 +411,7 @@ function labels(){
   el('record-source').textContent=packet.catalog_root||'Dizin seçilmedi';el('record-source').title=el('record-source').textContent;
   el('record-duration').textContent=bounds?formatTime(bounds.last-bounds.first)+' · '+packet.objects+' nesne':'Tacview CSV';
   const track=buffer.tracks.get(selected),first=track?.samples[0],last=track?.samples.at(-1);
-  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','speed','mach','roll','pitch','load-factor','throttle','east','north'])el(id).textContent='—';el('relative').hidden=true;return;}
+  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','heading-command','speed','mach','roll','pitch','load-factor','throttle','east','north'])el(id).textContent='—';el('relative').hidden=true;return;}
   const current=buffer.at(selected,viewTime),entity=current||(viewTime<first.record_start_s?first:last);
   el('detail-title').textContent=first.kind==='missile'?'Füze bilgisi':'Uçak bilgisi';el('selected-name').textContent=first.name;
   el('model').textContent=first.model+' · '+(first.team==='blue'?'Dost takım':first.team==='red'?'Karşı takım':'Takım belirtilmemiş');
@@ -426,6 +426,7 @@ function labels(){
   el('mach').textContent=mach==null?'—':number(mach,2);
   el('load-factor').textContent=Number.isFinite(entity.load_factor_g)?number(entity.load_factor_g,1):'—';
   el('throttle').textContent=Number.isFinite(entity.throttle_norm)?number(entity.throttle_norm*100,0):'—';
+  el('heading-command').textContent=Number.isFinite(entity.heading_command_deg)?number(entity.heading_command_deg,1):'—';
   el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';
   el('speed-measure').querySelector('dt').textContent=preferences.speedUnit==='mach'?'Hız · Mach':estimatedSpeed?'Hız · hesaplanan':'Hava hızı · TAS';
   el('mach-measure').querySelector('dt').textContent=estimatedMach?'Mach · tahmini':'Mach';

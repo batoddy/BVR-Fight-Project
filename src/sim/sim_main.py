@@ -5,8 +5,10 @@ Python ölçüm gönderir, C++ komutunu bekler, ardından bir adım ilerler.
 
 İsteğe bağlı parametreler (verilmeyen YAML'daki değerle kalır):
   python src/sim/sim_main.py --name deneme1 --altitude 8000 --throttle 0.9 --range 20
+  python src/sim/sim_main.py --duration 1200 --name manevra_deneme
 """
 import argparse
+import math
 import sys
 import time
 
@@ -33,11 +35,14 @@ def read_arguments():
     parser.add_argument("--altitude", type=float, help="İki uçağın da başlangıç irtifası, MSL metre.")
     parser.add_argument("--throttle", type=float, help="İki uçağın da başlangıç gaz komutu, 0..1.")
     parser.add_argument("--range", type=float, help="Başlangıç mesafesi, NM; red, blue'nun bu kadar kuzeyine konur.")
+    parser.add_argument("--duration", type=float, help="Simülasyon süresi, saniye; YAML world.duration_s yerine geçer.")
     arguments = parser.parse_args()
     if arguments.throttle is not None and not 0.0 <= arguments.throttle <= 1.0:
         parser.error("--throttle 0..1 aralığında olmalı.")
     if arguments.range is not None and arguments.range <= 0.0:
         parser.error("--range pozitif olmalı.")
+    if arguments.duration is not None and (not math.isfinite(arguments.duration) or arguments.duration <= 0):
+        parser.error("--duration pozitif ve sonlu olmalı.")
     return arguments
 
 
@@ -46,6 +51,8 @@ def main():
 
     # Kurulum tek sefer yapılır; fizik yalnız simulation.step() ile ilerler.
     scenario = load_scenario()
+    if arguments.duration is not None:
+        scenario["world"]["duration_s"] = arguments.duration
 
     # Verilen irtifa her uçağın YAML'daki spawn.alt'ının yerine geçer. İlk irtifa
     # komutu da spawn.alt'tan alındığı için uçaklar bu irtifayı korur.

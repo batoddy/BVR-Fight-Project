@@ -207,7 +207,7 @@ void FlankAttack::update(Aircraft& own, Maneuvers& maneuvers)
     // {
     // case Step::Flank:
     //     maneuvers.fly(own, maneuvers.flank);
-    //     if (maneuvers.flank.status(own) == ManeuverStatus::Done) { go_to(Step::Turn); }
+    //     if (maneuvers.flank.is_satisfied(own)) { go_to(Step::Turn); }
     //     if (condition::in_dor(own)) { finish(); }   // yan açıyı kazanamadan çok yaklaştım
     //     break;
     //

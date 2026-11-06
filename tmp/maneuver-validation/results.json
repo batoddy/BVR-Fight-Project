@@ -1,0 +1,376 @@
+[
+  {
+    "mode": "hold",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 0,
+      "satisfied": 721,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -0.014348563396163,
+      "closure_kt": 0.0026072841972109018,
+      "has_threat": false,
+      "los_rate_deg_s": 5.12600353886015e-07,
+      "range_nm": 32.9151596259389,
+      "ta_deg": 179.98557058308367
+    }
+  },
+  {
+    "mode": "fly_heading",
+    "angle_deg": 60,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 158,
+      "satisfied": 563,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -70.99422082299219,
+      "closure_kt": -405.3755138656445,
+      "has_threat": false,
+      "los_rate_deg_s": -0.18411996667783945,
+      "range_nm": 38.24194661012087,
+      "ta_deg": 169.01517694172574
+    }
+  },
+  {
+    "mode": "offset",
+    "angle_deg": 40,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 131,
+      "satisfied": 590,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -39.985864952119954,
+      "closure_kt": -143.18252104826382,
+      "has_threat": false,
+      "los_rate_deg_s": -0.13397458368364176,
+      "range_nm": 35.2012732173857,
+      "ta_deg": 171.72639156039054
+    }
+  },
+  {
+    "mode": "offset",
+    "angle_deg": -40,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 140,
+      "satisfied": 581,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": 39.95606954633091,
+      "closure_kt": -142.86128074203293,
+      "has_threat": false,
+      "los_rate_deg_s": 0.13425873420128492,
+      "range_nm": 35.12886302207092,
+      "ta_deg": -171.7510365986124
+    }
+  },
+  {
+    "mode": "commit",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 0,
+      "satisfied": 721,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -0.014460062056963425,
+      "closure_kt": 0.0025883611765493697,
+      "has_threat": false,
+      "los_rate_deg_s": 7.415906369400022e-09,
+      "range_nm": 32.91515980086107,
+      "ta_deg": 179.98555610063306
+    }
+  },
+  {
+    "mode": "crank",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 166,
+      "satisfied": 555,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -57.30860469956732,
+      "closure_kt": -365.6339198775796,
+      "has_threat": false,
+      "los_rate_deg_s": -0.11652514215441595,
+      "range_nm": 37.81813311178086,
+      "ta_deg": 171.56171400453368
+    }
+  },
+  {
+    "mode": "beam",
+    "angle_deg": 0,
+    "duration_s": 90,
+    "steps": 1081,
+    "statuses": {
+      "running": 260,
+      "satisfied": 821,
+      "done": 0
+    },
+    "min_altitude_m": 9996.963635608363,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": 89.9577645219773,
+      "closure_kt": -591.9226506561012,
+      "has_threat": false,
+      "los_rate_deg_s": 0.14842537094455197,
+      "range_nm": 45.923430297615184,
+      "ta_deg": -164.1704651376918
+    }
+  },
+  {
+    "mode": "flank",
+    "angle_deg": 40,
+    "duration_s": 150,
+    "steps": 1801,
+    "statuses": {
+      "running": 681,
+      "satisfied": 1120,
+      "done": 0
+    },
+    "min_altitude_m": 9996.965541503567,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -139.88653516605393,
+      "closure_kt": 2.0940313993434643,
+      "has_threat": false,
+      "los_rate_deg_s": 0.0028948098975418155,
+      "range_nm": 5.459821602723273,
+      "ta_deg": 40.06023781134164
+    }
+  },
+  {
+    "mode": "flank",
+    "angle_deg": -40,
+    "duration_s": 150,
+    "steps": 1801,
+    "statuses": {
+      "running": 676,
+      "satisfied": 1125,
+      "done": 0
+    },
+    "min_altitude_m": 9996.965541503567,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": 138.88021103807577,
+      "closure_kt": 8.724780065343737,
+      "has_threat": false,
+      "los_rate_deg_s": 0.0032089431070057447,
+      "range_nm": 5.0567247783083,
+      "ta_deg": -40.51657049572643
+    }
+  },
+  {
+    "mode": "pure",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 0,
+      "satisfied": 721,
+      "done": 0
+    },
+    "min_altitude_m": 9997.502972395108,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": 0.8364844547191765,
+      "closure_kt": 435.494536961029,
+      "has_threat": false,
+      "los_rate_deg_s": 0.3766632821947075,
+      "range_nm": 23.607923297458687,
+      "ta_deg": 108.60868235351637
+    }
+  },
+  {
+    "mode": "lag",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 85,
+      "satisfied": 636,
+      "done": 0
+    },
+    "min_altitude_m": 9997.502972395108,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": 16.11056847000916,
+      "closure_kt": 360.81377557152183,
+      "has_threat": false,
+      "los_rate_deg_s": 0.4570199880614722,
+      "range_nm": 24.43578022421385,
+      "ta_deg": 113.41743118529536
+    }
+  },
+  {
+    "mode": "lead",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 129,
+      "satisfied": 592,
+      "done": 0
+    },
+    "min_altitude_m": 9997.502972395108,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -19.48944939412163,
+      "closure_kt": 463.776774336025,
+      "has_threat": false,
+      "los_rate_deg_s": 0.24232509845407676,
+      "range_nm": 23.87239358625375,
+      "ta_deg": 101.77587823520514
+    }
+  },
+  {
+    "mode": "collision",
+    "angle_deg": 0,
+    "duration_s": 180,
+    "steps": 2161,
+    "statuses": {
+      "running": 1104,
+      "satisfied": 1057,
+      "done": 0
+    },
+    "min_altitude_m": 9997.502972395108,
+    "max_g_command": 4.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -62.45070793500855,
+      "closure_kt": 64.07454741943425,
+      "has_threat": false,
+      "los_rate_deg_s": 0.026976031896553367,
+      "range_nm": 17.539702894944305,
+      "ta_deg": 110.92481484314752
+    }
+  },
+  {
+    "mode": "out",
+    "angle_deg": 0,
+    "duration_s": 90,
+    "steps": 1081,
+    "statuses": {
+      "running": 297,
+      "satisfied": 0,
+      "done": 784
+    },
+    "min_altitude_m": 8995.856462899885,
+    "max_g_command": 6.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": 179.98598399000682,
+      "closure_kt": -17.880447579641668,
+      "has_threat": false,
+      "los_rate_deg_s": -0.041905691468305604,
+      "range_nm": 29.213815640032372,
+      "ta_deg": -7.121786859533586
+    }
+  },
+  {
+    "mode": "recommit",
+    "angle_deg": 0,
+    "duration_s": 60,
+    "steps": 721,
+    "statuses": {
+      "running": 300,
+      "satisfied": 0,
+      "done": 421
+    },
+    "min_altitude_m": 9996.96365994486,
+    "max_g_command": 6.0,
+    "threat_seen": false,
+    "last_metrics": {
+      "ata_deg": -30.005899643779653,
+      "closure_kt": 1357.9846571879325,
+      "has_threat": false,
+      "los_rate_deg_s": -0.6296516316465922,
+      "range_nm": 16.221161557779,
+      "ta_deg": -19.179247093760637
+    }
+  },
+  {
+    "mode": "notch",
+    "angle_deg": 0,
+    "duration_s": 45,
+    "steps": 541,
+    "statuses": {
+      "running": 540,
+      "satisfied": 0,
+      "done": 1
+    },
+    "min_altitude_m": 9996.96365994486,
+    "max_g_command": 4.0,
+    "threat_seen": true,
+    "last_metrics": {
+      "ata_deg": -96.57869067052405,
+      "closure_kt": 521.1782387077353,
+      "has_threat": true,
+      "los_rate_deg_s": -0.45825169817229994,
+      "range_nm": 24.45046669864752,
+      "ta_deg": -13.56113204105111
+    }
+  },
+  {
+    "mode": "drag",
+    "angle_deg": 0,
+    "duration_s": 45,
+    "steps": 541,
+    "statuses": {
+      "running": 540,
+      "satisfied": 0,
+      "done": 1
+    },
+    "min_altitude_m": 9996.96365994486,
+    "max_g_command": 6.0,
+    "threat_seen": true,
+    "last_metrics": {
+      "ata_deg": 174.69022768331155,
+      "closure_kt": 72.05637355919725,
+      "has_threat": true,
+      "los_rate_deg_s": 0.004815090932946377,
+      "range_nm": 28.144789793120832,
+      "ta_deg": -3.985151662366718
+    }
+  }
+]

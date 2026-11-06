@@ -214,6 +214,9 @@ namespace
 
         OtopilotFighter pilot;
         pilot.step(own, enemy);
+        require(own.weapons.missiles_left() == 4, "commit waits until target enters TR");
+        own.weapons.enemy_in_tr = true;   // koşul World::update'ten gelir; bu test yalnız otopilot akışını sürer
+        pilot.step(own, enemy);
         require(own.phase == Phase::Commit && own.weapons.missiles_left() == 4,
                 "transition selects next state without flying it yet");
         pilot.step(own, enemy);
@@ -234,13 +237,12 @@ namespace
         near(own.command.altitude_ft(), 26700, "first escape entry altitude");
         own.picture.ata_deg = 180;
         pilot.step(own, enemy);
-        own.picture.ata_deg = 2.1;
+        own.picture.ata_deg = own.profile.recommit_fire_ata_deg + 1.1;
         pilot.step(own, enemy);
         pilot.step(own, enemy);
-        require(own.phase == Phase::Commit && own.weapons.missiles_left() == 3,
-                "recommit waits for nose alignment");
-        own.picture.ata_deg = -2;
-        require(condition::nose_on_target(own), "negative alignment boundary");
+        require(own.phase == Phase::Recommit && own.weapons.missiles_left() == 3,
+                "recommit waits until target enters configured firing angle");
+        own.picture.ata_deg = -own.profile.recommit_fire_ata_deg;
         pilot.step(own, enemy);
         pilot.step(own, enemy);
         require(own.weapons.missiles_left() == 2, "second shot once");
@@ -265,9 +267,11 @@ namespace
         pilot.step(own, enemy);
         require(own.phase == Phase::Hold && own.weapons.missiles_left() == 2, "departure after final escape");
 
-        own.picture.ata_deg = 2;
+        own.picture.ata_deg = 3;
         require(condition::nose_on_target(own), "positive alignment boundary");
-        own.picture.ata_deg = -2.1;
+        own.picture.ata_deg = -3;
+        require(condition::nose_on_target(own), "negative alignment boundary");
+        own.picture.ata_deg = -3.1;
         require(!condition::nose_on_target(own), "outside negative alignment boundary");
     }
 
@@ -284,6 +288,7 @@ namespace
         fighter.kinematics.velocity_ned_kt.north = 700;
         hostile.kinematics = place(fighter.kinematics, 0, 20);
         hostile.kinematics.heading_deg = 180;
+        hostile.kinematics.tas_kt = 300;
         hostile.kinematics.velocity_ned_kt.north = -300;
 
         const double range_nm = geometry::range_3d_nm(fighter.kinematics, hostile.kinematics);
@@ -311,12 +316,13 @@ namespace
         require(engagement::mar_nm(fighter, hostile)
                 >= nez_nm + feet_to_nmile(AIM120C.blast_radius_ft) + fighter.profile.out_offset_nm, "MAR covers NEZ");
 
-        // DOR = DR + düşmanın 180° recommit dönüşünde yaklaştığı yol + ayrı out payı.
-        const double recommit_turn_s = PI * turn::radius_m(700, fighter.profile.out_g) / knot_to_mps(700);
+        // DOR = MAR + hedef atış açısına recommit sırasında düşmanın TAS'ıyla yaklaşması + 0,5 NM.
+        const double recommit_turn_rad = (180 - fighter.profile.recommit_fire_ata_deg) * DEG_TO_RAD;
+        const double recommit_turn_s = recommit_turn_rad * turn::radius_m(700, fighter.profile.out_g) / knot_to_mps(700);
         const double remaining_nm = engagement::dor_nm(fighter, hostile)
-                                    - travel_distance_nm(enemy_closure_kt, recommit_turn_s);
-        near(remaining_nm, engagement::dr_nm(fighter, hostile) + fighter.profile.out_offset_nm,
-             "DOR leaves DR plus the turn-start offset");
+                                    - travel_distance_nm(hostile.kinematics.tas_kt, recommit_turn_s);
+        near(remaining_nm, engagement::mar_nm(fighter, hostile) + 0.5,
+             "DOR leaves MAR plus fixed 0.5 NM margin");
 
 
     }
@@ -340,15 +346,15 @@ namespace
         near(own.profile.dr_notch_time_s, 15, "DR default notch duration");
         // 600 kt, 15 s: düşman 2.5 NM yaklaşır; kendi 700 kt hızımız eklenmez.
         const double approaching_dr_nm = engagement::dr_nm(own, enemy);
-        near(approaching_dr_nm - stern_wez_nm, 3.0, "DR enemy projection and fixed 0.5 NM margin");
+        near(approaching_dr_nm - stern_wez_nm, 3.0, "DR enemy TAS and fixed 0.5 NM margin");
         own.kinematics.velocity_ned_kt = {0, 700, 0};
         near(engagement::dr_nm(own, enemy), approaching_dr_nm, "DR excludes own closure component");
 
-        // Aynı 600 kt TAS ile yatayda dik uçan düşmanın yaklaşma katkısı sıfırdır.
+        // DR, düşmanın yönünden bağımsız TAS'ını kullanır; yaklaşma için en kötü durum kabul edilir.
         enemy.kinematics.velocity_ned_kt = {0, 600, 0};
-        near(engagement::dr_nm(own, enemy) - stern_wez_nm, 0.5, "DR uses projection instead of TAS");
+        near(engagement::dr_nm(own, enemy), approaching_dr_nm, "DR uses TAS for crossing target");
         enemy.kinematics.velocity_ned_kt = {600, 0, 0};
-        near(engagement::dr_nm(own, enemy) - stern_wez_nm, -2.0, "DR preserves receding velocity sign");
+        near(engagement::dr_nm(own, enemy), approaching_dr_nm, "DR uses TAS for receding target");
         enemy.kinematics.velocity_ned_kt = {-600, 0, 0};
         own.profile.dr_notch_time_s = 30;
         near(engagement::dr_nm(own, enemy) - stern_wez_nm, 5.5, "DR configurable notch duration");
