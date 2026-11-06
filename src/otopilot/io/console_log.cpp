@@ -37,6 +37,9 @@ namespace
 
 void ConsoleLog::print(const World& world)
 {
+    print_decision(world.fighter, last_fighter_decision_, world.sim_time_s);
+    print_decision(world.hostile, last_hostile_decision_, world.sim_time_s);
+
     const int second = static_cast<int>(world.sim_time_s);
     if (second == last_print_s_)
     {
@@ -50,6 +53,17 @@ void ConsoleLog::print(const World& world)
     print_aircraft(world.hostile);
     print_active_missiles(world.fighter);
     std::cout << '\n';
+}
+
+void ConsoleLog::print_decision(const Aircraft& aircraft, std::string& last_decision, double sim_time_s)
+{
+    if (aircraft.decision == last_decision)
+    {
+        return;
+    }
+    last_decision = aircraft.decision;
+    std::cout << std::fixed << std::setprecision(1) << "t " << sim_time_s << " s | KARAR " << aircraft.id
+              << ": " << aircraft.decision << '\n';
 }
 
 void ConsoleLog::print_maneuver_test(const World& world, const OtopilotManeuverTest& pilot)

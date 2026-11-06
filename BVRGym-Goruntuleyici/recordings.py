@@ -330,7 +330,7 @@ def read_calculations(directory):
                                 for slot, value in times.items()):
                             raise ValueError('missile_catch_times_s geçersiz')
                         values[key] = times
-                    elif key.endswith('_id'):
+                    elif key.endswith('_id') or key == 'decision':   # metin alanları
                         values[key] = raw or None
                     elif not raw:
                         values[key] = None

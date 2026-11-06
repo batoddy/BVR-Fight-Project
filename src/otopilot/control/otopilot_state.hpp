@@ -1,20 +1,16 @@
 #pragma once
 
-// Otopilot durum makinesinin durumları: fighter ve hostile aynı listeyi kullanır, her biri kendine gerekeni.
-// Atış durumları (FirstShot, SecondShot, Fire) tek step'tir: atış emri verilir, manevra değişmez.
+// Otopilot durum makinesinin durumları. Atış durumları (Shot, EscapeShot, CounterShot) tek step'tir:
+// atış emri verilir, manevra değişmez.
 enum class OtopilotState
 {
-    Commit,          // düşmana uç
-    FirstShot,       // tek step ilk atış emri
-    FirstSupport,    // Crank: füzeyi destekle
-    FirstEscape,     // Out: düşman arkada kalınca biter
-    Recommit,        // atış açısına dön
-    SecondShot,      // tek step ikinci atış emri
-    SecondSupport,   // Crank
-    FinalEscape,     // Out
+    Commit,          // düşmana uç; K1 atışa karar verir
+    Shot,            // tek step: K1 atış emri
+    Support,         // Crank: füzeyi destekle; sınırı K3
+    EscapeShot,      // tek step: çıkmadan önce atış emri (İmha / Riskli: MAR'da), sonra Escape
+    Escape,          // Out: düşman arkada kalınca K5
+    Recommit,        // atış açısına dön, sonra Commit
     Departure,       // çıkış rotasını koru
-    Fire,            // tek step atış emri (hostile)
-    Out,             // kaç (hostile)
-    HoldAfterOut,    // kaçış rotasını koru (hostile)
-    Hold,            // rotayı koru
+    CounterShot,     // tek step: K4 karşı atış emri, sonra destek
+    Defense,         // K4: Beam / Drag / Notch; tehdit bitince K5
 };

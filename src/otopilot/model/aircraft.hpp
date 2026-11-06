@@ -31,4 +31,5 @@ struct Aircraft
     // Karar çıktısı
     FlightCommand command;       // her step Python'un son uyguladığı komutla başlar (StateReader); otopilot değiştirir
     Phase phase = Phase::Hold;   // şu an hangi aşamada | otopilot
+    std::string decision;        // son karar ve nedeni; kayda ve konsola gider | otopilot
 };

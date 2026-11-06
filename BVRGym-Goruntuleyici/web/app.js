@@ -316,6 +316,7 @@ function relativePanel(first,entity){
   el('relative-target').textContent=target?'→ '+target.name:calc?.target_id?'→ '+calc.target_id:'';
   el('relative-empty').hidden=Boolean(calc);
   el('calc-phase').textContent=Number.isFinite(calc?.phase)?PHASE_NAMES[calc.phase]??'AŞAMA '+calc.phase:'—';
+  el('calc-decision').textContent=calc?.decision||'—';
   el('calc-ata').textContent=sideAngleLabel(calc?.ata_deg);el('calc-bearing').textContent=angleLabel(calc?.bearing_deg);
   el('calc-aspect').textContent=angleLabel(calc?.aspect_deg);
   el('calc-range-3d').textContent=distance(calc?.range_3d_m);el('calc-range-2d').textContent=distance(calc?.range_2d_m);

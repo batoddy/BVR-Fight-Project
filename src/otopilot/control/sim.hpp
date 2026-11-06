@@ -1,7 +1,6 @@
 #pragma once
 
-#include "control/otopilot_fighter.hpp"
-#include "control/otopilot_hostile.hpp"
+#include "control/otopilot.hpp"
 #include "control/otopilot_maneuver_test.hpp"
 #include "io/console_log.hpp"
 #include "io/messages.hpp"
@@ -16,13 +15,15 @@ public:
 
 private:
     static constexpr bool PRINT_LOG = false;   // true: terminale saniyede bir durum satırı (ConsoleLog)
+    static constexpr Mission FIGHTER_MISSION = {MissionGoal::Destroy, RiskLevel::Balanced};   // şimdilik sabit
+    static constexpr Mission HOSTILE_MISSION = {MissionGoal::Destroy, RiskLevel::Balanced};
 
     World world_;
     bool maneuver_test_enabled_ = false;
     OtopilotManeuverTest maneuver_test_;
 
-    OtopilotFighter otopilot_fighter_;
-    OtopilotHostile otopilot_hostile_;
+    Otopilot otopilot_fighter_{FIGHTER_MISSION};
+    Otopilot otopilot_hostile_{HOSTILE_MISSION};
 
     ConsoleLog log_;
 };

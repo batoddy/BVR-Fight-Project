@@ -13,7 +13,7 @@
 #include "common/formulas.hpp"
 #include "common/units.hpp"
 #include "control/conditions.hpp"
-#include "control/otopilot_fighter.hpp"
+#include "control/otopilot.hpp"
 #include "io/command_writer.hpp"
 #include "io/state_reader.hpp"
 #include "model/flight_command.hpp"
@@ -197,7 +197,7 @@ namespace
         require(maneuvers.crank.side() == ManeuverSide::Right, "second crank chooses side again");
     }
 
-    void fighter_two_shot_flow()
+    void otopilot_flow()
     {
         Aircraft own, enemy;
         own.profile = aircraft_profile("F16");
@@ -212,10 +212,12 @@ namespace
             own.weapons.missiles.push_back(missile);
         }
 
-        OtopilotFighter pilot;
+        Otopilot pilot{Mission{MissionGoal::Destroy, RiskLevel::Balanced}};
         pilot.step(own, enemy);
-        require(own.weapons.missiles_left() == 4, "commit waits until target enters TR");
-        own.weapons.enemy_in_tr = true;   // koşul World::update'ten gelir; bu test yalnız otopilot akışını sürer
+        own.weapons.enemy_in_tr = true;   // koşullar World::update'ten gelir; bu test yalnız otopilot akışını sürer
+        pilot.step(own, enemy);
+        require(own.weapons.missiles_left() == 4 && own.decision.empty(), "destroy does not fire at TR");
+        own.picture.is_in_dor = true;     // İmha: K1 DOR'da atar
         pilot.step(own, enemy);
         require(own.phase == Phase::Commit && own.weapons.missiles_left() == 4,
                 "transition selects next state without flying it yet");
@@ -224,6 +226,7 @@ namespace
         own.weapons.missiles[0].python_id = "blue/missile/0";
         own.weapons.has_launch_order = false;
 
+        own.picture.is_in_dor = false;    // K3'ü ayrı sürmek için
         own.picture.is_in_mar = true;
         pilot.step(own, enemy);
         pilot.step(own, enemy);
@@ -243,29 +246,25 @@ namespace
         require(own.phase == Phase::Recommit && own.weapons.missiles_left() == 3,
                 "recommit waits until target enters configured firing angle");
         own.picture.ata_deg = -own.profile.recommit_fire_ata_deg;
-        pilot.step(own, enemy);
-        pilot.step(own, enemy);
-        require(own.weapons.missiles_left() == 2, "second shot once");
-        own.weapons.missiles[1].python_id = "blue/missile/1";
-        own.weapons.has_launch_order = false;
-
-        for (int step = 0; step < 3; ++step)
+        for (int step = 0; step < 3; ++step)   // Recommit biter → Commit'te K1 (DOR içi) → atış
         {
             pilot.step(own, enemy);
         }
-        require(own.phase == Phase::Crank && own.weapons.missiles_left() == 2,
-                "second support stays on DOR and does not repeat fire");
-        own.picture.is_in_mar = true;
+        require(own.weapons.missiles_left() == 2 && own.decision.rfind("K1", 0) == 0, "after recommit K1 decides the next shot");
+        own.weapons.missiles[1].python_id = "blue/missile/1";
+        own.weapons.has_launch_order = false;
+
+        own.weapons.missiles[2].is_fired = own.weapons.missiles[3].is_fired = true;   // füze bitti: K5 ayrılır
         pilot.step(own, enemy);
         own.kinematics.altitude_ft = 26000;
         own.picture.ata_deg = 150;
         pilot.step(own, enemy);
-        require(own.phase == Phase::Out, "second support exits on MAR");
-        near(own.command.altitude_ft(), 22700, "final escape enters with current altitude");
+        require(own.phase == Phase::Out, "support exits on DOR");
+        near(own.command.altitude_ft(), 22700, "escape enters with current altitude");
         own.picture.ata_deg = 180;
         pilot.step(own, enemy);
         pilot.step(own, enemy);
-        require(own.phase == Phase::Hold && own.weapons.missiles_left() == 2, "departure after final escape");
+        require(own.phase == Phase::Hold && own.weapons.missiles_left() == 0, "departure when no missile left");
 
         own.picture.ata_deg = 3;
         require(condition::nose_on_target(own), "positive alignment boundary");
@@ -516,7 +515,7 @@ int main()
         flight_command_setters();
         turn_and_out_plan();
         maneuver_lifecycle();
-        fighter_two_shot_flow();
+        otopilot_flow();
         engagement_values();
         decision_range();
         world_threat_selection();
