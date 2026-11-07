@@ -16,7 +16,7 @@ public:
 private:
     static constexpr bool PRINT_LOG = false;   // true: terminale saniyede bir durum satırı (ConsoleLog)
     static constexpr Mission FIGHTER_MISSION = {MissionGoal::Destroy, RiskLevel::Balanced};   // şimdilik sabit
-    static constexpr Mission HOSTILE_MISSION = {MissionGoal::Destroy, RiskLevel::Balanced};
+    static constexpr Mission HOSTILE_MISSION = {MissionGoal::Repel, RiskLevel::Aggressive};
 
     World world_;
     bool maneuver_test_enabled_ = false;

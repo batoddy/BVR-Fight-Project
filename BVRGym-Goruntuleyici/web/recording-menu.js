@@ -2,7 +2,7 @@
 const el=id=>document.getElementById(id);
 const storageKey='bvrgym-recording-directory';
 const dateFormat=new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-export function setupRecordingMenu({open}){
+export function setupRecordingMenu({open,current}){
   let busy=false;
   const error=message=>{el('record-error').hidden=!message;el('record-error').textContent=message;};
   async function api(path,payload){
@@ -20,6 +20,7 @@ export function setupRecordingMenu({open}){
         const button=document.createElement('button');button.className='library-item';
         const content=document.createElement('div'),title=document.createElement('strong'),subtitle=document.createElement('span');
         title.textContent=entry.name;subtitle.textContent=entry.files+' CSV · Klasör kaydı';
+        const active=entry.path===current?.();button.classList.toggle('active',active);
         button.dataset.path=entry.path;button.title=entry.path;content.append(title,subtitle);button.append(content);
         if(entry.modified){
           const stamp=document.createElement('time'),date=new Date(entry.modified*1000);
@@ -34,7 +35,7 @@ export function setupRecordingMenu({open}){
         const remove=document.createElement('button');remove.className='library-delete';
         remove.textContent='×';remove.title='Kaydı sil';remove.setAttribute('aria-label',entry.name+' kaydını sil');
         remove.onclick=async()=>{
-          if(busy||!confirm(`"${entry.name}" kaydı diskten silinsin mi?\nBu işlem geri alınamaz.`))return;
+          if(busy||!confirm(`"${entry.name}" kaydı diskten silinsin mi?${active?'\nBu kayıt şu an açık; görüntü silinen kayıtta kalır.':''}\nBu işlem geri alınamaz.`))return;
           busy=true;remove.disabled=true;error('');
           try{await api('/api/delete',{id:entry.id});await refresh();}
           catch(exc){error(exc.message);}finally{busy=false;remove.disabled=false;}

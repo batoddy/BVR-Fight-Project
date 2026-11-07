@@ -1,7 +1,7 @@
 # Karar tasarımı
 
-**Durum:** tasarım. Kodda henüz yok; bugünkü `otopilot.cpp` / `decisions.cpp` eski akıştır.
-Kararlar 2026-11-07 tartışmasında verildi. Ertelenenler en sonda.
+**Durum:** kodda (`control/otopilot.*`, `control/decisions.*`). Kararlar 2026-11-07 tartışmasında verildi. Ertelenenler en sonda.
+Eşikler `decisions.cpp` başında: `BEAM_MARGIN_NM` 5, `DEFENSE_MARGIN_S` 10, `TRADE_MARGIN_S` 5, `NOTCH_MARGIN_S` 3; `conditions.cpp`'de `HARMLESS_RECOMMIT_MARGIN_NM` 1.
 
 ## 1. Yapı
 
@@ -56,7 +56,7 @@ Füze güdümlü mü = `is_pitbull` **veya** atan uçağın ATA'sı gimbal için
 ABORT'ta tehdit gelirse savunma yapılmaz, Out'a devam edilir.
 
 **Tehdit** (yetişebilen en yakın düşman füzesi):
-1. Tehdit yok ya da yetişemiyor → devam
+1. Tehdit yok, yetişemiyor ya da zararsız → devam
 2. Havada füzem yok ve karşı atış şartı var → karşı atış → SUPPORT (sonraki step TRADE'e düşer)
    Güvenli: yok · Dengeli: düşman TR'mde · Riskli: düşman WEZ'imde
 3. Füzem havada ve pitbull değil → TRADE
@@ -93,7 +93,7 @@ ABORT'ta tehdit gelirse savunma yapılmaz, Out'a devam edilir.
 4. **A:** `t_pb_ben ≤ t_kritik` → crank'e devam
 5. **B2:** `t_kritik_düşman < t_pb_tehdit` ve `t_kritik_düşman + pay < t_kritik` → crank'e devam (düşman önce kırmak zorunda)
 6. **B1:** `t_vur_ben + pay < t_pb_tehdit` → crank'e devam (füzem tehdit pitbull olmadan vurur)
-7. Diğer → desteği hemen bırak, DEFEND
+7. Diğer → t_kritik'e kadar crank'e devam (düşman bu arada kırabilir); t_kritik gelince desteği bırak, DEFEND
 
 Risk: Güvenli A · Dengeli A + B2 · Riskli A + B2 + B1. Tehdit zaten pitbull ise yalnız A.
 
@@ -113,9 +113,11 @@ pay   = (füze–ben mesafesi − patlama yarıçapı − dönüş yolu) − x
 ```
 
 1. Tehdit bitti ya da güdümsüz kaldı → REASSESS
-2. pay > BEAM_PAYI ve Güvenli değil → Beam
-3. 0 ≤ pay ≤ BEAM_PAYI → Drag (Out)
-4. pay < 0 → Drag; `catch_time_left ≤ notch dönüşü + pay` olunca Notch
+2. Tehdit zararsız → REASSESS (ben cold: COLD; recommit MRR kuralıyla)
+   Zararsız = füze TAS < benim TAS ve recommit kaçış payı ≥ 1 NM. Pay eşiğin altına inerse yeniden tehdit.
+3. pay > BEAM_PAYI ve Güvenli değil → Beam
+4. 0 ≤ pay ≤ BEAM_PAYI → Drag (Out)
+5. pay < 0 → Drag; `catch_time_left ≤ notch dönüşü + pay` olunca Notch
 
 Notch yalnız son çare (simde doppler yok, füze yalnız kinematik yenilir).
 Sabit ivme varsayımı: hız/irtifa/manevra etkisini görmez, hata çoğunlukla güvenli tarafta.
@@ -150,37 +152,22 @@ Sabit ivme varsayımı: hız/irtifa/manevra etkisini görmez, hata çoğunlukla 
 
 "Vazgeçtim" bayrağı düşman hot'a dönünce sıfırlanır.
 
-## 6. Gereken ek kod
+## 6. Koddaki karşılıkları
 
-### Hesaplar
-
-| Ne | Nereye |
+| Ne | Nerede |
 |---|---|
-| `pitbull_time_left_s(missile)`: yol = menzil − pitbull, `accel_travel_time_s` ile | `missile_geometry`, `MissileTargetInfo`, `world.cpp` |
-| Füze güdümlü mü (§3) | picture'a tehdit için bool, kendi füzem için koşul |
-| Kaçış payı NM (§5 DEFEND), "recommit yapsam" sürümü dahil | `engagement` ya da `missile_geometry` |
-| `picture.mrr_nm` (`engagement::mrr_nm` var) | `picture.hpp`, `world.cpp` |
-| `weapons.r_cold_nm = r_cold_nm(enemy, own)` | `weapons.hpp`, `world.cpp` |
-| Düşmanın savunma süresi `out_plan(enemy, own)` | var |
-| TR, MSR | var |
-
-### Manevralar
-
-| Ne | Not |
-|---|---|
-| `Pursuit`'e gaz parametresi; `chase` = pure + art yakıcı | CHASE ve cold destek |
-| Out Done sonrası gaz art yakıcı | OUT → COLD ve ABORT aynı Out'u sürdürür; `EXIT_THROTTLE` değişebilir |
-| `hold` | var |
-
-### Otopilot
-
-| Ne |
-|---|
-| `OtopilotState`: Commit, Shot, Support, Trade, Defend, Out, Cold, Recommit, Chase, Abort |
-| Otopilot üyeleri: savunma tipi, "vazgeçtim" bayrağı |
-| `Mission`'a L&L alanı (SUPPORT sonu ABORT) |
-| `decisions` yeniden: `abort`, `threat_response`, `first_shot`, `support`, `trade`, `defense`, `reassess`, `cold`, `chase` |
-| Eski kalıntılar silinir: yorumdaki eski `otopilot.cpp`, `otopilot_copy.cpp`, eski K1–K5 |
+| Pitbull'a kalan süre | `missile_geometry::pitbull_time_left_s` → `MissileTargetInfo::pitbull_time_left_s` |
+| Füze güdümlü mü (§3) | `missile_geometry::is_guided` → `MissileTargetInfo::is_guided` (kopunca dönmez) |
+| Tehdit | `picture.threat`: en yakın **güdümlü** düşman füzesi |
+| Kaçış payı (drag / recommit) | `missile_geometry::escape_margin_nm` → `picture.threat_escape_margin_nm`, `threat_recommit_margin_nm` |
+| Recommit ve notch dönüş süresi | `engagement::recommit_turn_s`, `notch_turn_s` → `picture.notch_turn_s` |
+| Düşmanın savunma süresi | `picture.enemy_out_turn_s` = `out_plan(enemy, own).turn.time_s` |
+| MRR, R_cold'um | `picture.mrr_nm`, `weapons.r_cold_nm` |
+| Kovalama | `Maneuvers::chase` (pure pursuit, art yakıcı) |
+| Out | dönüşten sonra da art yakıcı (COLD ve ABORT aynı out'u sürdürür) |
+| L&L | `Mission::leave_after_support` |
+| Zararsız tehdit | `condition::threat_harmless` (DEFEND çıkışı ve tehdit kesintisi) |
+| Koşullar | `condition::enemy_cold`, `enemy_hot`, `beyond_mrr`, `enemy_in_my_msr`, `enemy_in_my_r_cold`, `is_live`, `has_live_missile`, `live_missile_count`, `out_of_missiles`, `has_guided_threat` |
 
 ## 7. Ertelenenler ve testte bakılacaklar
 

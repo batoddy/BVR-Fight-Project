@@ -102,11 +102,12 @@ std::optional<double> engagement::f_pole_nm(const Aircraft& own, const Aircraft&
 //     (v0 − kapanma)·t + a·t²/2 = DOR + pay − pitbull   →   t = accel_travel_time_s(yol, v0 − kapanma, a)
 std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    (void)enemy;   // DOR ve kapanma own.picture'da
     const MissileProfile& missile = own.profile.main_weapon;
-    const double closure_kt = own.picture.enemy_closure_kt + own.kinematics.tas_kt * std::cos((own.profile.radar_gimbal_deg - 5) * DEG_TO_RAD);
+    const double crank_ata_deg = own.profile.radar_gimbal_deg - 5;   // pitbull anında crank'teyim: ATA'dan bağımsız
+    const double closure_kt = own.picture.enemy_closure_kt + own.kinematics.tas_kt * std::cos(crank_ata_deg * DEG_TO_RAD);
+    const double dor_nm = engagement::dor_nm(own, enemy, crank_ata_deg);
 
-    const double gap_nm = own.picture.dor_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
+    const double gap_nm = dor_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
     if (gap_nm < 0.0)
     {
         return std::nullopt;   // DOR pitbull mesafesinden kısa: bu tanımla TR yok
@@ -118,7 +119,7 @@ std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& ene
     {
         return std::nullopt;   // füze bu kapanmayla pitbull'a erişemez
     }
-    return own.picture.dor_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s) + 0.5;
+    return dor_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s) + 0.5;
 }
 
 bool engagement::in_tr(const Aircraft& own, const Aircraft& enemy)
@@ -129,11 +130,12 @@ bool engagement::in_tr(const Aircraft& own, const Aircraft& enemy)
 
 std::optional<double> engagement::msr_nm(const Aircraft& own, const Aircraft& enemy)
 {
-    (void)enemy;   // DOR ve kapanma own.picture'da
     const MissileProfile& missile = own.profile.main_weapon;
-    const double closure_kt = own.picture.enemy_closure_kt + own.kinematics.tas_kt * std::cos((own.profile.radar_gimbal_deg - 5) * DEG_TO_RAD);
+    const double crank_ata_deg = own.profile.radar_gimbal_deg - 5;   // pitbull anında crank'teyim: ATA'dan bağımsız
+    const double closure_kt = own.picture.enemy_closure_kt + own.kinematics.tas_kt * std::cos(crank_ata_deg * DEG_TO_RAD);
+    const double mar_nm = engagement::mar_nm(own, enemy, crank_ata_deg);
 
-    const double gap_nm = own.picture.mar_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
+    const double gap_nm = mar_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
     if (gap_nm < 0.0)
     {
         return std::nullopt;   // DOR pitbull mesafesinden kısa: bu tanımla TR yok
@@ -145,7 +147,7 @@ std::optional<double> engagement::msr_nm(const Aircraft& own, const Aircraft& en
     {
         return std::nullopt;   // füze bu kapanmayla pitbull'a erişemez
     }
-    return own.picture.mar_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s) + 0.5;
+    return mar_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s) + 0.5;
 }
 
 bool engagement::in_msr(const Aircraft& own, const Aircraft& enemy)
@@ -331,12 +333,17 @@ double engagement::dr_nm(const Aircraft& own, const Aircraft& enemy)
 //   Düşmanın yaklaşması TAS'ıyla (en kötü durum: tam bana doğru geliyor).
 double engagement::dor_nm(const Aircraft& own, const Aircraft& enemy)
 {
+    return dor_nm(own, enemy, geometry::ata_deg(own.kinematics, enemy.kinematics));
+}
+
+double engagement::dor_nm(const Aircraft& own, const Aircraft& enemy, double ata_deg)
+{
     const double speed_kt = own.kinematics.tas_kt;
     const double radius_m = turn::radius_m(speed_kt, own.profile.out_g);
     const double in_turn_s = turn::time_s(180 - own.profile.recommit_fire_ata_deg, radius_m, speed_kt);
     const double enemy_approach_nm = travel_distance_nm(enemy.kinematics.tas_kt, in_turn_s);
 
-    return engagement::mar_nm(own, enemy) + enemy_approach_nm + 0.5;
+    return engagement::mar_nm(own, enemy, ata_deg) + enemy_approach_nm + 0.5;
 }
 
 bool engagement::in_dor(const Aircraft& own, const Aircraft& enemy)
@@ -345,3 +352,17 @@ bool engagement::in_dor(const Aircraft& own, const Aircraft& enemy)
     return range_nm <= dor_nm(own, enemy);
 }
 
+// Sabit g'li dönüş süresi, şu anki hızımla: Δt = |Δψ| · r / V   (r = V² / (g·√(n²−1)), turn::)
+double engagement::recommit_turn_s(const Aircraft& own)
+{
+    const double speed_kt = own.kinematics.tas_kt;
+    const double radius_m = turn::radius_m(speed_kt, own.profile.out_g);
+    return turn::time_s(180 - own.profile.recommit_fire_ata_deg, radius_m, speed_kt);
+}
+
+double engagement::notch_turn_s(const Aircraft& own)
+{
+    const double speed_kt = own.kinematics.tas_kt;
+    const double radius_m = turn::radius_m(speed_kt, own.profile.out_g);
+    return turn::time_s(90, radius_m, speed_kt);
+}

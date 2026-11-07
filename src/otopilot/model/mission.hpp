@@ -19,6 +19,7 @@ struct Mission
 {
     MissionGoal goal = MissionGoal::Destroy;
     RiskLevel risk = RiskLevel::Balanced;
+    bool leave_after_support = false;   // L&L: destek bitince out yerine ABORT, savaşa dönülmez
 };
 
 inline const char* goal_name(MissionGoal goal)   // karar kaydı için

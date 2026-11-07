@@ -68,7 +68,7 @@ private:
 };
 
 // =============================================================================
-// OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter
+// OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca Done, uçulmaya devam ederse kaçış sürer
 // =============================================================================
 
 class Out : public Maneuver
@@ -82,8 +82,7 @@ public:
 private:
     static constexpr double DESCEND_FT = 3300.0;                  // ft, out'ta ne kadar alçalınacak
     static constexpr double FLOOR_FT = 10000.0;                   // ft, out bunun altına indirmez
-    static constexpr double THROTTLE = throttle::MAX_THRUST;
-    static constexpr double EXIT_THROTTLE = throttle::DEFAULT;    // Done olunca: sonraki manevraya art yakıcı kalmaz
+    static constexpr double THROTTLE = throttle::MAX_THRUST;      // Done'dan sonra da: COLD ve ABORT aynı out'u sürdürür
     static constexpr double DONE_ATA_DEG = 177.0;                 // derece, |ATA| bunu geçince düşman arkada
 
     double target_altitude_ft_ = 0;                               // ft, enter()'da bir kez hesaplanır
@@ -207,7 +206,7 @@ public:
     ManeuverStatus status(const Aircraft& own) const override;   // tehdit ATA ±180°'ye yakınsa Satisfied, değilse Running
 
 private:
-    static constexpr double THROTTLE = throttle::MRT;     // P-1290: drag askeri güçle
+    static constexpr double THROTTLE = throttle::MAX_THRUST;     // P-1290: drag askeri güçle
     static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 };
 
@@ -332,7 +331,7 @@ enum class PursuitMode
 class Pursuit : public Maneuver
 {
 public:
-    explicit Pursuit(PursuitMode mode) : mode_(mode) {}
+    explicit Pursuit(PursuitMode mode, double throttle = throttle::DEFAULT) : mode_(mode), throttle_(throttle) {}
 
     Phase phase() const override;                         // moda göre PurePursuit, LagPursuit, LeadPursuit
     FlightCommand update(const Aircraft& own) override;   // Pure bearing; Lag LOS yönünün gerisine LAG_DEG; Lead önüne LEAD_DEG; LOS dönmüyorsa pure
@@ -341,13 +340,13 @@ public:
 private:
     static constexpr double LAG_DEG = 15.0;               // derece, Lag'de burnun düşmanın gerisinde kalacağı açı
     static constexpr double LEAD_DEG = 20.0;              // derece, Lead'de LOS hareketi yönündeki sabit öncü açı
-    static constexpr double THROTTLE = throttle::DEFAULT;
     static constexpr double G_LIMIT = 4.0;
     static constexpr double ANGLE_TOLERANCE_DEG = 2.0;
 
     double target_heading_deg(const Aircraft& own) const;  // derece, ilgili modun güncel hedef yönü
 
     PursuitMode mode_;
+    double throttle_;                                     // kurulurken verilir; varsayılan DEFAULT
 };
 
 // =============================================================================
@@ -372,6 +371,7 @@ public:
     Pursuit pure_pursuit{PursuitMode::Pure};          // burun düşmanda
     Pursuit lag_pursuit{PursuitMode::Lag};            // burun düşmanın gerisinde
     Pursuit lead_pursuit{PursuitMode::Lead};          // burun düşmanın önünde
+    Pursuit chase{PursuitMode::Pure, throttle::MAX_THRUST};   // kaçan düşmanı kovala: saf takip, art yakıcı
     Collision collision;                           // çarpışma rotası
     FlyHeading fly_heading;                        // sabit yön
     Flank flank;                                   // düşmanın verilen yan açısını koru

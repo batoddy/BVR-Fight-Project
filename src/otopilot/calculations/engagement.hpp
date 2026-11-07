@@ -23,7 +23,7 @@ namespace engagement
     bool in_nez(const Aircraft& own, const Aircraft& enemy);                    // min_nm < menzil ≤ nez_nm(enemy, own): atarsam out yapsa da kaçamaz
     std::optional<double> a_pole_nm(const Aircraft& own, const Aircraft& enemy);   // NM, füze pitbull olduğunda iki uçak arası; erişemezse yok
     std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);   // NM, füze hedefe vardığında iki uçak arası; erişemezse yok
-    std::optional<double> tr_nm(const Aircraft& own, const Aircraft& enemy);       // NM, en kısa atış menzili: A-pole DOR dışında; picture.dor_nm gerekir
+    std::optional<double> tr_nm(const Aircraft& own, const Aircraft& enemy);       // NM, en kısa atış menzili: A-pole DOR dışında; DOR crank açısıyla
     bool in_tr(const Aircraft& own, const Aircraft& enemy);                     // menzil ≤ TR; TR yoksa false
     std::optional<double> msr_nm(const Aircraft& own, const Aircraft& enemy);      // NM, MSR; çözüm yoksa yok
     bool in_msr(const Aircraft& own, const Aircraft& enemy);                    // menzil ≤ MSR; MSR yoksa false
@@ -40,5 +40,10 @@ namespace engagement
     double mrr_nm(const Aircraft& own, const Aircraft& enemy);                       // NM, Cold Ops'ta: buradan recommit yapıp atarsam sonraki out'ta kaçabilirim
     double dr_nm(const Aircraft& own, const Aircraft& enemy);                        // NM, R_cold + notch süresince düşmanın TAS'ıyla yaklaşması + 0,5 NM
     double dor_nm(const Aircraft& own, const Aircraft& enemy);                       // NM, MAR + recommit dönüşüm süresince düşmanın TAS'ıyla yaklaşması + 0,5 NM
+    double dor_nm(const Aircraft& own, const Aircraft& enemy, double ata_deg);       // aynısı, MAR ata_deg'den out
     bool in_dor(const Aircraft& own, const Aircraft& enemy);                         // menzil ≤ DOR
+
+    // --- Dönüş süreleri: savunma ve recommit kararları ---
+    double recommit_turn_s(const Aircraft& own);                                     // s, cold'dan recommit dönüşü: (180 − recommit_fire_ata_deg)°, out g'siyle
+    double notch_turn_s(const Aircraft& own);                                        // s, drag'den notch'a 90° dönüş, out g'siyle
 }

@@ -115,7 +115,7 @@
     <span class="eyebrow">Otopilot · karar tasarımı · 2026-11-07</span>
     <h1>BVR Karar Akışı</h1>
     <p>Durum makinesi, her fazdaki karar kuralları ve kararların dayandığı süre ve mesafe metrikleri. Kaynak: <code>src/otopilot/control/KARAR_TASARIMI.md</code>.</p>
-    <span class="status"><b>Tasarım</b> Henüz kodda yok; bugünkü otopilot eski akışla çalışıyor.</span>
+    <span class="status"><b>Kodda</b> control/otopilot.* ve control/decisions.* bu akışla çalışıyor.</span>
   </header>
 
   <nav aria-label="Bölümler">
@@ -151,30 +151,30 @@ flowchart TB
   R{{"REASSESS"}}
   ABORT(["ABORT&lt;br/&gt;kalıcı"])
 
-  COMMIT -->|"TR'de ateş"| SUPPORT
-  COMMIT -->|"düşman cold"| R
-  SUPPORT -->|"2. atış: Riskli, MSR"| SUPPORT
-  SUPPORT -->|"pitbull / DOR"| OUT
-  SUPPORT -->|"L&amp;L görevi"| ABORT
-  SUPPORT -->|"füzem bitti / düşman cold"| R
-  SUPPORT -.->|"tehdit"| TRADE
-  TRADE -->|"tehdit öldü"| SUPPORT
-  TRADE -->|"pitbull / kritik an"| DEFEND
-  DEFEND -->|"tehdit bitti"| R
-  OUT -->|"dönüş bitti"| COLD
-  COLD -->|"menzil ≥ MRR, düşman hot"| RECOMMIT
-  COLD -->|"İmha, düşman cold"| CHASE
-  RECOMMIT -->|"dönüş bitti"| COMMIT
-  RECOMMIT -->|"menzil ≤ DOR"| OUT
-  R -->|"düşman cold, İmha"| CHASE
-  R -->|"düşman cold Püskürt / ben cold"| COLD
+  COMMIT -->|"menzil ≤ TR: ateş"| SUPPORT
+  COMMIT -->|"düşman kaçıyor"| R
+  SUPPORT -->|"2. atış (Riskli, menzil ≤ MSR)"| SUPPORT
+  SUPPORT -->|"füzem pitbull ya da menzil ≤ DOR"| OUT
+  SUPPORT -->|"destek bitti, görev L&amp;L"| ABORT
+  SUPPORT -->|"füzem bitti ya da düşman kaçıyor"| R
+  SUPPORT -.->|"düşman füzesi geldi"| TRADE
+  TRADE -->|"düşman füzesi bitti"| SUPPORT
+  TRADE -->|"füzem pitbull ya da kritik an"| DEFEND
+  DEFEND -->|"düşman füzesi bitti"| R
+  OUT -->|"düşman arkamda"| COLD
+  COLD -->|"düşman hot, menzil ≥ MRR"| RECOMMIT
+  COLD -->|"düşman kaçıyor, görev İmha"| CHASE
+  RECOMMIT -->|"burun düşmanda"| COMMIT
+  RECOMMIT -->|"dönerken menzil ≤ DOR"| OUT
+  R -->|"düşman kaçıyor, görev İmha"| CHASE
+  R -->|"düşman kaçıyor (Püskürt) ya da ben kaçıyorum"| COLD
   R -->|"menzil ≤ DOR"| OUT
-  R -->|"diğer"| RECOMMIT
-  R -->|"füze bitti"| ABORT
-  CHASE -->|"R_cold'da ateş"| SUPPORT
-  CHASE -->|"düşman hot"| COMMIT
-  CHASE -->|"düşman hot, ≤ DOR"| OUT
-  CHASE -->|"vazgeç"| COLD
+  R -->|"hiçbiri: geri dön"| RECOMMIT
+  R -->|"füzem kalmadı"| ABORT
+  CHASE -->|"menzil ≤ R_cold'um: ateş"| SUPPORT
+  CHASE -->|"düşman döndü, menzil > DOR"| COMMIT
+  CHASE -->|"düşman döndü, menzil ≤ DOR"| OUT
+  CHASE -->|"yetişemiyorum: vazgeç"| COLD
 
   classDef hub fill:#c77d12,stroke:#8a560c,color:#1b1206
   classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
@@ -397,7 +397,9 @@ flowchart TD
   B2 -->|evet| CR
   B2 -->|hayır| B1{"B1: füzem tehdit pitbull&lt;br/&gt;olmadan vurur?&lt;br/&gt;yalnız Riskli"}
   B1 -->|evet| CR
-  B1 -->|hayır| DROP["Desteği hemen bırak → DEFEND"]
+  B1 -->|hayır| K{"t_kritik geldi mi?"}
+  K -->|hayır| CR
+  K -->|evet| DROP["Desteği bırak → DEFEND"]
   classDef go fill:#2f6b52,stroke:#1f4a38,color:#eefaf4
   classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
   class CR go
@@ -417,7 +419,7 @@ Tehdit zaten pitbull ise B2 ve B1 geçersiz: onu vursam da füzesi durmaz.</pre>
         </tbody>
       </table>
     </div>
-    <p class="caption">Destek bir kez bırakılınca füzem güdümünü kaybeder; DEFEND'den TRADE'e dönüş yok. A, B2, B1 arasında gidip gelmek zararsız, hepsi aynı manevra.</p>
+    <p class="caption">Hiçbir kural tutmasa da kritik ana kadar crank sürer: bu sırada düşman kırarsa füzesi ölür, benimki yaşar. Destek bir kez bırakılınca füzem güdümünü kaybeder; DEFEND'den TRADE'e dönüş yok.</p>
   </section>
 
   <section id="defend">
@@ -464,7 +466,9 @@ pay   = füze–ben mesafesi − patlama yarıçapı − dönüşte kapanan − 
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
 flowchart TD
   D0{"Tehdit bitti ya da&lt;br/&gt;güdümsüz kaldı?"} -->|evet| R{{"REASSESS"}}
-  D0 -->|hayır| D1{"pay &gt; BEAM_PAYI&lt;br/&gt;ve Güvenli değil?"}
+  D0 -->|hayır| DZ{"Füze benden yavaş ve&lt;br/&gt;recommit payı ≥ 1 NM?"}
+  DZ -->|evet| R
+  DZ -->|hayır| D1{"pay &gt; BEAM_PAYI&lt;br/&gt;ve Güvenli değil?"}
   D1 -->|evet| BE["Beam&lt;br/&gt;menzili koru"]
   D1 -->|hayır| D2{"pay ≥ 0?"}
   D2 -->|evet| DR["Drag (out)&lt;br/&gt;kaçarım"]
@@ -479,6 +483,7 @@ flowchart TD
     </div>
     <ul class="notes">
       <li>Savunma yalnız acilleşir: Beam → Drag → Notch. Geri dönülmez.</li>
+      <li>Zararsız füze (benden yavaş, füzeye dönsem bile ≥ 1 NM pay kalıyor) savunmayı bitirir ve tehdit kesintisini de tetiklemez. Ben cold olduğum için REASSESS COLD'u seçer, recommit MRR kuralıyla gelir. Pay 1 NM'nin altına inerse füze yeniden tehdit olur.</li>
       <li>Yavaşlama sabit kabul edilir. Hız, irtifa ve füzenin manevrası hesapta yok; hata çoğunlukla güvenli tarafta (gerçek füze daha erken ölür).</li>
       <li>Aynı formül COLD'da "recommit yapsam" sorusu için de kullanılır: bu kez ben füzeye dönmüş kabul edilirim.</li>
     </ul>

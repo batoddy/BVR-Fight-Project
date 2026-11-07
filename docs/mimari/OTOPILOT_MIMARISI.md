@@ -152,34 +152,11 @@ Manevra yaşam döngüsü: her otopilotun `Maneuvers` nesnesi son uçurulan mane
 | `Crank` | Crank | gimbal − 5° hedef ATA, LOS hızı kadar ileri alınır; `in_radar_sight()` sorgusu (düşman radar konisinde mi, \|ATA\| < gimbal). Taraf `enter()`'da `crank_side_for` ile seçilir (`side()` ile okunur): düşman hangi taraftaysa o tarafta kalır | sürekli |
 | `Beam` | Beam | bearing ∓ 90; taraf burnuma göre seçilir (düşman sağımdaysa sola, solumdaysa sağa), dönüş hep 90°'den kısa | sürekli |
 
-`OtopilotFighter` ve `OtopilotHostile` birer durum makinesidir; ikisi de `step` içinde tek bir switch kullanır. Her durum bir bloktur: önce o durumun manevrası `maneuvers_.fly(own, manevra)` ile uçulur (fazı da manevradan alır), sonra çıkış koşullarına bakılır. `go_to(yeni_durum)` yalnız state'i değiştirir. Yeni state'in bloğu bir sonraki step'te manevrayı seçer; giriş hazırlığı ilk `fly()` çağrısında yapılır. State değişse bile aynı manevra kesintisiz sürüyorsa yeniden giriş yapılmaz. Geçiş koşulları `control/conditions.hpp` içinde isimli fonksiyonlardır; karar yapısı ileride değişse de manevralar ve koşullar aynı kalır.
+`Otopilot` bir durum makinesidir; fighter ve hostile aynı sınıfı kendi görev konseptiyle (`Mission`: hedef, risk, L&L) kullanır. Her step önce kesintiler çalışır (ABORT; ardından bana gelen güdümlü füze → karşı atış, TRADE ya da DEFEND), sonra o fazın `step_*` fonksiyonu manevrasını `maneuvers_.fly` ile uçar ve `decide::` kararına göre geçiş yapar. Geçiş yalnız `go_to` ile yapılır. Kesinti geçişinde yeni faz aynı step uçulur; fazın kendi geçişinde sonraki step. Taahhüt bitince (savunma, destek, kovalama) anlık `reassess` yeni fazı seçer. Geçiş koşulları `control/conditions.hpp`, karar kuralları ve eşikleri `control/decisions.cpp` içindedir.
 
-Mevcut fighter akışı iki atış ve iki ayrı destek bölümünden oluşur. Aynı Crank ve Out manevraları farklı statelerde tekrar kullanılır. Örnek çalıştırma (yaml'a dokunmadan):
+Fazlar: Commit, Shot (atış emri), Support, Trade, Defend, Out, Cold, Recommit, Chase, Abort. Kurallar, metrikler (TRADE süreleri, kaçış payı) ve geçiş şeması [KARAR_TASARIMI.md](../../src/otopilot/control/KARAR_TASARIMI.md)'de; şemalı hali [KARAR_AKISI.html](../KARAR_AKISI.html).
 
-```powershell
-python src/sim/sim_main.py --name show --range 40 --altitude 6000
-```
-
-6 km, R_cold uyumunun geçerli aralığının (4–10 km) ortasıdır.
-
-| Fighter | Geçiş |
-|---|---|
-| Commit (In) | MAR içindeyim → FirstEscape; değilsem menzil < 35 NM → FirstShot |
-| FirstShot (Fire) | tek step AIM-120C atış emri → FirstSupport |
-| FirstSupport (Crank) | DOR içindeyim → FirstEscape |
-| FirstEscape (Out) | Out bitince gaz 0.45 → Recommit |
-| Recommit (In) | burun hedefe hizalandı (\|ATA\| ≤ 2°) → SecondShot |
-| SecondShot (Fire) | tek step AIM-120C atış emri → SecondSupport |
-| SecondSupport (Crank) | MAR içindeyim → FinalEscape |
-| FinalEscape (Out) | Out bitince gaz 0.45 → Departure |
-| Departure (Hold) | rotayı koru |
-
-| Hostile | Geçiş |
-|---|---|
-| Commit (In) | fighter kendi MAR'ına girdi (`inside_enemy_mar`) → Fire |
-| Fire | AIM-120C atış emri → Out |
-| Out | Out bitince gaz 0.45 → HoldAfterOut |
-| HoldAfterOut | Hold |
+Destek kuralı: pitbull olmamış füze, atan uçak hedefi radar gimbal'ı içinde tuttukça güdümlüdür (`MissileTargetInfo::is_guided`, bir kez kopunca dönmez). Güdümünü kaybetmiş füze tehdit sayılmaz. BVRGym'de bu kural yoktur; C++ kararları kural varmış gibi verir.
 
 Aynı komutla alınan son uçuşun akışı (`recordings/show_wez`; bu kayıt WEZ dış sınırı Rmax uyumuna geçmeden önce alındı, yeni formülle yeniden koşturulmadı):
 
@@ -193,11 +170,11 @@ Aynı komutla alınan son uçuşun akışı (`recordings/show_wez`; bu kayıt WE
 | 121 / 127 | Fighter'ın / hostile'ın out'u biter |
 | 157 | Hostile'ın füzesi fighter'a en çok 4.7 km yaklaşıp kaybolur: MAR'da dönen fighter kurtuldu |
 
-Bu eski kayıtta fighter'ın atış kuralı yalnız "düşman WEZ'imde" idi; mevcut iki atışlı akışı temsil etmez.
+Bu eski kayıtta fighter'ın atış kuralı yalnız "düşman WEZ'imde" idi; mevcut durum makinesini temsil etmez.
 
 Bilinmesi gerekenler:
 - BVRGym füzesi 6 km'de burun buruna, manevra yapmayan hedefi yalnız ~12 NM'ye kadar vurur; daha uzakta tırmanıp dalma (loft) sonrası 0.3–1.9 km ile ıskalar. Dönen hedefi daha yakından da ıskalayabilir. WEZ'in dış sınırı (Rmax) "erişim" sınırıdır, isabet menzili değil ([wez_formulu.md](../../src/otopilot/calculations/wez_formulu.md)); WEZ'e girer girmez atmak isabet getirmez.
-- Gelen füzeye karşı "kalan süre" (mesafe / kapanma) füze yavaşladıkça ve biz döndükçe zıpladığı için kaldırıldı. Yerine kaçış payı (`escape_margin_nm`) gelecek.
+- Gelen füzeye karşı "kalan süre" (mesafe / kapanma) füze yavaşladıkça ve biz döndükçe zıpladığı için savunma tipi seçiminde kullanılmaz. Yerine kaçış payı (`missile_geometry::escape_margin_nm`, `picture.threat_escape_margin_nm`) kullanılır; kalan süre yalnız TRADE kıyaslarında ve notch anında.
 
 ## Füze slotları ve atış yaşam döngüsü
 

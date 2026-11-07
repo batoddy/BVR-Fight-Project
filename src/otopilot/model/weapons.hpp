@@ -34,6 +34,7 @@ struct Weapons
     bool enemy_in_nez = false;         // düşman benim NEZ'imde mi: wez.min_nm < menzil ≤ nez_nm
     bool enemy_in_tr = false;          // menzil ≤ TR mi; TR yoksa false
     bool enemy_in_msr = false;         // menzil ≤ MSR mi; MSR yoksa false
+    double r_cold_nm = 0;              // NM, düşman benden kaçarken füzemin yetişebileceği en büyük mesafe
     // TODO: m_pole_nm
 
     bool fire(const MissileProfile& profile);               // bu profilin ilk atılmamış slotu; füze yoksa ya da önceki emir henüz uçmadıysa false

@@ -367,7 +367,7 @@ export class Scene {
 
   // Bölge çemberi: hedefin irtifasında yatay; yarıçap değişmedikçe geometri yeniden kurulmaz.
   // active: seçili uçak çemberin içinde; çizgi ve etiket belirginleşir.
-  drawZoneRing(ring,entity,radius,zone,active,rect){
+  drawZoneRing(ring,entity,radius,zone,active,rect,placed){
     const key=String(Math.round(radius));
     if(ring.radius!==key){
       ring.radius=key;
@@ -391,8 +391,12 @@ export class Scene {
     ring.label.hidden=top.z<-1||top.z>1;
     if(ring.label.hidden)return;
     ring.label.textContent=zone.label;ring.label.style.color=ring.label.style.borderColor=color;ring.label.classList.toggle('active',active);
-    const x=Math.round((top.x*.5+.5)*rect.width),y=Math.round((-top.y*.5+.5)*rect.height);
-    ring.label.style.transform=`translate(${x}px,${y}px) translate(-50%,-100%)`;
+    const width=ring.label.offsetWidth,height=ring.label.offsetHeight,x=Math.round((top.x*.5+.5)*rect.width-width/2);
+    let y=Math.round((-top.y*.5+.5)*rect.height-height);
+    // Yarıçapı yakın bölgelerin etiketleri üst üste binmesin: çakışan etiket yukarı kayar.
+    for(let i=0;i<=placed.length;i++){const hit=placed.find(r=>x<r.right&&x+width>r.x&&y<r.bottom&&y+height>r.y);if(!hit)break;y=hit.y-height-2;}
+    placed.push({x,y,right:x+width,bottom:y+height});
+    ring.label.style.transform=`translate(${x}px,${y}px)`;
   }
 
   // Yalnızca azami menzilin dış sınırını kesikli çiz; yarıçap değişmedikçe geometri yeniden kurulmaz.
@@ -466,11 +470,12 @@ export class Scene {
     if(enemy)this.drawWezRing(this.wezRings.enemy,a.target,enemy.wez_max_range_m,colorFor(a.target),Boolean(enemy.enemy_in_my_wez));
     else this.wezRings.enemy.group.visible=false;
     // Düşman merkezli bölgeler: yarıçap seçili uçağın hesabı (onun satırı), çember hedefin etrafında.
+    const placed=[];
     for(const zone of ENEMY_ZONES){
       const ring=this.zoneRings[zone.key],radius=a?.calc[zone.field];
       const show=Boolean(a?.options.zones[zone.key]&&a.target&&radius>0);
       ring.group.visible=show;ring.label.hidden=!show;
-      if(show)this.drawZoneRing(ring,a.target,radius,zone,a.calc.range_3d_m<radius,rect);
+      if(show)this.drawZoneRing(ring,a.target,radius,zone,a.calc.range_3d_m<radius,rect,placed);
     }
   }
 

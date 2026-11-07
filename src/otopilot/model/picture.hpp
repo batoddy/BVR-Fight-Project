@@ -48,9 +48,14 @@ struct Picture
     double dor_nm = 0;                 // NM, DOR: MAR + recommit dönüşüm süresince düşmanın TAS'ıyla yaklaşması + 0,5 NM
     bool is_in_mar = false;            // range_3d_nm <= mar_nm
     bool is_in_dor = false;            // range_3d_nm <= dor_nm
+    double mrr_nm = 0;                 // NM, MRR: cold ops'ta buradan recommit yapıp atarsam sonraki out'ta kaçabilirim
+    double notch_turn_s = 0;           // s, drag'den notch'a 90° dönüş süresi
+    double enemy_out_turn_s = 0;       // s, düşman şimdi out yapsa dönüş süresi; kendi gözümden (out_plan(enemy, own))
 
     // Tehditler: enemy.weapons.missiles içine adres; her step baştan taranır. Bilgileri missile->target'ta; sonraki step'e saklanmaz.
     std::vector<const Missile*> threats;   // bana gelen bütün düşman füzeleri; yoksa boş
-    const Missile* threat = nullptr;       // bana en yakın olanı; yoksa nullptr
+    const Missile* threat = nullptr;       // bana en yakın güdümlü olanı; yoksa nullptr
     bool is_spiked = false;                // bana füze geliyor mu. NOT: gerçek spike radar kilididir, radar modeli yok
+    std::optional<double> threat_escape_margin_nm;     // NM, şimdi out + drag yapsam threat ölene kadar aramda kalan; − yetişir. Tehdit yoksa yok
+    std::optional<double> threat_recommit_margin_nm;   // NM, aynısı, şimdi recommit yapıp threat'e doğru uçsam. Tehdit yoksa yok
 };

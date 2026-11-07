@@ -111,16 +111,10 @@ FlightCommand Out::update(const Aircraft& own)
 {
     const double away_from_enemy_deg = own.picture.bearing_deg - 180.0 + los_lead_deg(own);   // düşman tam arkamda
 
-    double out_throttle = THROTTLE;
-    if (status(own) == ManeuverStatus::Done)
-    {
-        out_throttle = EXIT_THROTTLE;   // düşman arkada: art yakıcıyı bırak
-    }
-
     FlightCommand command = own.command;
     command.set_heading_deg(away_from_enemy_deg)
            .set_altitude_ft(target_altitude_ft_)
-           .set_throttle(out_throttle)
+           .set_throttle(THROTTLE)
            .set_g_limit(own.profile.out_g, own.profile.max_g);   // NEZ/MAR hesabıyla aynı g
     return command;
 }
@@ -563,7 +557,7 @@ FlightCommand Pursuit::update(const Aircraft& own)
 {
     FlightCommand command = own.command;
     command.set_heading_deg(target_heading_deg(own))
-           .set_throttle(THROTTLE)
+           .set_throttle(throttle_)
            .set_g_limit(G_LIMIT, own.profile.max_g);
     return command;
 }

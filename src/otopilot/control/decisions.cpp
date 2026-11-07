@@ -2,170 +2,353 @@
 
 #include <optional>
 
-#include "calculations/missile_geometry.hpp"
-#include "model/missile.hpp"
-
 #include "control/conditions.hpp"
-
-// ========================================================================================================
-// K1  —  atış ne zaman (her Commit'te; Recommit'ten sonra da)
-// ========================================================================================================
-
-// Menzil sırası genelde TR > DOR > MAR. NEZ'e hiçbir tutumda girilmez.
-// Püskürt: TR'de at; füze pitbull'u DOR dışında olur, düşmanı erken döndürür. TR çözümü yoksa DOR'da.
-// İmha: her tutumda DOR'da at, isabet için daha yakın. Riskli ikinci füzeyi MAR'da atar (K3).
-Decision<FirstShot> decide::first_shot(const Aircraft& own, const Mission& mission)
-{
-    if (own.weapons.missiles_left() == 0)
-    {
-        return {FirstShot::Wait, "füze yok"};
-    }
-    if (mission.goal == MissionGoal::Repel && condition::enemy_in_my_tr(own))
-    {
-        return {FirstShot::Fire, "TR'ye girildi"};
-    }
-    if (condition::in_dor(own))
-    {
-        return {FirstShot::Fire, "DOR'a girildi"};
-    }
-    return {FirstShot::Wait, "atış eşiği gelmedi"};
-}
-
-// ========================================================================================================
-// K3  —  füze havada: destek ne zaman biter
-// ========================================================================================================
-
-// İmha / Riskli: MAR'a kadar destek, MAR'da ikinci füzeyi atıp çık. Diğerleri: DOR'da çık.
-Decision<SupportLimit> decide::support_limit(const Aircraft& own, const Mission& mission)
-{
-    if (mission.goal == MissionGoal::Destroy && mission.risk == RiskLevel::Aggressive)
-    {
-        if (condition::in_mar(own))
-        {
-            return {SupportLimit::FireAndEscape, "MAR'a girildi: ikinci atış ve çıkış"};
-        }
-        return {SupportLimit::Continue, "MAR'a kadar destek"};
-    }
-    if (condition::in_dor(own))
-    {
-        return {SupportLimit::Escape, "DOR'a girildi"};
-    }
-    return {SupportLimit::Continue, "destek sürüyor"};
-}
-
-// ========================================================================================================
-// K4  —  bana füze geliyor
-// ========================================================================================================
+#include "model/missile.hpp"
 
 namespace
 {
-    constexpr double DEFENSE_MARGIN_S = 10.0;   // s, Out dönüşüne eklenen pay: füzeye bu kadar kala savunma başlar
+    constexpr double BEAM_MARGIN_NM = 5.0;     // NM, kaçış payı bundan büyükse Beam (menzili koru), değilse Drag
+    constexpr double DEFENSE_MARGIN_S = 10.0;  // s, out dönüşüne eklenen pay: savunmaya en geç bu kadar önce geçilir
+    constexpr double TRADE_MARGIN_S = 5.0;     // s, TRADE'de B2 ve B1 karşılaştırmalarının payı
+    constexpr double NOTCH_MARGIN_S = 3.0;     // s, notch dönüşüne eklenen pay: tehdide bu kadar kala notch
 
-    bool counter_fire_allowed(const Aircraft& own, RiskLevel risk)   // karşı atış: havada füzem yoksa, riske göre
+    // En son atılan canlı füzem: desteklediğim füze. Yoksa nullptr.
+    const Missile* newest_live_missile(const Aircraft& own)
     {
-        if (!own.weapons.active_missiles().empty() || own.weapons.missiles_left() == 0)
+        const Missile* newest = nullptr;
+        for (const Missile& missile : own.weapons.missiles)
+        {
+            if (condition::is_live(missile) && (newest == nullptr || missile.fire_order > newest->fire_order))
+            {
+                newest = &missile;
+            }
+        }
+        return newest;
+    }
+
+    bool supporting(const Aircraft& own)   // desteklediğim füze var ve henüz pitbull değil
+    {
+        const Missile* missile = newest_live_missile(own);
+        return missile != nullptr && !missile->target.is_pitbull;
+    }
+
+    bool counter_fire_allowed(const Aircraft& own, RiskLevel risk)   // havada füzem yokken karşı atış, riske göre
+    {
+        if (condition::has_live_missile(own) || own.weapons.missiles_left() == 0)
         {
             return false;
         }
         switch (risk)
         {
-        case RiskLevel::Safe: return false;                                  // doğrudan savunma
+        case RiskLevel::Safe: return false;
         case RiskLevel::Balanced: return condition::enemy_in_my_tr(own);
         case RiskLevel::Aggressive: return condition::enemy_in_my_wez(own);
         }
         return false;
     }
 
-    bool supporting(const Aircraft& own)   // havada pitbull olmamış füzem var
+    bool threat_alive(const Aircraft& own)   // bana gelen güdümlü, yetişebilen ve zararsız olmayan füze var
     {
-        const Missile* missile = own.weapons.active_missile();
-        return missile != nullptr && !missile->target.is_pitbull;
+        return condition::has_guided_threat(own) && own.picture.threat->target.catch_time_left_s.has_value()
+               && !condition::threat_harmless(own);
     }
 }
 
-// Füzeye kalan süre (yetişme süresi) Out dönüş süresiyle karşılaştırılır:
-//   ≤ dönüş            : Notch, kaçmaya vakit yok
-//   ≤ dönüş + pay      : son an; Güvenli/Dengeli Out + Drag, Riskli Notch
-//   daha uzun          : Güvenli/Dengeli Beam (füzeyi erit), Riskli Notch
-// Yetişme süresi yoksa (füze şu an yetişemiyor) Beam: savunmada kalınır, tehdit bitince K5.
-Decision<ThreatResponse> decide::defense(const Aircraft& own, const Mission& mission)
+// ========================================================================================================
+// KESİNTİLER
+// ========================================================================================================
+
+Decision<AbortChoice> decide::abort(const Aircraft& own)
 {
-    const bool aggressive = mission.risk == RiskLevel::Aggressive;
-    const std::optional<double> time_left_s = own.picture.threat ? own.picture.threat->target.catch_time_left_s : std::nullopt;
-    const double out_turn_s = own.picture.out.turn.time_s;
-
-    if (time_left_s && *time_left_s <= out_turn_s)
+    if (condition::out_of_missiles(own))
     {
-        return {ThreatResponse::Notch, "füzeye kalan süre Out dönüşünden kısa"};
+        return {AbortChoice::Abort, "füzem kalmadı"};
     }
-    if (aggressive)
+    if (condition::in_mar(own))
     {
-        return {ThreatResponse::Notch, "Riskli: Notch"};
+        return {AbortChoice::Abort, "MAR ihlali"};
     }
-    if (time_left_s && *time_left_s <= out_turn_s + DEFENSE_MARGIN_S)
-    {
-        return {ThreatResponse::Drag, "füze yakın: Out + Drag"};
-    }
-    return {ThreatResponse::Beam, "füze uzak: Beam"};
+    return {AbortChoice::Continue, "devam"};
 }
 
-// Karşı atış: Güvenli yok, Dengeli düşman TR'mdeyse, Riskli WEZ'imdeyse; havada füzem yoksa.
-// Füzem havada ve pitbull değilse son ana (dönüş + pay) kadar destek sürer; sonra savunma.
+// Havada füzem yoksa riske göre karşı atış; füzem pitbull değilse TRADE; diğer durumda savunma.
 Decision<ThreatResponse> decide::threat_response(const Aircraft& own, const Mission& mission)
 {
-    const Missile* threat = own.picture.threat;
-    if (threat == nullptr)
+    if (!condition::has_guided_threat(own))
     {
-        return {ThreatResponse::Continue, "tehdit yok"};
+        return {ThreatResponse::Continue, "güdümlü tehdit yok"};
     }
-    if (!threat->target.catch_time_left_s)
+    if (!threat_alive(own))
     {
-        return {ThreatResponse::Continue, "füze yetişemiyor"};
+        return {ThreatResponse::Continue, "tehdit yetişemiyor"};
     }
     if (counter_fire_allowed(own, mission.risk))
     {
         return {ThreatResponse::CounterFire, "karşı atış şartı var"};
     }
-    const bool last_moment = *threat->target.catch_time_left_s <= own.picture.out.turn.time_s + DEFENSE_MARGIN_S;
-    if (supporting(own) && !last_moment)
+    if (supporting(own))
     {
-        return {ThreatResponse::Continue, "füzemi destekliyorum"};
+        return {ThreatResponse::Trade, "füzem havada, pitbull değil"};
     }
-    return defense(own, mission);
+    return {ThreatResponse::Defend, "tehdit geliyor"};
 }
 
 // ========================================================================================================
-// K5  —  savunma bitti
+// COMMIT  —  ilk atış noktası: şimdilik sabit, TR (Pk ikinci aşamada)
 // ========================================================================================================
 
-// Peşimde füze varken: Recommit'te burnum füzeye döner, kapanma ≈ şimdiki + 2 × TAS olur.
-// O kapanmayla füze yetişebiliyorsa kaçış yönünde beklenir (Wait); yetişemiyorsa ya da füze yoksa devam.
-Decision<AfterEscape> decide::after_escape(const Aircraft& own, const Mission& mission)
+Decision<CommitChoice> decide::commit(const Aircraft& own)
 {
-    (void)mission;   // örnek: Püskürt + düşman cold → Depart; Güvenli yalnız füze ≥ 2 ise Recommit
-    const Missile* threat = own.picture.threat;
-    if (threat != nullptr
-        && missile_geometry::catch_time_left_s(*threat, threat->target.closure_kt + 2.0 * own.kinematics.tas_kt))
+    if (condition::enemy_cold(own))
     {
-        return {AfterEscape::Wait, "Recommit'te füze yetişir"};
+        return {CommitChoice::Reassess, "düşman cold"};
     }
-    if (own.weapons.missiles_left() > 0)
+    if (own.weapons.missiles_left() == 0 || !condition::enemy_in_my_wez(own))
     {
-        return {AfterEscape::Recommit, "füze var"};
+        return {CommitChoice::Continue, "WEZ dışı"};
     }
-    return {AfterEscape::Depart, "füze bitti"};
+    if (condition::enemy_in_my_tr(own))
+    {
+        return {CommitChoice::Fire, "TR'ye girildi"};
+    }
+    if (!own.weapons.tr_nm && condition::in_dor(own))
+    {
+        return {CommitChoice::Fire, "TR çözümü yok: DOR'a girildi"};
+    }
+    return {CommitChoice::Continue, "atış noktası gelmedi"};
 }
 
 // ========================================================================================================
-// İSKELET  —  K2; gövde şimdiki akışın davranışını döndürür, örnekler yorumda
+// SUPPORT  —  füzem havada, tehdit yok
 // ========================================================================================================
 
-Decision<AfterShot> decide::after_shot(const Aircraft& own, const Mission& mission)
+// İmha + Riskli MSR'de 2. füzeyi atar ve en yeni füzeyi pitbull'a kadar destekler.
+// Diğerleri füzem pitbull olunca ya da DOR'da (pitbull olmasa da) çıkar.
+Decision<SupportChoice> decide::support(const Aircraft& own, const Mission& mission)
 {
-    (void)own;
-    (void)mission;
-    // Püskürt → Leave (L&L: at ve Out).
-    // İmha → destek, riske göre: Güvenli Crank, Dengeli Crank, Riskli Commit (pitbull'a kadar burun düşmanda).
-    return {AfterShot::Crank, "destek: Crank"};
+    const Missile* missile = newest_live_missile(own);
+    if (missile == nullptr)
+    {
+        return {SupportChoice::Reassess, "füzem bitti"};
+    }
+
+    const bool aggressive_destroy = mission.goal == MissionGoal::Destroy && mission.risk == RiskLevel::Aggressive;
+    const bool second_shot_left = own.weapons.missiles_left() > 0 && condition::live_missile_count(own) < 2;
+    SupportChoice leave = SupportChoice::Out;
+    if (mission.leave_after_support)
+    {
+        leave = SupportChoice::Abort;
+    }
+
+    if (aggressive_destroy && second_shot_left && condition::enemy_in_my_msr(own))
+    {
+        return {SupportChoice::SecondShot, "Riskli imha: MSR'de 2. atış"};
+    }
+    if (missile->target.is_pitbull)
+    {
+        if (condition::enemy_cold(own))
+        {
+            return {SupportChoice::Reassess, "füzem pitbull, düşman kaçıyor"};
+        }
+        if (aggressive_destroy && second_shot_left)
+        {
+            return {SupportChoice::Continue, "Riskli imha: MSR'ye kadar devam"};
+        }
+        return {leave, "füzem pitbull"};
+    }
+    if (!aggressive_destroy && condition::in_dor(own))
+    {
+        return {leave, "DOR: destek bırakıldı"};
+    }
+    return {SupportChoice::Continue, "destek sürüyor"};
 }
 
+// ========================================================================================================
+// TRADE  —  iki füze havada, benimki pitbull değil
+// ========================================================================================================
+
+// Crank'i en geç t_kritik'te bırakırım:  t_kritik = t_vur_tehdit − (out dönüşü + pay)
+//   A  (her risk)    : t_pb_ben ≤ t_kritik                              füzem kritik andan önce pitbull
+//   B2 (Dengeli+)    : t_kritik_düşman < t_pb_tehdit ve
+//                      t_kritik_düşman + pay < t_kritik                düşman benden önce kırmak zorunda, füzesi ölür
+//                      t_kritik_düşman = t_vur_ben − (düşmanın out dönüşü + pay)
+//   B1 (Riskli)      : t_vur_ben + pay < t_pb_tehdit                    füzem tehdit pitbull olmadan vurur
+// Tehdit zaten pitbull ise yalnız A. Hiçbiri tutmazsa da t_kritik'e kadar crank sürer: bu sırada düşman kırabilir.
+Decision<TradeChoice> decide::trade(const Aircraft& own, const Mission& mission)
+{
+    if (!threat_alive(own))
+    {
+        return {TradeChoice::Support, "tehdit bitti"};
+    }
+    const Missile* missile = newest_live_missile(own);
+    if (missile == nullptr)
+    {
+        return {TradeChoice::Defend, "füzem bitti"};
+    }
+    if (missile->target.is_pitbull)
+    {
+        return {TradeChoice::Defend, "füzem pitbull"};
+    }
+    if (!missile->has_kinematics)
+    {
+        return {TradeChoice::Continue, "füzem henüz uçmadı"};
+    }
+
+    const MissileTargetInfo& threat = own.picture.threat->target;
+    const double threat_hit_s = *threat.catch_time_left_s;
+    const double crank_left_s = threat_hit_s - (own.picture.out.turn.time_s + DEFENSE_MARGIN_S);
+
+    const std::optional<double> my_pitbull_s = missile->target.pitbull_time_left_s;
+    if (my_pitbull_s && *my_pitbull_s <= crank_left_s)
+    {
+        return {TradeChoice::Continue, "A: füzem kritik andan önce pitbull"};
+    }
+
+    const std::optional<double> my_hit_s = missile->target.catch_time_left_s;
+    const std::optional<double> threat_pitbull_s = threat.pitbull_time_left_s;
+    const bool threat_can_die = !threat.is_pitbull && threat_pitbull_s && my_hit_s;   // atan kırılırsa tehdit güdümünü kaybeder
+
+    if (threat_can_die && mission.risk != RiskLevel::Safe)
+    {
+        const double enemy_break_s = *my_hit_s - (own.picture.enemy_out_turn_s + DEFENSE_MARGIN_S);
+        if (enemy_break_s < *threat_pitbull_s && enemy_break_s + TRADE_MARGIN_S < crank_left_s)
+        {
+            return {TradeChoice::Continue, "B2: düşman önce kırmak zorunda"};
+        }
+    }
+    if (threat_can_die && mission.risk == RiskLevel::Aggressive && *my_hit_s + TRADE_MARGIN_S < *threat_pitbull_s)
+    {
+        return {TradeChoice::Continue, "B1: füzem tehdit pitbull olmadan vurur"};
+    }
+    if (crank_left_s > 0.0)
+    {
+        return {TradeChoice::Continue, "kritik ana kadar crank"};
+    }
+    return {TradeChoice::Defend, "kritik an geldi: destek bırakıldı"};
+}
+
+// ========================================================================================================
+// DEFEND  —  kaçış payına göre savunma tipi
+// ========================================================================================================
+
+// Kaçış payı (picture.threat_escape_margin_nm): şimdi out + drag yapsam füze ölene kadar aramda kalan mesafe.
+//   pay > BEAM_MARGIN_NM, Güvenli değil      : Beam, menzili koru
+//   0 ≤ pay                                   : Drag, kaçarım
+//   pay < 0, tehdide kalan ≤ notch dönüşü + pay : Notch, son çare
+//   pay < 0                                   : Drag, füzenin enerjisini tüket
+Decision<Defense> decide::defense(const Aircraft& own, const Mission& mission)
+{
+    const std::optional<double> margin_nm = own.picture.threat_escape_margin_nm;
+    if (!margin_nm)
+    {
+        return {Defense::Drag, "tehdit yok"};
+    }
+    if (*margin_nm > BEAM_MARGIN_NM && mission.risk != RiskLevel::Safe)
+    {
+        return {Defense::Beam, "kaçış payı bol: Beam"};
+    }
+    if (*margin_nm >= 0.0)
+    {
+        return {Defense::Drag, "drag ile kaçarım"};
+    }
+
+    const std::optional<double> threat_hit_s = own.picture.threat->target.catch_time_left_s;
+    if (threat_hit_s && *threat_hit_s <= own.picture.notch_turn_s + NOTCH_MARGIN_S)
+    {
+        return {Defense::Notch, "son an: Notch"};
+    }
+    return {Defense::Drag, "kaçamıyorum: enerjisini tüket"};
+}
+
+// ========================================================================================================
+// REASSESS  —  taahhüt bitti: savunma, destek ya da kovalama
+// ========================================================================================================
+
+Decision<ReassessChoice> decide::reassess(const Aircraft& own, const Mission& mission)
+{
+    if (condition::out_of_missiles(own))
+    {
+        return {ReassessChoice::Abort, "füzem kalmadı"};
+    }
+    if (condition::enemy_cold(own))
+    {
+        if (mission.goal == MissionGoal::Destroy && own.weapons.missiles_left() > 0)
+        {
+            return {ReassessChoice::Chase, "düşman kaçıyor: kovala"};
+        }
+        return {ReassessChoice::Cold, "düşman kaçıyor: bekle"};
+    }
+    if (condition::my_aspect(own) == Aspect::Cold)
+    {
+        return {ReassessChoice::Cold, "cold'dayım: MRR'ye açıl"};
+    }
+    if (condition::in_dor(own))
+    {
+        return {ReassessChoice::Out, "DOR içinde"};
+    }
+    return {ReassessChoice::Recommit, "düşman hot, DOR dışı"};
+}
+
+// ========================================================================================================
+// COLD  —  cold ops: MRR'ye açıl, recommit anını bekle
+// ========================================================================================================
+
+// Recommit kaçış payı (picture.threat_recommit_margin_nm): havada bana gelen füze varken dönsem yetişir mi.
+Decision<ColdChoice> decide::cold(const Aircraft& own, const Mission& mission, bool gave_up_chase)
+{
+    if (condition::enemy_hot(own))
+    {
+        if (own.weapons.missiles_left() == 0)
+        {
+            return {ColdChoice::Run, "son füzem havada: sonucu bekle"};
+        }
+        if (!condition::beyond_mrr(own))
+        {
+            return {ColdChoice::Run, "MRR'ye açılıyorum"};
+        }
+        const std::optional<double> recommit_margin_nm = own.picture.threat_recommit_margin_nm;
+        if (recommit_margin_nm && *recommit_margin_nm < 0.0)
+        {
+            return {ColdChoice::Run, "recommit yaparsam tehdit yetişir"};
+        }
+        return {ColdChoice::Recommit, "MRR dışı"};
+    }
+    if (condition::enemy_cold(own))
+    {
+        if (mission.goal == MissionGoal::Destroy && !gave_up_chase && own.weapons.missiles_left() > 0)
+        {
+            return {ColdChoice::Chase, "düşman kaçıyor: kovala"};
+        }
+        if (condition::beyond_mrr(own))
+        {
+            return {ColdChoice::Hold, "düşman kaçıyor: bekle"};
+        }
+        return {ColdChoice::Run, "MRR'ye açılıyorum"};
+    }
+    return {ColdChoice::Run, "düşman beam: bekle"};
+}
+
+// ========================================================================================================
+// CHASE  —  İmha, düşman kaçıyor
+// ========================================================================================================
+
+Decision<ChaseChoice> decide::chase(const Aircraft& own)
+{
+    if (condition::enemy_hot(own))
+    {
+        if (condition::in_dor(own))
+        {
+            return {ChaseChoice::Out, "düşman döndü, DOR içinde"};
+        }
+        return {ChaseChoice::Commit, "düşman döndü"};
+    }
+    if (own.weapons.missiles_left() > 0 && !condition::has_live_missile(own) && condition::enemy_in_my_r_cold(own))
+    {
+        return {ChaseChoice::Fire, "kaçan düşman R_cold'umda"};
+    }
+    if (condition::my_aspect(own) == Aspect::Hot && own.picture.closure_kt <= 0.0)
+    {
+        return {ChaseChoice::GiveUp, "yetişemiyorum"};
+    }
+    return {ChaseChoice::Continue, "kovalıyorum"};
+}

@@ -3,8 +3,9 @@
 #include "model/aircraft.hpp"
 #include "model/mission.hpp"
 
-// Karar noktaları: akış (otopilot) belli, yalnız kritik anlarda görev konseptine göre seçim yapılır.
+// Karar noktaları: otopilot hangi fazda olduğunu bilir, bu fonksiyonlar o fazda ne yapılacağını seçer.
 // Her fonksiyon saf sorgudur: own ve mission'ı okur, seçimi ve nedenini döndürür; akışı otopilot değiştirir.
+// Kurallar, metrikler ve geçiş şeması: control/KARAR_TASARIMI.md
 template <typename Choice>
 struct Decision
 {
@@ -12,21 +13,25 @@ struct Decision
     const char* reason;   // karar kaydında görünen neden
 };
 
-enum class FirstShot { Wait, Fire };                    // K1
-enum class AfterShot { Leave, Crank, Commit };          // K2: L&L (Out) / destek
-enum class SupportLimit { Continue, Escape, FireAndEscape };   // K3
-enum class ThreatResponse { Continue, CounterFire, Beam, Drag, Notch };   // K4; savunmalar artan aciliyet sırasıyla
-enum class AfterEscape { Recommit, Depart, Wait };      // K5; Wait: kaçış yönünde kal
+enum class AbortChoice { Continue, Abort };
+enum class ThreatResponse { Continue, CounterFire, Trade, Defend };
+enum class CommitChoice { Continue, Fire, Reassess };
+enum class SupportChoice { Continue, SecondShot, Out, Abort, Reassess };
+enum class TradeChoice { Continue, Support, Defend };
+enum class Defense { Beam, Drag, Notch };                  // artan aciliyet sırasıyla; savunma yalnız ileri gider
+enum class ReassessChoice { Abort, Chase, Cold, Out, Recommit };
+enum class ColdChoice { Run, Hold, Recommit, Chase };      // Run: out yönünde kaçmaya devam, Hold: rotayı koru
+enum class ChaseChoice { Continue, Fire, Commit, Out, GiveUp };
 
 namespace decide
 {
-    // K1: atış ne zaman. Commit'te her step sorulur; Fire dönünce bir kez atılır.
-    Decision<FirstShot> first_shot(const Aircraft& own, const Mission& mission);
-    Decision<SupportLimit> support_limit(const Aircraft& own, const Mission& mission);   // K3: ilk füze havada, destek ne zaman biter
-    Decision<ThreatResponse> threat_response(const Aircraft& own, const Mission& mission);   // K4: bana füze geliyor; savunma dışında her step
-    Decision<ThreatResponse> defense(const Aircraft& own, const Mission& mission);   // K4: savunmadayken füzeye kalan süreye göre Beam/Drag/Notch
-    Decision<AfterEscape> after_escape(const Aircraft& own, const Mission& mission);   // K5: savunma bitti
-
-    // --- İskelet: henüz akışa bağlı değil ---
-    Decision<AfterShot> after_shot(const Aircraft& own, const Mission& mission);              // K2: atıştan sonra
+    Decision<AbortChoice> abort(const Aircraft& own);                                          // kesinti: füzem bitti ya da MAR ihlali
+    Decision<ThreatResponse> threat_response(const Aircraft& own, const Mission& mission);     // kesinti: bana gelen güdümlü füze
+    Decision<CommitChoice> commit(const Aircraft& own);                                        // COMMIT: ilk atış noktası
+    Decision<SupportChoice> support(const Aircraft& own, const Mission& mission);              // SUPPORT: 2. atış ve destek sonu
+    Decision<TradeChoice> trade(const Aircraft& own, const Mission& mission);                  // TRADE: crank'i ne kadar tutarım
+    Decision<Defense> defense(const Aircraft& own, const Mission& mission);                    // DEFEND: kaçış payına göre savunma tipi
+    Decision<ReassessChoice> reassess(const Aircraft& own, const Mission& mission);            // REASSESS: taahhüt bitti, sırada ne var
+    Decision<ColdChoice> cold(const Aircraft& own, const Mission& mission, bool gave_up_chase); // COLD: recommit anı
+    Decision<ChaseChoice> chase(const Aircraft& own);                                          // CHASE: kovala, at ya da vazgeç
 }

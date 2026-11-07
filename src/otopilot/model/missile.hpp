@@ -32,6 +32,8 @@ struct MissileTargetInfo
     std::optional<double> a_pole_nm;       // NM, atış anındaki weapons.a_pole_nm (Weapons::fire); uçuşta sabit
     std::optional<double> f_pole_nm;       // NM, atış anındaki weapons.f_pole_nm (Weapons::fire); uçuşta sabit
     std::optional<double> catch_time_left_s;   // s, füzenin hedefe yetişmesine kalan süre (missile_geometry::catch_time_left_s); yetişemiyorsa yok
+    std::optional<double> pitbull_time_left_s; // s, pitbull'a kalan süre (missile_geometry::pitbull_time_left_s); pitbull ise 0, erişemiyorsa yok
+    bool is_guided = true;                 // pitbull ya da atan uçak destekliyor (missile_geometry::is_guided); bir kez false olunca kalır
 };
 
 // Uçağın füze slotlarından biri. Liste ilk step'te Python'daki füze sayısı kadar kurulur,

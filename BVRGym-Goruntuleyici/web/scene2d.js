@@ -133,7 +133,7 @@ export class Scene {
     if(analysis?.options.enemyWez&&analysis.target)wezRing(analysis.target,analysis.target.calc);
     // Düşman merkezli bölgeler: yarıçap seçili uçağın hesabı, çember hedefin etrafında; içindeyse belirgin. 3D ile aynı.
     if(analysis?.target){
-      const center=this.point(analysis.target),dark=document.documentElement.dataset.theme==='dark';
+      const center=this.point(analysis.target),dark=document.documentElement.dataset.theme==='dark',placed=[];
       for(const zone of ENEMY_ZONES){
         const radius=analysis.calc[zone.field];
         if(!analysis.options.zones[zone.key]||!(radius>0))continue;
@@ -153,7 +153,10 @@ export class Scene {
         if(zone.style==='dash')ctx.setLineDash([12,7]);
         ctx.stroke();ctx.setLineDash([]);
         ctx.font='600 11px "Segoe UI",sans-serif';ctx.textAlign='center';ctx.textBaseline='bottom';
-        ctx.fillText(zone.label,center.x,center.y-pixels-3);
+        // Yarıçapı yakın bölgelerin etiketleri üst üste binmesin: çakışan etiket yukarı kayar.
+        const width=ctx.measureText(zone.label).width+4,height=13;let y=center.y-pixels-3;
+        for(let i=0;i<=placed.length;i++){const hit=placed.find(r=>Math.abs(r.x-center.x)<(r.width+width)/2&&y>r.y-height&&y-height<r.y);if(!hit)break;y=hit.y-height-1;}
+        placed.push({x:center.x,y,width});ctx.fillText(zone.label,center.x,y);
         ctx.restore();
       }
     }

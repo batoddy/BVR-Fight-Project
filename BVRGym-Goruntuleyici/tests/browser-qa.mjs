@@ -27,7 +27,7 @@ try{
   await page.waitForFunction(()=>document.querySelector('#status').textContent==='Kayıt bekleniyor');
   assert.equal(await page.locator('#timeline').isDisabled(),true);
   assert.equal(await page.locator('dialog').count(),0);
-  assert.equal(await page.locator('#object-scale').isVisible(),true);
+  assert.equal(await page.locator('#object-scale').count(),1);
   const actions=await page.locator('.toolbar-actions').boundingBox();
   assert.ok(Math.abs(actions.x+actions.width-1484)<2);
   await page.locator('#open-settings').click();
@@ -244,7 +244,7 @@ try{
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>record.label.hidden);}));
   await page.locator('#label-speed').check();await page.locator('#label-altitude').check();await page.locator('#label-names').check();
   assert.ok(await page.evaluate(async()=>{const {scene,buffer}=await import('/app.js');return [...scene.models].every(([id,record])=>record.stem.visible===(buffer.tracks.get(id).samples[0].kind==='aircraft'));}));
-  await page.locator('#object-scale').selectOption('25');await page.waitForTimeout(150);
+  await page.locator('#view-options').evaluate(menu=>menu.open=true);await page.locator('#object-scale').selectOption('25');await page.waitForTimeout(150);
   assert.ok(await page.evaluate(async()=>{const {scene,buffer}=await import('/app.js');return [...scene.models].every(([id,record])=>record.model.scale.x===(buffer.tracks.get(id).samples[0].kind==='missile'?93.75:25));}));
   await page.locator('#object-scale').selectOption('1');await page.waitForTimeout(150);
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].every(record=>record.model.scale.x===1);}));
@@ -379,7 +379,7 @@ try{
   assert.equal(await page.locator('#entity-list .munition').count(),8);
   assert.ok(await page.locator('#entity-list .munition.spent').count()>0);
   assert.ok(await page.evaluate(async()=>{const {scene}=await import('/app.js');return [...scene.models.values()].some(record=>!record.model.visible&&record.trail.visible);}));
-  await page.locator('#camera-mode').selectOption('all');
+  await page.locator('#frame-all').click();
   assert.equal(await page.locator('#follow').isChecked(),false);
   await page.locator('#seek-time').fill('10');await page.locator('#seek-time').press('Enter');
   await page.waitForTimeout(200);assert.ok(Math.abs(Number(await page.locator('#timeline').inputValue())-10)<.01);
@@ -414,12 +414,12 @@ try{
   const halfStart=Number(await page.locator('#timeline').inputValue());await page.waitForTimeout(800);
   const halfAdvance=Number(await page.locator('#timeline').inputValue())-halfStart;assert.ok(halfAdvance>.3&&halfAdvance<.6);
   await page.keyboard.press('Space');
-  for(const rate of [1,2,3,4,5,10]){
+  for(const rate of [1,2,5,10,20,50]){
     await page.keyboard.press('ArrowUp');
     assert.equal(await page.locator('#playback-rate').textContent(),rate+'×');
     assert.equal(await page.locator(`[data-rate="${rate}"]`).getAttribute('aria-pressed'),'true');
   }
-  await page.keyboard.press('ArrowUp');assert.equal(await page.locator('#playback-rate').textContent(),'10×');
+  await page.keyboard.press('ArrowUp');assert.equal(await page.locator('#playback-rate').textContent(),'50×');
   await page.locator('[data-rate="1"]').click();
   await page.locator('#playback-speed').fill('3');await page.locator('#play-pause').click();
   const start=Number(await page.locator('#timeline').inputValue());await page.waitForTimeout(1000);
@@ -469,7 +469,7 @@ try{
   assert.equal(await page.locator('#file-input').count(),0);
   assert.equal(await page.locator('#recent-recordings').count(),0);
   await page.locator('#close-record-panel').click();
-  await page.locator('#view-2d').click();await page.locator('#camera-mode').selectOption('all');await page.waitForTimeout(200);
+  await page.locator('#view-2d').click();await page.locator('#frame-all').click();await page.waitForTimeout(200);
   assert.equal(await page.locator('#scene2d').isVisible(),true);
   await page.setViewportSize({width:430,height:850});await page.waitForTimeout(300);
   await readScale();

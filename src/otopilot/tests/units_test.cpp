@@ -197,11 +197,13 @@ namespace
         require(maneuvers.crank.side() == ManeuverSide::Right, "second crank chooses side again");
     }
 
+    // Otopilot akışı: koşullar World::update'ten gelir; burada picture ve weapons elle sürülür.
     void otopilot_flow()
     {
         Aircraft own, enemy;
         own.profile = aircraft_profile("F16");
         own.kinematics.altitude_ft = 30000;
+        own.kinematics.tas_kt = 500;
         own.command.set_altitude_ft(30000).set_throttle(0.45);
         own.picture.range_3d_nm = 34;
         for (int slot = 0; slot < 4; ++slot)
@@ -214,57 +216,117 @@ namespace
 
         Otopilot pilot{Mission{MissionGoal::Destroy, RiskLevel::Balanced}};
         pilot.step(own, enemy);
-        own.weapons.enemy_in_tr = true;   // koşullar World::update'ten gelir; bu test yalnız otopilot akışını sürer
+        require(own.phase == Phase::Commit && own.weapons.missiles_left() == 4, "commit waits outside WEZ");
+
+        own.weapons.enemy_in_wez = true;
+        own.weapons.enemy_in_tr = true;
         pilot.step(own, enemy);
-        require(own.weapons.missiles_left() == 4 && own.decision.empty(), "destroy does not fire at TR");
-        own.picture.is_in_dor = true;     // İmha: K1 DOR'da atar
-        pilot.step(own, enemy);
-        require(own.phase == Phase::Commit && own.weapons.missiles_left() == 4,
-                "transition selects next state without flying it yet");
+        require(own.decision.rfind("COMMIT: ateş", 0) == 0 && own.weapons.missiles_left() == 4, "fire decided at TR, order next step");
         pilot.step(own, enemy);
         require(own.weapons.missiles_left() == 3, "first shot once");
-        own.weapons.missiles[0].python_id = "blue/missile/0";
+        Missile& first = own.weapons.missiles[0];
+        first.python_id = "blue/missile/0";
         own.weapons.has_launch_order = false;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Crank, "support cranks against hot enemy while missile waits launch");
 
-        own.picture.is_in_dor = false;    // K3'ü ayrı sürmek için
-        own.picture.is_in_mar = true;
+        first.has_kinematics = true;
+        first.state = MissileState::InFlight;
+        first.target.is_pitbull = true;
         pilot.step(own, enemy);
+        require(own.decision.rfind("SUPPORT → OUT", 0) == 0, "support ends at pitbull");
         pilot.step(own, enemy);
-        require(own.phase == Phase::Crank, "first support exits on DOR, not MAR");
-        own.picture.is_in_dor = true;
-        own.picture.is_in_mar = false;
-        pilot.step(own, enemy);
-        own.picture.ata_deg = 150;
-        pilot.step(own, enemy);
-        require(own.phase == Phase::Out, "first escape starts");
-        near(own.command.altitude_ft(), 26700, "first escape entry altitude");
+        require(own.phase == Phase::Out, "out flown");
+        near(own.command.altitude_ft(), 26700, "out entry altitude");
+        require(own.command.throttle() == throttle::MAX_THRUST, "out on afterburner");
+
         own.picture.ata_deg = 180;
         pilot.step(own, enemy);
-        own.picture.ata_deg = own.profile.recommit_fire_ata_deg + 1.1;
+        require(own.decision.rfind("OUT → COLD", 0) == 0, "out done goes cold");
+        pilot.step(own, enemy);
+        require(own.decision.rfind("COLD → RECOMMIT", 0) == 0, "hot enemy beyond MRR: recommit");
+        own.picture.ata_deg = 0;
+        pilot.step(own, enemy);
+        require(own.decision.rfind("RECOMMIT → COMMIT", 0) == 0, "recommit done");
+
+        // Tehdit gelirken füzem pitbull değil: TRADE.
+        Missile threat;
+        threat.profile = AIM120C;
+        threat.has_kinematics = true;
+        threat.state = MissileState::InFlight;
+        threat.target.catch_time_left_s = 60.0;
+        threat.target.pitbull_time_left_s = 40.0;
+        own.picture.threat = &threat;
+        own.picture.out.turn.time_s = 15;
+        first.target.is_pitbull = false;
+        first.target.pitbull_time_left_s = 20.0;
+        pilot.step(own, enemy);
+        require(own.decision.rfind("TEHDİT → TRADE", 0) == 0 && own.phase == Phase::Crank, "threat while supporting: trade");
+        pilot.step(own, enemy);
+        require(own.decision.rfind("TEHDİT → TRADE", 0) == 0, "A holds: crank continues");
+
+        first.target.pitbull_time_left_s = 50.0;          // kritik an 60 − (15 + 10) = 35 s'den sonra
+        first.target.catch_time_left_s.reset();           // B2/B1 hesaplanamaz
+        own.picture.threat_escape_margin_nm = 10.0;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Crank && own.decision.rfind("TEHDİT → TRADE", 0) == 0, "A fails: crank until critical moment");
+        threat.target.catch_time_left_s = 25.0;           // kritik an geçti: 25 − (15 + 10) = 0
+        pilot.step(own, enemy);
+        require(own.decision.rfind("DEFEND", 0) == 0, "critical moment: drop support");
+        threat.target.catch_time_left_s = 60.0;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Beam, "large escape margin: beam");
+        own.picture.threat_escape_margin_nm = -1.0;
+        own.picture.notch_turn_s = 10;
+        pilot.step(own, enemy);
+        require(own.decision.rfind("DEFEND: acilleşti", 0) == 0, "negative margin escalates");
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Drag, "drag before last moment");
+        threat.target.catch_time_left_s = 12.0;
         pilot.step(own, enemy);
         pilot.step(own, enemy);
-        require(own.phase == Phase::Recommit && own.weapons.missiles_left() == 3,
-                "recommit waits until target enters configured firing angle");
-        own.picture.ata_deg = -own.profile.recommit_fire_ata_deg;
-        for (int step = 0; step < 3; ++step)   // Recommit biter → Commit'te K1 (DOR içi) → atış
+        require(own.phase == Phase::Notch, "notch at last moment");
+        threat.target.catch_time_left_s = 60.0;
+        own.picture.threat_escape_margin_nm = 10.0;
+        pilot.step(own, enemy);
+        require(own.phase == Phase::Notch, "defense never de-escalates");
+
+        own.picture.threat = nullptr;
+        own.picture.threat_escape_margin_nm.reset();
+        pilot.step(own, enemy);
+        require(own.decision.rfind("REASSESS → RECOMMIT", 0) == 0, "threat over: reassess");
+
+        // Zararsız füze: benden yavaş ve recommit payı ≥ 1 NM → savunma bırakılır, kesinti de tetiklenmez.
+        first.state = MissileState::Ended;                // füzem bitti: TRADE yok
+        own.weapons.enemy_in_tr = false;                  // karşı atış yok
+        threat.kinematics.tas_kt = 1500;
+        own.picture.threat = &threat;
+        own.picture.threat_recommit_margin_nm = 2.0;
+        pilot.step(own, enemy);
+        require(own.decision.rfind("DEFEND", 0) == 0, "fast threat: defend");
+        threat.kinematics.tas_kt = 400;                   // ben 500 kt
+        pilot.step(own, enemy);
+        require(own.decision.rfind("DEFEND: ", 0) != 0 && own.decision.find("REASSESS") != std::string::npos,
+                "harmless threat: leave defense");
+        pilot.step(own, enemy);
+        require(own.decision.rfind("DEFEND", 0) != 0, "harmless threat does not interrupt");
+        own.picture.threat_recommit_margin_nm = 0.5;      // füzeye yaklaştım: pay eşiğin altında
+        pilot.step(own, enemy);
+        require(own.decision.rfind("DEFEND", 0) == 0, "margin below threshold: threat again");
+        own.picture.threat = nullptr;
+        own.picture.threat_recommit_margin_nm.reset();
+
+        for (Missile& missile : own.weapons.missiles)   // füze bitti: kalıcı çıkış
         {
-            pilot.step(own, enemy);
+            missile.is_fired = true;
+            missile.has_kinematics = true;
+            missile.state = MissileState::Ended;
         }
-        require(own.weapons.missiles_left() == 2 && own.decision.rfind("K1", 0) == 0, "after recommit K1 decides the next shot");
-        own.weapons.missiles[1].python_id = "blue/missile/1";
-        own.weapons.has_launch_order = false;
-
-        own.weapons.missiles[2].is_fired = own.weapons.missiles[3].is_fired = true;   // füze bitti: K5 ayrılır
         pilot.step(own, enemy);
-        own.kinematics.altitude_ft = 26000;
-        own.picture.ata_deg = 150;
+        require(own.decision.rfind("ABORT", 0) == 0 && own.phase == Phase::Out, "abort when out of missiles");
+        own.picture.range_3d_nm = 50;
         pilot.step(own, enemy);
-        require(own.phase == Phase::Out, "support exits on DOR");
-        near(own.command.altitude_ft(), 22700, "escape enters with current altitude");
-        own.picture.ata_deg = 180;
-        pilot.step(own, enemy);
-        pilot.step(own, enemy);
-        require(own.phase == Phase::Hold && own.weapons.missiles_left() == 0, "departure when no missile left");
+        require(own.phase == Phase::Out, "abort is permanent");
 
         own.picture.ata_deg = 3;
         require(condition::nose_on_target(own), "positive alignment boundary");
@@ -272,6 +334,55 @@ namespace
         require(condition::nose_on_target(own), "negative alignment boundary");
         own.picture.ata_deg = -3.1;
         require(!condition::nose_on_target(own), "outside negative alignment boundary");
+    }
+
+    // Pitbull süresi, destek kuralı ve kaçış payı: formül adım adım yeniden hesaplanır.
+    void missile_decision_metrics()
+    {
+        Missile missile;
+        missile.profile = AIM120C;
+        missile.target.range_nm = 20;
+        missile.target.closure_kt = 2000;
+        near(*missile_geometry::pitbull_time_left_s(missile),
+             *accel_travel_time_s(20 - AIM120C.pitbull_range_nm, 2000, AIM120C.slowing_accel_kt_s), "pitbull time left");
+        missile.target.is_pitbull = true;
+        near(*missile_geometry::pitbull_time_left_s(missile), 0, "pitbull time is zero once pitbull");
+
+        Aircraft launcher, target;
+        launcher.profile = aircraft_profile("F16");
+        launcher.kinematics.lat_deg = 59.5;
+        launcher.kinematics.lon_deg = 18.0;
+        target.kinematics = place(launcher.kinematics, 50, 20);
+        missile.target.is_pitbull = false;
+        require(missile_geometry::is_guided(missile, launcher, target), "target inside gimbal: guided");
+        target.kinematics = place(launcher.kinematics, 70, 20);
+        require(!missile_geometry::is_guided(missile, launcher, target), "target outside gimbal: lost");
+        missile.target.is_pitbull = true;
+        require(missile_geometry::is_guided(missile, launcher, target), "pitbull guides itself");
+
+        // Füze 2000 kt, Mach 1 = 590 kt, kapanma 2270 kt; 15 s dönüş, 600 kt kaçış.
+        missile.kinematics.tas_kt = 2000;
+        missile.kinematics.mach = 2000.0 / 590.0;
+        missile.target.closure_kt = 2270;
+        missile.target.range_nm = 15;
+        const double accel = AIM120C.slowing_accel_kt_s;
+        const double speed_after_turn_kt = 2000 + accel * 15;
+        const double closure_after_turn_kt = speed_after_turn_kt - 600;
+        const double turn_closed_nm = (2270 + closure_after_turn_kt) / 2 * 15 / 3600;
+        const double time_to_end_s = (speed_after_turn_kt - 600) / -accel;
+        const double run_closed_nm = (closure_after_turn_kt * time_to_end_s + accel * time_to_end_s * time_to_end_s / 2) / 3600;
+        const double expected_nm = 15 - feet_to_nmile(AIM120C.blast_radius_ft) - turn_closed_nm - run_closed_nm;
+        near(missile_geometry::escape_margin_nm(missile, 15, 600), expected_nm, "escape margin (drag)", 1e-9);
+        require(expected_nm < 0, "15 NM: cannot escape");
+        missile.target.range_nm = 25;
+        require(missile_geometry::escape_margin_nm(missile, 15, 600) > 0, "25 NM: escape");
+
+        const double recommit_end_s = (speed_after_turn_kt - 590) / -accel;   // füzeye dönünce füze Mach 1'de ölür
+        const double recommit_closure_kt = speed_after_turn_kt + 500;
+        const double recommit_turn_nm = (2270 + recommit_closure_kt) / 2 * 15 / 3600;
+        const double recommit_run_nm = (recommit_closure_kt * recommit_end_s + accel * recommit_end_s * recommit_end_s / 2) / 3600;
+        near(missile_geometry::escape_margin_nm(missile, 15, -500),
+             25 - feet_to_nmile(AIM120C.blast_radius_ft) - recommit_turn_nm - recommit_run_nm, "escape margin (recommit)", 1e-9);
     }
 
     void engagement_values()
@@ -384,6 +495,8 @@ namespace
             missile.target_id = "blue";
             missile.kinematics = place(world.fighter.kinematics, 0, slot == 0 ? 12 : 6);
             missile.kinematics.velocity_ned_kt.north = -1500;
+            missile.kinematics.tas_kt = 1500;
+            missile.kinematics.mach = 2.5;
             missile.target.a_pole_nm = 20.0 + slot;
             missile.target.f_pole_nm = 10.0 + slot;
             world.hostile.weapons.missiles.push_back(missile);
@@ -402,6 +515,12 @@ namespace
         require(threats[1]->target.catch_time_left_s
                 == missile_geometry::catch_time_left_s(*threats[1]), "catch time computed for every missile");
         require(world.fighter.picture.is_spiked, "spiked while a missile is inbound");
+        require(threats[1]->target.pitbull_time_left_s == missile_geometry::pitbull_time_left_s(*threats[1]), "pitbull time computed");
+        require(world.fighter.picture.threat_escape_margin_nm.has_value()
+                && world.fighter.picture.threat_recommit_margin_nm.has_value(), "threat margins computed");
+        require(!world.hostile.picture.threat_escape_margin_nm.has_value(), "no margin without threat");
+        near(world.fighter.picture.mrr_nm, engagement::mrr_nm(world.fighter, world.hostile), "MRR computed");
+        near(world.fighter.weapons.r_cold_nm, engagement::r_cold_nm(world.hostile, world.fighter), "my R_cold mirrors enemy escape R_cold");
         require(world.hostile.picture.threats.empty(), "no threat list against hostile");
         require(world.hostile.picture.threat == nullptr, "no missile against hostile");
         require(!world.hostile.picture.is_spiked, "not spiked without missile");
@@ -420,6 +539,12 @@ namespace
         require(world.fighter.picture.me_in_enemy_wez == world.hostile.weapons.enemy_in_wez, "me_in_enemy_wez copied");
         const double range_nm = world.hostile.picture.range_3d_nm;
         require(world.hostile.weapons.enemy_in_nez == (range_nm <= world.hostile.weapons.nez_nm), "enemy in NEZ");
+
+        world.hostile.weapons.missiles[1].target.is_guided = false;   // destek kuralı: güdüm koptu, bir daha dönmez
+        world.update();
+        require(!world.hostile.weapons.missiles[1].target.is_guided, "lost guidance stays lost");
+        require(world.fighter.picture.threat != nullptr && world.fighter.picture.threat->slot == 0, "unguided missile is not the threat");
+        require(world.fighter.picture.threats.size() == 2, "unguided missile still listed");
     }
 
     void metric_wire_and_imperial_calculations()
@@ -516,6 +641,7 @@ int main()
         turn_and_out_plan();
         maneuver_lifecycle();
         otopilot_flow();
+        missile_decision_metrics();
         engagement_values();
         decision_range();
         world_threat_selection();

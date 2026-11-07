@@ -27,32 +27,34 @@ Seçilen dizinin yolu tarayıcıda hatırlanır; CSV içerikleri tarayıcı depo
 | Kontrol | İşlev |
 |---|---|
 | Baştan / oynat-duraklat / sona | Temel oynatma |
+| `‹` `›` düğmeleri, `,` `.` tuşları | Seçili nesnenin bir kayıt örneği geri/ileri; oynatmayı duraklatır |
 | Zaman çubuğu | Kaydın herhangi bir anına git |
+| Manevra şeridi | Zaman çubuğunun altındaki renkli bant: bakış uçağının otopilot aşamaları; parçaya basmak o aşamanın başına gider |
 | Zaman kutusu | Saniye veya `dakika:saniye` gir |
 | Boşluk | Oynat/duraklat |
 | Sol / sağ ok | 1 saniye geri/ileri; Shift ile 10 saniye |
 | Yukarı / aşağı ok | Oynatma hızını bir kademe değiştir |
-| Hız seçimi | `0.25×`, `0.5×`, `1×`, `2×`, `3×`, `4×`, `5×`, `10×` |
+| Hız seçimi | `0.25×`, `0.5×`, `1×`, `2×`, `5×`, `10×`, `20×`, `50×` |
 
-Kısayollar metin alanı düzenlerken veya menü açıkken ilgili girişe öncelik verir. Hız değişikliği duraklatılmış kaydı kendiliğinden başlatmaz. Oynatma alanının üst kenarı sürüklenerek yüksekliği ayarlanabilir.
+Kısayolların listesi **Ayarlar** menüsündedir. Kısayollar metin alanı düzenlerken veya menü açıkken ilgili girişe öncelik verir. Hız değişikliği duraklatılmış kaydı kendiliğinden başlatmaz. Oynatma alanının üst kenarı sürüklenerek yüksekliği ayarlanabilir.
 
 ## Kamera, nesneler ve ölçek
 
-3D/2D düğmeleri aynı zaman ve nesne verisini farklı görünümlerde çizer. Kamera menüsünde serbest kamera, üstten ve tüm nesneler seçenekleri vardır. Sol tuş döndürür, sağ tuş taşır, tekerlek yakınlaştırır. Seçili nesne takibi görünüm menüsünden açılır; uçağa veya etikete çift tıklamak yaklaşır ve takip eder.
+3D/2D düğmeleri aynı zaman ve nesne verisini farklı görünümlerde çizer. **Görünüm → Bakış** 3D kamerayı serbest veya üstten tutar; 2D'de kullanılmaz. Üstten bakışta kamera eğilirse seçim serbeste döner. Sahnenin sağ altındaki düğmeler seçili nesneye odaklanır, tüm nesneleri sığdırır ve yakınlaştırır. Sol tuş döndürür, sağ tuş taşır, tekerlek yakınlaştırır. Seçili nesne takibi görünüm menüsünden açılır; uçağa, etikete veya envanterdeki füze simgesine çift tıklamak yaklaşır ve takip eder. Takip edilen nesne o an görünmüyorsa kamera bekler, takip kapanmaz.
 
 Sol panelde uçaklar takım ve adla filtrelenir. Göz düğmesi uçağı ve bağlı mühimmatını gizler. Envanterde uçaktaki, havadaki ve kaydı biten mühimmat ayrı görünür; uçuş ölçümü olmayan slot sahnede hayali bir füze oluşturmaz.
 
 Füze etiketleri iki satırda ad, hız ve irtifayı gösterir; uzun adlar kısaltılır. Füze seçilince atıştan beri geçen süre ve gidilen yol da açılır. Yeşil **PB** rozeti, otopilotun kaydettiği pitbull durumunu gösterir. Bu bilgi yeni `calculations.csv` kayıtlarındaki `pitbull_missile_slots` alanından okunur; alanı içermeyen eski kayıtlarda rozet gösterilmez. Otopilot füzenin hedefine yetişmesine kalan süreyi hesapladıysa etikette **varış** satırı da görünür (`missile_catch_times_s` alanı); hesap yoksa satır çıkmaz.
 
-**Nesne ölçeği** `1×`, `25×`, `50×`, `100×` seçeneklerine sahiptir. `1×` gerçek model boyunu kullanır; diğer ölçeklerde füzeler görünürlük için ek `3.75×` büyütülür. Dünya mesafeleri ve hesaplanan menziller değişmez. Tanınmayan model genel geometriyle gösterilir.
+**Görünüm → Nesne ölçeği** `1×`, `3×`, `25×`, `50×`, `100×` seçeneklerine sahiptir. `1×` gerçek model boyunu kullanır; diğer ölçeklerde füzeler görünürlük için ek `3.75×` büyütülür. Dünya mesafeleri ve hesaplanan menziller değişmez. Tanınmayan model genel geometriyle gösterilir.
 
 ## Analiz ve bilgi paneli
 
 Seçili uçağın ölçülen irtifa, yönelim, TAS/Mach, yük faktörü ve gaz komutu sağ panelde görünür. Hava hızı ölçümü yoksa konumdan türetilen hız, Mach ölçümü yoksa ISA tahmini ayrı adlandırılır. Gaz, ölçülen motor çıkışı değil kayıttaki hedef komuttur.
 
-C++ kullanılan oturumda `calculations.csv` varsa panel aşama, ATA, bearing, yatay/3B mesafe, aspect, WEZ ve karşılıklı WEZ durumlarını; R_cold (Stern WEZ), NEZ, MAR, DR ve DOR menzillerini gösterir. A-pole, F-pole ve TR, kendi ana silahıyla şimdi atış için C++ tarafından kaydedilen tahminlerdir; havada füze bulunması gerekmez. Bu üç tahminde C++'ın boş sonuç için yazdığı `0`, **Çözüm yok** olarak gösterilir. Seçilen NM/km birimi bütün bu mesafelere uygulanır. Eski kayıtlarda bulunmayan alanlar **—** kalır. Son snapshot gibi hesabın bulunmadığı anlarda arayüz bu eksikliği belirtir.
+C++ kullanılan oturumda `calculations.csv` varsa panel aşamayı ve kararı, ardından üç grubu gösterir: **Geometri** (ATA, bearing, yatay/3B mesafe, aspect, closure), **Atış** (radar, WEZ azami/asgari, A-pole, F-pole, TR, MSR) ve **Savunma** (karşılıklı WEZ, MAR, DR, DOR, Stern WEZ, NEZ, tehdit füzesi). **Manevra geçişleri** listesi her aşama değişimini zamanıyla verir; satıra basmak o ana gider. A-pole, F-pole ve TR, kendi ana silahıyla şimdi atış için C++ tarafından kaydedilen tahminlerdir; havada füze bulunması gerekmez. Bu üç tahminde C++'ın boş sonuç için yazdığı `0`, **Çözüm yok** olarak gösterilir. Seçilen NM/km birimi bütün bu mesafelere uygulanır. Eski kayıtlarda bulunmayan alanlar **—** kalır. Son snapshot gibi hesabın bulunmadığı anlarda arayüz bu eksikliği belirtir.
 
-**Sahnede göster** bölümünden hedef çizgisi, ATA/bearing/range/aspect etiketi, radar açısı ve iki uçağın WEZ halkaları seçilir. Düşman çevresindeki Stern WEZ, NEZ, MAR, DR, DOR ve TR halkaları ayrı ayrı açılıp kapatılabilir; seçimler iki görünümde de uygulanır ve tarayıcıda saklanır. TR, seçili uçağın kaydedilmiş TR mesafesini hedef merkezli pembe bir halka olarak gösterir; değer eksik, sıfır veya negatifse halka çizilmez. Füze seçiliyse analiz taşıyıcısının, seçim yoksa uygun dost uçağın bakışından yürür. Bu çizimler C++ hesabını gösterir; yeni bir radar veya menzil çözümü yapmaz.
+Sahnede çizilecekler değerlerin yanındaki kutularla seçilir; kutunun yanındaki çizgi örneği sahnedeki renk ve stildir. Hedef çizgisi açıkken Geometri kutuları çizgi etiketinde görünecek değerleri seçer. Atış ve Savunma başlıklarındaki **Tümü** kutusu gruptaki bütün çizimleri açar/kapatır. Düşman çevresindeki halkalar (Stern WEZ, NEZ, MAR, DR, DOR, TR, MSR) varsayılan kapalıdır; yakın yarıçaplı halkaların etiketleri üst üste binmeden dizilir. Seçimler iki görünümde de uygulanır ve tarayıcıda saklanır. TR, seçili uçağın kaydedilmiş TR mesafesini hedef merkezli pembe bir halka olarak gösterir; değer eksik, sıfır veya negatifse halka çizilmez. Füze seçiliyse analiz taşıyıcısının, seçim yoksa uygun dost uçağın bakışından yürür. Bu çizimler C++ hesabını gösterir; yeni bir radar veya menzil çözümü yapmaz.
 
 ## Görünüm tercihleri
 
@@ -61,7 +63,7 @@ C++ kullanılan oturumda `calculations.csv` varsa panel aşama, ATA, bearing, ya
 - İrtifa dolgusu, yükseklik çizgileri, hız vektörü okları, yer ızgarası ve etiket alanları ayrı ayarlanır.
 
 **Görünüm → Hız vektörleri · oklar**, uçak ve füzelerin burun yönü yerine gerçek hareket yönünü gösterir. Kayıttaki kuzey/doğu/aşağı hızları varsa önceliklidir; yoksa ardışık konumların zamana göre farkı kullanılır. 3D ok tırmanma/dalış bileşenini de içerir; 2D'de yatay izdüşümü çizilir. Ok uzunluğu hızla doğrusal orantılıdır: 2D'de 100 m/s için 18 piksel, 3D'de aynı oran kamera hedefinin derinliğinde kullanılır. Aynı görünümde bütün nesneler ortak hız ölçeği kullanır; model büyütmesi ok uzunluğunu değiştirmez. Hız yönü bilinmiyorsa, nesne duruyorsa veya ölçümü bitmişse ok gösterilmez.
-- **Füze vuruş bilgisi** varsayılan kapalıdır. Açıkken olay dosyasındaki sonuçlar envanterde ve zaman çizelgesinde gösterilir; olay işaretine basmak o ana gider.
+- Fırlatma ve hedef olayları zaman çubuğunda her zaman işaretlenir; işarete basmak o ana gider. **Füze sonuçları · isabet/kayıp** varsayılan kapalıdır; açıkken isabet/kayıp sonuçları envanterde ve zaman çubuğunda da gösterilir.
 - Tema, panel ölçüleri ve görünüm tercihleri tarayıcıda saklanır. Yan paneller kapanabilir ve genişlikleri değiştirilebilir.
 
 ## Birimler ve coğrafi referans

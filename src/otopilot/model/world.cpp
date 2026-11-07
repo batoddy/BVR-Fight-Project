@@ -6,7 +6,7 @@
 
 namespace
 {
-    void compute_missile_info(Aircraft& own, const Aircraft& target)   // own'un havadaki füzeleri: missile.target alanları
+    void compute_missile_info(Aircraft& own, const Aircraft& target)   // own'un havadaki füzeleri: missile.target alanları; own atan uçak
     {
         for (Missile& missile : own.weapons.missiles)
         {
@@ -17,6 +17,8 @@ namespace
                 info.closure_kt = missile_geometry::closure_kt(missile, target);
                 info.is_pitbull = info.is_pitbull || missile_geometry::is_pitbull(missile, info.range_nm);   // radar bir kez açılınca kapanmaz
                 info.catch_time_left_s = missile_geometry::catch_time_left_s(missile);                      // range ve closure'dan sonra
+                info.pitbull_time_left_s = missile_geometry::pitbull_time_left_s(missile);                  // is_pitbull'dan sonra
+                info.is_guided = info.is_guided && missile_geometry::is_guided(missile, own, target);       // güdüm bir kez kopunca dönmez
             }
         }
     }
@@ -34,11 +36,15 @@ namespace
         return threats;
     }
 
-    const Missile* closest_threat(const std::vector<const Missile*>& threats)   // bana en yakın tehdit; yoksa nullptr
+    const Missile* closest_threat(const std::vector<const Missile*>& threats)   // bana en yakın güdümlü tehdit; yoksa nullptr
     {
         const Missile* closest = nullptr;
         for (const Missile* threat : threats)
         {
+            if (!threat->target.is_guided)
+            {
+                continue;   // güdümünü kaybetmiş füze tehdit sayılmaz (destek kuralı)
+            }
             if (closest == nullptr || threat->target.range_nm < closest->target.range_nm)
             {
                 closest = threat;
@@ -73,10 +79,22 @@ namespace
         picture.dr_nm = engagement::dr_nm(own, enemy);
         picture.dor_nm = engagement::dor_nm(own, enemy);
         picture.is_in_dor = engagement::in_dor(own, enemy);
+        picture.mrr_nm = engagement::mrr_nm(own, enemy);
+        picture.notch_turn_s = engagement::notch_turn_s(own);
+        picture.enemy_out_turn_s = engagement::out_plan(enemy, own).turn.time_s;
 
         picture.threats = find_threats(own, enemy);
         picture.threat = closest_threat(picture.threats);
         picture.is_spiked = !picture.threats.empty();
+
+        picture.threat_escape_margin_nm.reset();   // tehdit yoksa pay yok
+        picture.threat_recommit_margin_nm.reset();
+        if (picture.threat != nullptr)
+        {
+            const Missile& threat = *picture.threat;
+            picture.threat_escape_margin_nm = missile_geometry::escape_margin_nm(threat, picture.out.turn.time_s, picture.out.escape_kt);
+            picture.threat_recommit_margin_nm = missile_geometry::escape_margin_nm(threat, engagement::recommit_turn_s(own), -own.kinematics.tas_kt);
+        }
     }
 
     void compute_weapons(Aircraft& own, const Aircraft& enemy)   // own.weapons'ın hesaplanan alanları; picture'dan sonra (pole'lar ve TR okur)
@@ -93,6 +111,7 @@ namespace
         weapons.enemy_in_msr = engagement::in_msr(own, enemy);
         weapons.nez_nm = engagement::nez_nm(enemy, own);          // benim NEZ'im = düşmanın gözünden kaçış NEZ'i (uçaklar ters)
         weapons.enemy_in_nez = engagement::in_nez(own, enemy);
+        weapons.r_cold_nm = engagement::r_cold_nm(enemy, own);    // benim R_cold'um = düşman benden kaçarken füzemin yetişebileceği mesafe (uçaklar ters)
     }
 }
 

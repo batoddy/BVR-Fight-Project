@@ -35,23 +35,26 @@
       </details>
       <div class="button-group" aria-label="Görünüm"><button id="view-3d" aria-pressed="true">3D</button><button id="view-2d" aria-pressed="false">2D</button></div>
       <button id="ruler" class="ruler-button" aria-pressed="false" aria-keyshortcuts="C" title="Cetvel · C: aç/kapa · İz üzerinde iki nokta seç · Orta tuş: kaydır · Shift + sol tuş: döndür · Esc: temizle/kapat" aria-label="Cetvel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.5 15.5 3 21 8.5 8.5 21Z"/><path d="M7 11.5l2 2M10 8.5l2 2M13 5.5l2 2"/></svg></button>
-      <label class="sr-only" for="camera-mode">Kamera</label><select id="camera-mode"><option value="orbit">Serbest kamera</option><option value="top">Üstten</option><option value="all">Tüm nesneler</option></select>
-      <label class="object-scale-control" for="object-scale">Nesne ölçeği:<select id="object-scale" title="Model ölçeği; füzelerin ek büyütmesi korunur. 2D'de uzaktaki modeller okunabilir bir simgeyle gösterilir."><option value="1" selected>1×</option><option value="3">3×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
-      <details id="view-options" class="toolbar-menu"><summary>Görünüm</summary><div class="popover">
+      <details id="view-options" class="toolbar-menu"><summary>Görünüm</summary><div class="popover view-popover">
+      <h3 class="menu-section">Kamera</h3>
+      <label for="camera-mode">Bakış<select id="camera-mode" title="3D kamera açısı; 2D görünümde kullanılmaz"><option value="orbit">Serbest</option><option value="top">Üstten</option></select></label>
       <label><input id="follow" type="checkbox" checked><span id="follow-caption">Seçili nesneyi takip et</span></label>
+      <label for="object-scale" title="Model ölçeği; füzelerin ek büyütmesi korunur. 2D'de uzaktaki modeller okunabilir bir simgeyle gösterilir.">Nesne ölçeği<select id="object-scale"><option value="1" selected>1×</option><option value="3">3×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+      <h3 class="menu-section">İz</h3>
       <label><input id="trail" type="checkbox" checked>Uçuş izi</label>
       <label for="trail-duration">İz süresi<select id="trail-duration"><option value="60">1 dakika</option><option value="300">5 dakika</option><option value="-1">Tüm kayıt</option></select></label>
       <label><input id="show-history" type="checkbox" checked>Kaydı biten füzeleri son konumunda tut</label>
-      <label title="Mühimmat sonucunu ve zaman çubuğundaki olay işaretlerini gösterir; kayıtta olay yoksa etkisi olmaz"><input id="missile-outcomes" type="checkbox">Füze vuruş bilgisi</label>
+      <h3 class="menu-section">Zemin ve yardımcılar</h3>
       <label><input id="grid" type="checkbox" checked>Yer referansı</label>
       <label title="İnternet bağlantısıyla coğrafi haritayı zemine yerleştirir; arazi yüksekliği içermez"><input id="basemap" type="checkbox">Harita · OpenStreetMap</label>
       <label><input id="altitude-guides" type="checkbox" checked>İrtifa dolgusu ve çizgiler</label>
       <label title="Hareket yönü ve hızı; 100 m/s için 18 px ok uzunluğu. 2D'de yatay hız gösterilir."><input id="velocity-guides" type="checkbox" checked>Hız vektörleri · oklar</label>
+      <label title="Füzenin isabet/kayıp sonucunu ve zaman çubuğundaki isabet işaretlerini gösterir; fırlatma işaretleri her zaman görünür"><input id="missile-outcomes" type="checkbox">Füze sonuçları · isabet/kayıp</label>
+      <h3 class="menu-section">Etiketler</h3>
       <label for="label-mode">Etiketler<select id="label-mode"><option value="all">Tüm nesneler</option><option value="selected">Yalnızca seçili</option><option value="none">Kapalı</option></select></label>
       <label><input id="label-names" type="checkbox" checked>Nesne adı</label>
       <label><input id="label-altitude" type="checkbox" checked>İrtifa</label>
       <label><input id="label-speed" type="checkbox" checked><span id="label-speed-caption">Hız · m/s</span></label>
-      <p>Sol tuş: döndür · Sağ tuş: taşı<br>Tekerlek: yakınlaştır · Boşluk: oynat/duraklat</p>
     </div></details>
       <details id="warnings-options" class="toolbar-menu">
         <summary id="open-warnings" class="icon-summary warning-summary" title="Uyarı yok" aria-label="Uyarılar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20.5h20Z"/><path d="M12 9.5v5"/><path d="M12 17.6v.1"/></svg><span id="warning-count" class="warning-count" hidden></span></summary>
@@ -59,12 +62,22 @@
       </details>
       <details id="settings-options" class="toolbar-menu">
         <summary id="open-settings" class="icon-summary" title="Ayarlar" aria-label="Ayarlar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></summary>
-        <section id="settings-panel" class="popover settings-popover" aria-labelledby="settings-title"><div class="menu-heading"><h2 id="settings-title">Birimler</h2><button id="close-settings" aria-label="Ayarları kapat">×</button></div><div class="unit-settings">
+        <section id="settings-panel" class="popover settings-popover" aria-labelledby="settings-title"><div class="menu-heading"><h2 id="settings-title">Ayarlar</h2><button id="close-settings" aria-label="Ayarları kapat">×</button></div><h3 class="menu-section">Birimler</h3><div class="unit-settings">
     <label for="speed-unit">Hız<select id="speed-unit"><option value="mps">Metre/saniye · m/s</option><option value="kms">Kilometre/saniye · km/s</option><option value="kmh">Kilometre/saat · km/sa</option><option value="kts">Knot · kt</option><option value="mach">Mach</option></select></label>
     <label for="altitude-unit">İrtifa<select id="altitude-unit"><option value="ft">Feet · ft</option><option value="m">Metre · m</option></select></label>
     <label for="distance-unit">Mesafe<select id="distance-unit"><option value="nm">Deniz mili · NM</option><option value="km">Kilometre · km</option></select></label>
   </div>
-  <div class="settings-actions"><button id="reset-units">Varsayılanlara dön</button></div></section>
+  <div class="settings-actions"><button id="reset-units">Birimleri sıfırla</button></div>
+  <h3 class="menu-section">Kısayollar</h3>
+  <dl class="shortcuts">
+    <dt><kbd>Boşluk</kbd></dt><dd>Oynat / duraklat</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>1 s geri / ileri · <kbd>Shift</kbd> ile 10 s</dd>
+    <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Bir kayıt örneği geri / ileri</dd>
+    <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Oynatma hızı</dd>
+    <dt><kbd>C</kbd></dt><dd>Cetvel · <kbd>Esc</kbd> temizle/kapat</dd>
+    <dt>Çift tık</dt><dd>Nesneye odaklan: liste, etiket, füze simgesi</dd>
+    <dt>Fare</dt><dd>Sol: döndür · Sağ: taşı · Tekerlek: yakınlaştır</dd>
+  </dl></section>
       </details>
       <button id="toggle-theme" class="theme-toggle" role="switch" aria-label="Koyu mod" aria-checked="true" title="Koyu mod"><span class="switch-track"><span class="switch-thumb"></span></span></button>
     </div>
@@ -94,20 +107,22 @@
           </div>
           <span id="reference-units" class="reference-units">İrtifa ft · Hız m/s</span>
         </div>
-        <div class="zoom"><button id="zoom-in" aria-label="Yakınlaştır">+</button><button id="zoom-out" aria-label="Uzaklaştır">−</button></div>
+        <div class="zoom"><button id="focus-selected" title="Seçili nesneye odaklan" aria-label="Seçili nesneye odaklan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button><button id="frame-all" title="Tüm nesneleri sığdır" aria-label="Tüm nesneleri sığdır"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button><button id="zoom-in" aria-label="Yakınlaştır">+</button><button id="zoom-out" aria-label="Uzaklaştır">−</button></div>
       </div>
       <section id="playback-dock" class="timeline-bar" aria-label="Kayıt oynatma">
         <div id="dock-resizer" class="dock-resizer" role="separator" tabindex="0" aria-label="Oynatma alanının yüksekliği" aria-orientation="horizontal"><span></span></div>
         <div class="dock-body">
           <div class="playback-main">
             <button id="restart-playback" title="Baştan izle" aria-label="Baştan izle" disabled><svg class="playback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-9 6 9 6Z"/></svg></button>
+            <button id="step-back" title="Bir örnek geri · ," aria-keyshortcuts="," aria-label="Bir kayıt örneği geri" disabled><svg class="playback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
             <button id="play-pause" title="Oynat / duraklat · Space" aria-keyshortcuts="Space" aria-label="Oynat" aria-pressed="true" disabled><span id="play-icon" aria-hidden="true">▶</span><span id="pause-icon" aria-hidden="true" hidden><svg class="playback-icon pause-symbol" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button>
+            <button id="step-forward" title="Bir örnek ileri · ." aria-keyshortcuts="." aria-label="Bir kayıt örneği ileri" disabled><svg class="playback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
             <button id="record-end" title="Sona git" aria-label="Sona git" disabled><svg class="playback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l9 6-9 6Z"/></svg></button>
             <label class="sr-only" for="seek-time">Gösterim zamanı; düzenleyerek belirli zamana git</label><input id="seek-time" value="00:00.0" title="Zamana git: saniye veya dakika:saniye" aria-label="Zamana git" disabled>
-            <div class="timeline-track"><input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıt zamanı" disabled><div id="timeline-events" class="timeline-events"></div></div>
+            <div class="timeline-track"><input id="timeline" type="range" min="0" max="1" step=".01" value="0" aria-label="Kayıt zamanı" disabled><div id="timeline-events" class="timeline-events"></div><div id="timeline-phases" class="timeline-phases"></div></div>
             <output id="timeline-last">—</output>
           </div>
-          <div class="speed-control"><label for="playback-speed">Hız <output id="playback-rate">1×</output></label><input id="playback-speed" type="range" min="0" max="7" step="1" value="2" aria-label="Oynatma hızı" aria-valuetext="1×" title="↑ Hızlandır · ↓ Yavaşlat"><div class="speed-stops"><button data-rate="0.25" aria-pressed="false">0,25×</button><button data-rate="0.5" aria-pressed="false">0,5×</button><button data-rate="1" aria-pressed="true">1×</button><button data-rate="2">2×</button><button data-rate="3">3×</button><button data-rate="4">4×</button><button data-rate="5">5×</button><button data-rate="10">10×</button></div></div>
+          <div class="speed-control"><label for="playback-speed">Hız <output id="playback-rate">1×</output></label><input id="playback-speed" type="range" min="0" max="7" step="1" value="2" aria-label="Oynatma hızı" aria-valuetext="1×" title="↑ Hızlandır · ↓ Yavaşlat"><div class="speed-stops"><button data-rate="0.25" aria-pressed="false">0,25×</button><button data-rate="0.5" aria-pressed="false">0,5×</button><button data-rate="1" aria-pressed="true">1×</button><button data-rate="2">2×</button><button data-rate="5">5×</button><button data-rate="10">10×</button><button data-rate="20">20×</button><button data-rate="50">50×</button></div></div>
         </div>
       </section>
     </main>
@@ -120,53 +135,49 @@
         <dl class="positions"><div><dt>Yerel doğu</dt><dd id="east">—</dd></div><div><dt>Yerel kuzey</dt><dd id="north">—</dd></div></dl>
         <section id="relative" class="relative" hidden>
           <h3>Hedefe göre <span id="relative-target" class="relative-target"></span></h3>
-          <dl class="relative-measures">
-            <div class="wide"><dt title="Otopilotun bu andaki manevra/aşaması">Manevra:</dt><dd id="calc-phase">—</dd></div>
-            <div class="wide"><dt title="Otopilotun son kararı ve nedeni">Karar:</dt><dd id="calc-decision">—</dd></div>
-            <div><dt title="Antenna Train Angle: burun ile hedef arası; + sağda">ATA</dt><dd id="calc-ata">—</dd></div>
-            <div><dt title="Kuzeye göre hedefin yönü; + doğu">Bearing</dt><dd id="calc-bearing">—</dd></div>
-            <div><dt>Range · 3B</dt><dd id="calc-range-3d">—</dd></div>
-            <div><dt>Range · yatay</dt><dd id="calc-range-2d">—</dd></div>
-            <div><dt title="Hedefin burnu ile bize bakışı: 0 hot, 180 cold">Aspect</dt><dd id="calc-aspect">—</dd></div>
-            <div><dt title="Benim WEZ'im: ilk füzeme göre, bu düşmana karşı">WEZ menzili</dt><dd id="calc-wez">—</dd></div>
-            <div><dt>Düşman WEZ'imde</dt><dd id="calc-enemy-in-my-wez">—</dd></div>
-            <div><dt>Düşmanın WEZ'indeyim</dt><dd id="calc-me-in-enemy-wez">—</dd></div>
-            <div><dt title="Şimdi atış için, füzenin aktifleşmesindeki uçaklar arası mesafe tahmini; kayıttaki 0 çözüm yok anlamındadır">A-pole</dt><dd id="calc-a-pole">—</dd></div>
-            <div><dt title="Şimdi atış için, füzenin hedefe erişmesindeki uçaklar arası mesafe tahmini; kayıttaki 0 çözüm yok anlamındadır">F-pole</dt><dd id="calc-f-pole">—</dd></div>
-            <div><dt title="Otopilotun şimdi atış için hesapladığı TR mesafesi; kayıttaki 0 çözüm yok anlamındadır">TR</dt><dd id="calc-tr">—</dd></div>
-            <div><dt title="Otopilotun şimdi atış için hesapladığı MSR mesafesi; kayıttaki 0 çözüm yok anlamındadır">MSR</dt><dd id="calc-msr">—</dd></div>
-            <div><dt title="Minimum Abort Range">MAR</dt><dd id="calc-mar">—</dd></div>
-            <div><dt title="Decision Range: R_cold + notch süresindeki düşman yaklaşması + out payı">DR</dt><dd id="calc-dr">—</dd></div>
-            <div><dt title="Desired Out Range: DR + düşmanın In dönüşündeki yaklaşması + out payı">DOR</dt><dd id="calc-dor">—</dd></div>
-            <div><dt title="Düşman füzesinin, ben kaçarken (kuyruktan) yetişebileceği en uzak atış mesafesi">Stern WEZ</dt><dd id="calc-stern-wez">—</dd></div>
-            <div><dt title="No Escape Zone">NEZ</dt><dd id="calc-nez">—</dd></div>
-            <div class="wide"><dt title="Bana gelen en yakın düşman füzesi: mesafe · Mach · arayıcı">Tehdit füzesi</dt><dd id="calc-threat">—</dd></div>
-          </dl>
+          <div class="phase-now" title="Otopilotun bu andaki manevra/aşaması"><i id="phase-color" class="phase-dot" aria-hidden="true"></i><span id="calc-phase">—</span></div>
+          <p class="decision" title="Otopilotun son kararı ve nedeni"><span>Karar</span> <strong id="calc-decision">—</strong></p>
           <p id="relative-empty" class="data-note" hidden>Bu ölçüm anında otopilot hesabı kayıtlı değil.</p>
-        </section>
-        <section class="overlay-options" aria-labelledby="overlay-title">
-          <h3 id="overlay-title">Sahnede göster</h3>
-          <label><input id="overlay-line" type="checkbox">Hedef çizgisi</label>
-          <div class="overlay-indent">
-            <label><input id="overlay-ata" type="checkbox">ATA</label>
-            <label><input id="overlay-bearing" type="checkbox">Bearing</label>
-            <label><input id="overlay-range" type="checkbox">Range</label>
-            <label><input id="overlay-aspect" type="checkbox">Aspect</label>
-            <label title="Kapanma hızı: aradaki mesafenin azalma hızı, + yaklaşıyoruz"><input id="overlay-closure" type="checkbox">Closure (Vc)</label>
-          </div>
-          <label><input id="overlay-radar" type="checkbox">Radar açısı</label>
-          <label title="Seçili uçağın WEZ'i: azami menzilin dış sınırı"><input id="overlay-own-wez" type="checkbox">Dost WEZ</label>
-          <label title="Hedef uçağın WEZ'i: azami menzilin dış sınırı"><input id="overlay-enemy-wez" type="checkbox">Düşman WEZ</label>
-          <h3>Düşman çevresinde</h3>
-          <div class="overlay-indent">
-            <label title="Seçili uçağın stern_wez hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-stern-wez" type="checkbox">Stern WEZ</label>
-            <label title="Seçili uçağın nez hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-nez" type="checkbox">NEZ</label>
-            <label title="Seçili uçağın mar hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-mar" type="checkbox">MAR</label>
-            <label title="Seçili uçağın Decision Range hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-dr" type="checkbox">DR</label>
-            <label title="Seçili uçağın dor hesabı, hedefin etrafında çember; içindeyken belirginleşir"><input id="overlay-dor" type="checkbox">DOR</label>
-            <label title="Seçili uçağın kaydedilmiş TR mesafesi, hedefin etrafında çember; yalnız pozitif çözüm varsa gösterilir"><input id="overlay-tr" type="checkbox">TR</label>
-            <label title="Seçili uçağın kaydedilmiş MSR mesafesi, hedefin etrafında çember; yalnız pozitif çözüm varsa gösterilir"><input id="overlay-msr" type="checkbox">MSR</label>
-          </div>
+          <section class="measure-group">
+            <h4>Geometri <label title="Seçili uçaktan hedefe çizgi; işaretli değerler çizginin etiketinde görünür"><input id="overlay-line" type="checkbox"><i class="swatch" data-swatch="line"></i>Hedef çizgisi</label></h4>
+            <dl class="relative-measures">
+              <div><dt><label title="Antenna Train Angle: burun ile hedef arası; R sağda, L solda"><input id="overlay-ata" type="checkbox">ATA</label></dt><dd id="calc-ata">—</dd></div>
+              <div><dt><label title="Kuzeye göre hedefin yönü"><input id="overlay-bearing" type="checkbox">Bearing</label></dt><dd id="calc-bearing">—</dd></div>
+              <div><dt><label><input id="overlay-range" type="checkbox">Range · 3B</label></dt><dd id="calc-range-3d">—</dd></div>
+              <div><dt>Range · yatay</dt><dd id="calc-range-2d">—</dd></div>
+              <div><dt><label title="Hedefin burnu ile bize bakışı: 0 hot, 180 cold"><input id="overlay-aspect" type="checkbox">Aspect</label></dt><dd id="calc-aspect">—</dd></div>
+              <div><dt><label title="Kapanma hızı: aradaki mesafenin azalma hızı, + yaklaşıyoruz"><input id="overlay-closure" type="checkbox">Closure · Vc</label></dt><dd id="calc-closure">—</dd></div>
+            </dl>
+          </section>
+          <section class="measure-group">
+            <h4>Atış <label title="Bu gruptaki bütün sahne çizimlerini aç/kapat"><input class="group-all" type="checkbox">Tümü</label></h4>
+            <dl class="relative-measures">
+              <div class="wide"><dt><label title="Radar tarama açısı ve menzili"><input id="overlay-radar" type="checkbox"><i class="swatch" data-swatch="radar"></i>Radar</label></dt><dd id="calc-radar">—</dd></div>
+              <div><dt><label title="Benim WEZ'im: ilk füzeme göre, bu düşmana karşı; uçağımın etrafında dış sınır"><input id="overlay-own-wez" type="checkbox"><i class="swatch" data-swatch="ownWez"></i>WEZ azami</label></dt><dd id="calc-wez">—</dd></div>
+              <div><dt>WEZ asgari</dt><dd id="calc-wez-min">—</dd></div>
+              <div class="wide"><dt>Düşman WEZ'imde</dt><dd id="calc-enemy-in-my-wez">—</dd></div>
+              <div><dt title="Şimdi atış için, füzenin aktifleşmesindeki uçaklar arası mesafe tahmini">A-pole</dt><dd id="calc-a-pole">—</dd></div>
+              <div><dt title="Şimdi atış için, füzenin hedefe erişmesindeki uçaklar arası mesafe tahmini">F-pole</dt><dd id="calc-f-pole">—</dd></div>
+              <div><dt><label title="Otopilotun şimdi atış için hesapladığı TR mesafesi; hedefin etrafında çember"><input id="overlay-tr" type="checkbox"><i class="swatch" data-swatch="tr"></i>TR</label></dt><dd id="calc-tr">—</dd></div>
+              <div><dt><label title="Otopilotun şimdi atış için hesapladığı MSR mesafesi; hedefin etrafında çember"><input id="overlay-msr" type="checkbox"><i class="swatch" data-swatch="msr"></i>MSR</label></dt><dd id="calc-msr">—</dd></div>
+            </dl>
+          </section>
+          <section class="measure-group">
+            <h4>Savunma <label title="Bu gruptaki bütün sahne çizimlerini aç/kapat"><input class="group-all" type="checkbox">Tümü</label></h4>
+            <dl class="relative-measures">
+              <div class="wide"><dt><label title="Hedef uçağın WEZ'i: kendi hesabındaki azami menzilin dış sınırı"><input id="overlay-enemy-wez" type="checkbox"><i class="swatch" data-swatch="enemyWez"></i>Düşmanın WEZ'indeyim</label></dt><dd id="calc-me-in-enemy-wez">—</dd></div>
+              <div><dt><label title="Minimum Abort Range; hedefin etrafında çember"><input id="overlay-mar" type="checkbox"><i class="swatch" data-swatch="mar"></i>MAR</label></dt><dd id="calc-mar">—</dd></div>
+              <div><dt><label title="Decision Range: R_cold + notch süresindeki düşman yaklaşması + out payı"><input id="overlay-dr" type="checkbox"><i class="swatch" data-swatch="dr"></i>DR</label></dt><dd id="calc-dr">—</dd></div>
+              <div><dt><label title="Desired Out Range: DR + düşmanın In dönüşündeki yaklaşması + out payı"><input id="overlay-dor" type="checkbox"><i class="swatch" data-swatch="dor"></i>DOR</label></dt><dd id="calc-dor">—</dd></div>
+              <div><dt><label title="Düşman füzesinin, ben kaçarken (kuyruktan) yetişebileceği en uzak atış mesafesi"><input id="overlay-stern-wez" type="checkbox"><i class="swatch" data-swatch="sternWez"></i>Stern WEZ</label></dt><dd id="calc-stern-wez">—</dd></div>
+              <div><dt><label title="No Escape Zone; hedefin etrafında taralı daire"><input id="overlay-nez" type="checkbox"><i class="swatch" data-swatch="nez"></i>NEZ</label></dt><dd id="calc-nez">—</dd></div>
+              <div class="wide"><dt title="Bana gelen en yakın düşman füzesi: mesafe · Mach · arayıcı">Tehdit füzesi</dt><dd id="calc-threat">—</dd></div>
+            </dl>
+          </section>
+          <details class="phase-log">
+            <summary>Manevra geçişleri <span id="phase-log-count" class="count"></span></summary>
+            <ol id="phase-log"></ol>
+          </details>
         </section>
       </div>
       <div id="detail-resizer" class="panel-resizer" role="separator" tabindex="0" aria-label="Bilgi paneli genişliği" aria-orientation="vertical"></div>

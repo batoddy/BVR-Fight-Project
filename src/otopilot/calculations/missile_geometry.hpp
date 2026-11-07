@@ -23,4 +23,12 @@ namespace missile_geometry
 
     std::optional<double> catch_time_left_s(const Missile& missile);       // s, hedefe yetişmesine kalan süre; yetişemezse yok. target.range/closure'dan sonra
     std::optional<double> catch_time_left_s(const Missile& missile, double closure_kt);   // aynısı, verilen kapanmayla (ör. hedef dönerse)
+    std::optional<double> pitbull_time_left_s(const Missile& missile);    // s, pitbull'a kalan süre; pitbull ise 0, erişemezse yok. target.range/closure/is_pitbull'dan sonra
+
+    // Destek kuralı: pitbull olmamış füze, atan uçak hedefi radar gimbal'ı içinde tuttukça güdümlüdür.
+    bool is_guided(const Missile& missile, const Aircraft& launcher, const Aircraft& target);   // target.is_pitbull'dan sonra
+
+    // NM, şimdi turn_s'lik dönüşle dönüp run_kt ile füzeden uzaklaşsam füze ölene kadar aramda kalan mesafe; − ise yetişir.
+    // run_kt: + füzeden uzaklaşıyorum (out + drag), − füzeye doğru gidiyorum (recommit). target.range/closure'dan sonra
+    double escape_margin_nm(const Missile& missile, double turn_s, double run_kt);
 }

@@ -6,11 +6,9 @@
 #include "model/aircraft.hpp"
 #include "model/mission.hpp"
 
-// Durum makinesi; fighter ve hostile aynı sınıfı kendi görev konseptiyle kullanır.
-// Her step: o durumun manevrası uçulur, sonra çıkış koşullarına bakılır.
-// go_to yalnız state'i değiştirir; Maneuvers::fly değişen manevranın enter()'ını ilk kullanımda çağırır.
-// Akış: Commit → K1'de atış → Crank → K3'te Out (İmha/Riskli: MAR'da bir atış daha) → K5: Recommit → Commit ... / Departure.
-// K4: atış ve savunma dışındaki her durumda bana füze gelirse karşı atış ya da savunma (Defense); tehdit bitince K5.
+// Durum makinesi; fighter ve hostile aynı sınıfı kendi görev konseptiyle kullanır. Kurallar: control/KARAR_TASARIMI.md
+// Her step: önce kesintiler (ABORT, tehdit), sonra o fazın fonksiyonu: manevrasını uçar, kararına göre geçiş yapar.
+// Geçiş yalnız go_to ile. Kesinti geçişinde yeni faz aynı step uçulur; fazın kendi geçişinde sonraki step.
 class Otopilot
 {
 public:
@@ -18,16 +16,30 @@ public:
     void step(Aircraft& own, const Aircraft& enemy);   // yazdıkları: own.command, own.phase, own.decision, atış emri
 
 private:
-    void go_to(OtopilotState next);                    // yalnız durumu değiştirir; manevra o durumun bloğunda seçilir
-    void record(Aircraft& own, const char* text, const char* reason) const;   // own.decision = "text — reason (görev)"
-    bool react_to_threat(Aircraft& own);               // K4: akışı keserse true
-    void after_escape(Aircraft& own, const char* text); // K5: Recommit ya da Departure
+    void step_commit(Aircraft& own);
+    void step_shot(Aircraft& own);
+    void step_support(Aircraft& own);
+    void step_trade(Aircraft& own);
+    void step_defend(Aircraft& own);
+    void step_out(Aircraft& own);
+    void step_cold(Aircraft& own);
+    void step_recommit(Aircraft& own);
+    void step_chase(Aircraft& own);
+    void step_abort(Aircraft& own);
+
+    void check_abort(Aircraft& own);                   // kesinti: ABORT dışındaki her fazda
+    void react_to_threat(Aircraft& own);               // kesinti: Commit, Support, Out, Cold, Recommit, Chase'te
+    void reassess(Aircraft& own);                      // REASSESS: anlık düğüm, yeni fazı seçer
+    void start_defense(Aircraft& own, const char* text);   // savunma tipini seçip Defend'e geçer
+    void update_defense(Aircraft& own);                // savunma yalnız acilleşir: Beam → Drag → Notch
     Maneuver& defense_maneuver();                      // defense_'e göre Beam / Drag / Notch
-    static const char* defense_name(ThreatResponse response);   // karar kaydı metni
+    Maneuver& support_maneuver(const Aircraft& own);   // düşman cold ise kovalama, değilse crank
+    void go_to(OtopilotState next);                    // yalnız durumu değiştirir
+    void record(Aircraft& own, const char* text, const char* reason) const;   // own.decision = "text — reason (görev)"
 
     Mission mission_;
     OtopilotState state_ = OtopilotState::Commit;
-    OtopilotState after_counter_shot_ = OtopilotState::Support;   // karşı atıştan sonra dönülecek durum
-    ThreatResponse defense_ = ThreatResponse::Beam;               // Defense'te uçulan savunma
+    Defense defense_ = Defense::Beam;                  // Defend'te uçulan savunma
+    bool gave_up_chase_ = false;                       // kovalamadan vazgeçtim; düşman hot'a dönünce sıfırlanır
     Maneuvers maneuvers_;
 };

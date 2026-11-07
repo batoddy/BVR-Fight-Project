@@ -2,7 +2,7 @@ import {SampleBuffer,ReplayClock} from './stream.js';
 import {Scene} from './scene.js';
 import {Scene as Scene2D} from './scene2d.js';
 import {setupRecordingMenu} from './recording-menu.js';
-import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,altitudeValue,altitudeReferenceInfo,speedValue,distanceLabel,munitionState,angleLabel,sideAngleLabel} from './units.js';
+import {ALTITUDE_UNITS,SPEED_UNITS,DISTANCE_UNITS,ENEMY_ZONES,altitudeValue,altitudeReferenceInfo,speedValue,distanceLabel,munitionState,angleLabel,sideAngleLabel,closureLabel,radarColor} from './units.js';
 import {inventoryPanel} from './inventory.js';
 import {Ruler} from './ruler.js';
 
@@ -10,7 +10,7 @@ const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
   altitudeGuides:true,velocityGuides:true,objectScale:1,trail:true,trailDuration:300,history:true,grid:true,basemap:false,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm',
   overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayClosure:true,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true,
-  overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDr:true,overlayDor:true,overlayTr:true,overlayMsr:true};
+  overlaySternWez:false,overlayNez:false,overlayMar:false,overlayDr:false,overlayDor:false,overlayTr:false,overlayMsr:false};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
@@ -19,7 +19,7 @@ try{
 }catch{}
 const save=()=>{try{localStorage.setItem('bvrgym-layout-v2',JSON.stringify(preferences));}catch{}};
 const buffer=new SampleBuffer(),replayClock=new ReplayClock();
-const playbackRates=[.25,.5,1,2,3,4,5,10],hiddenObjects=new Set();
+const playbackRates=[.25,.5,1,2,5,10,20,50],hiddenObjects=new Set();
 const teamOrder={blue:0,red:1};
 let selected=null,viewTime=null,paused=true,scrubbing=false,lastReceive=0,connectionError=null,
   lastLabels=0,listSignature='',filter='all',query='',scene,webglError=null;
@@ -94,7 +94,7 @@ function focusEntity(id){
   hiddenObjects.delete(id);selectEntity(id);scene.focusEntity(entity);scene.follow=true;
   preferences.follow=true;save();updateFollow();
 }
-el('entity-list').ondblclick=event=>{const button=event.target.closest('.entity');if(button)focusEntity(button.closest('.aircraft-card').dataset.id);};
+el('entity-list').ondblclick=event=>{const munition=event.target.closest('.munition'),button=event.target.closest('.entity');if(munition)focusEntity(munition.dataset.id);else if(button)focusEntity(button.closest('.aircraft-card').dataset.id);};
 try{scene=new Scene(el('scene'),selectEntity,()=>{preferences.follow=scene.follow;save();updateFollow();});}
 catch{
   webglError='3D açılamadı; 2D görünüm kullanılıyor.';
@@ -110,20 +110,24 @@ function setMode(value){
   el('view-3d').setAttribute('aria-pressed',String(value==='3d'));el('view-2d').setAttribute('aria-pressed',String(value==='2d'));
   el('view-title').textContent=value==='3d'?'3D uçuş görünümü':'Üstten görünüm';
   el('camera-help').textContent=value==='3d'?'Sol tuş: döndür · Sağ tuş: taşı':'Sürükle: taşı · Tekerlek: yakınlaştır';
+  el('camera-mode').disabled=Boolean(webglError)||value==='2d';
 }
 setMode(preferences.mode);el('view-3d').onclick=()=>setMode('3d');el('view-2d').onclick=()=>setMode('2d');
 const ruler=new Ruler(el('scene').parentElement,()=>scene,active=>el('ruler').setAttribute('aria-pressed',String(active)));
 el('ruler').onclick=()=>ruler.setActive(!ruler.active);
 function camera(value){
-  preferences.camera=value;scene.follow=false;preferences.follow=false;
-  if(value==='all'){
-    scene.frameAll(visibleEntities());
-  }else if(!webglError){setMode('3d');scene.setView(value);}
-  updateFollow();save();
+  preferences.camera=value==='top'?'top':'orbit';save();
+  if(!webglError&&preferences.mode==='3d')scene.setView(preferences.camera);
 }
-el('camera-mode').value=['orbit','top','all'].includes(preferences.camera)?preferences.camera:'orbit';
+preferences.camera=preferences.camera==='top'?'top':'orbit';el('camera-mode').value=preferences.camera;
 el('camera-mode').onchange=event=>camera(event.target.value);
-if(webglError){el('camera-mode').querySelector('[value=orbit]').disabled=true;el('camera-mode').querySelector('[value=top]').disabled=true;}
+// Üstten bakışta kullanıcı kamerayı eğerse seçim Serbest'e döner.
+if(!webglError)scene.controls.addEventListener('end',()=>{if(preferences.camera==='top'&&scene.controls.getPolarAngle()>.05){preferences.camera='orbit';scene.viewMode='orbit';el('camera-mode').value='orbit';save();}});
+el('frame-all').onclick=()=>{
+  scene.follow=false;preferences.follow=false;save();updateFollow();scene.frameAll(visibleEntities());
+  if(!webglError&&preferences.mode==='3d'&&preferences.camera==='top')scene.setView('top');
+};
+el('focus-selected').onclick=()=>{if(selected)focusEntity(selected);};
 el('follow').onclick=()=>{scene.follow=!scene.follow;preferences.follow=scene.follow;save();updateFollow();};
 el('zoom-in').onclick=()=>scene.zoom(1.25);el('zoom-out').onclick=()=>scene.zoom(.8);
 
@@ -146,12 +150,15 @@ viewSettings();updateFollow();
 // Sahnede gösterilecek otopilot hesapları: sağ paneldeki seçimler.
 const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-closure','overlayClosure'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar'],
   ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dr','overlayDr'],['overlay-dor','overlayDor'],['overlay-tr','overlayTr'],['overlay-msr','overlayMsr']];
+const groupInputs=box=>[...box.closest('.measure-group').querySelectorAll('input[id^="overlay-"]')];
 function overlaySettings(){
   for(const [id,key] of overlayInputs)preferences[key]=el(id).checked;
   for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect','overlay-closure'])el(id).disabled=!preferences.overlayLine;
+  for(const box of document.querySelectorAll('.group-all')){const inputs=groupInputs(box),on=inputs.filter(input=>input.checked).length;box.checked=on===inputs.length;box.indeterminate=on>0&&on<inputs.length;}
   save();
 }
 for(const [id,key] of overlayInputs){el(id).checked=preferences[key];el(id).onchange=overlaySettings;}
+for(const box of document.querySelectorAll('.group-all'))box.onchange=()=>{for(const input of groupInputs(box))input.checked=box.checked;overlaySettings();};
 overlaySettings();
 const toolbarMenus=[...document.querySelectorAll('.toolbar-menu')];
 function closeMenus(except=null){for(const menu of toolbarMenus)if(menu!==except)menu.open=false;}
@@ -209,13 +216,13 @@ function formatTime(value){const ticks=Math.round(Math.max(0,value)*10),m=Math.f
 function seek(time,pausePlayback=true){const bounds=buffer.bounds();if(!bounds||!Number.isFinite(time))return;viewTime=Math.max(bounds.first,Math.min(bounds.last,time));if(pausePlayback)paused=true;replayClock.seek(viewTime,performance.now()/1000);renderList();updateTimeline();}
 function updateTimeline(){
   const bounds=buffer.complete?buffer.bounds():null;
-  for(const id of ['timeline','play-pause','restart-playback','record-end','seek-time'])el(id).disabled=!bounds;
+  for(const id of ['timeline','play-pause','restart-playback','record-end','seek-time','step-back','step-forward'])el(id).disabled=!bounds;
   if(bounds){el('timeline').min=bounds.first;el('timeline').max=bounds.last;if(!scrubbing)el('timeline').value=viewTime??bounds.first;
     el('timeline-last').textContent=formatTime(bounds.last);el('timeline').setAttribute('aria-valuetext',formatTime(viewTime??bounds.first));}
   if(document.activeElement!==el('seek-time'))el('seek-time').value=formatTime(viewTime??0);
   el('play-icon').hidden=!paused;el('pause-icon').hidden=paused;
   el('play-pause').setAttribute('aria-label',paused?'Oynat':'Duraklat');el('play-pause').setAttribute('aria-pressed',String(paused));
-  drawEventMarks(bounds);
+  drawEventMarks(bounds);drawPhaseStrip(bounds);
 }
 // Kayittaki olaylar zaman cubuguna isaretlenir; olay yoksa cubuk eskisi gibi bos kalir.
 const eventLabels={target_assigned:'Hedef atandı',target_cleared:'Hedef kaldırıldı',missile_launched:'Fırlatma',
@@ -228,10 +235,12 @@ function eventText(event){
   if(event.type==='health_changed')parts.push(event.from+' → '+event.to);
   return parts.join(' · ')+' · '+formatTime(event.sim_time_s);
 }
+// Sonuç olayları (isabet, kayıp, sağlık) yalnız "Füze sonuçları" açıkken; fırlatma ve hedef olayları her zaman.
+const OUTCOME_EVENTS=new Set(['missile_hit','missile_lost','health_changed']);
 function drawEventMarks(bounds){
-  const events=preferences.missileOutcomes?buffer.packet.events||[]:[],host=el('timeline-events');
+  const events=(buffer.packet.events||[]).filter(event=>preferences.missileOutcomes||!OUTCOME_EVENTS.has(event.type)),host=el('timeline-events');
   const span=bounds?bounds.last-bounds.first:0;
-  const signature=bounds&&span>0&&events.length?buffer.packet.session+':'+events.length+':'+bounds.first+':'+bounds.last:'';
+  const signature=bounds&&span>0&&events.length?buffer.packet.session+':'+events.length+':'+bounds.first+':'+bounds.last+':'+preferences.missileOutcomes:'';
   if(host.dataset.signature===signature)return;
   host.dataset.signature=signature;host.replaceChildren();
   if(!signature)return;
@@ -246,6 +255,48 @@ function drawEventMarks(bounds){
     host.append(mark);
   }
 }
+// Manevra şeridi: seçili uçağın (füzede taşıyıcısının) otopilot aşamaları, ardışık aynı aşama tek parça.
+let phaseCache={key:'',segments:[]};
+function phaseSegments(id){
+  const samples=buffer.tracks.get(id)?.samples;if(!samples)return [];
+  const key=buffer.session+':'+id+':'+samples.length;
+  if(phaseCache.key===key)return phaseCache.segments;
+  const segments=[];let current=null;
+  for(const sample of samples){
+    const phase=sample.calc?.phase;
+    if(!Number.isFinite(phase)){current=null;continue;}
+    if(current)current.end=sample.sim_time_s;
+    if(current?.phase===phase)continue;
+    current={phase,start:sample.sim_time_s,end:sample.sim_time_s,decision:sample.calc.decision};segments.push(current);
+  }
+  phaseCache={key,segments};return segments;
+}
+function drawPhaseStrip(bounds){
+  const host=el('timeline-phases'),segments=bounds&&buffer.complete?phaseSegments(perspectiveId()):[];
+  const span=bounds?bounds.last-bounds.first:0;
+  const signature=span>0&&segments.length?phaseCache.key+':'+bounds.first+':'+bounds.last:'';
+  if(host.dataset.signature===signature)return;
+  host.dataset.signature=signature;host.replaceChildren();
+  if(!signature)return;
+  for(const segment of segments){
+    const mark=document.createElement('button');mark.className='phase-segment';mark.tabIndex=-1;
+    mark.style.left=(segment.start-bounds.first)/span*100+'%';mark.style.width=Math.max(.15,(segment.end-segment.start)/span*100)+'%';
+    mark.style.background=phaseColor(segment.phase);
+    mark.title=phaseName(segment.phase)+' · '+formatTime(segment.start)+'–'+formatTime(segment.end)+(segment.decision?' · '+segment.decision:'');
+    mark.onclick=()=>seek(segment.start);host.append(mark);
+  }
+}
+// Bir kayıt örneği ileri/geri: seçili nesnenin, yoksa bakış uçağının örnekleri.
+function step(direction){
+  const samples=(buffer.tracks.get(selected)??buffer.tracks.get(perspectiveId()))?.samples;
+  if(!samples?.length||viewTime===null)return;
+  let lo=0,hi=samples.length;
+  const before=direction>0?time=>time<=viewTime+1e-6:time=>time<viewTime-1e-6;
+  while(lo<hi){const mid=(lo+hi)>>1;if(before(samples[mid].sim_time_s))lo=mid+1;else hi=mid;}
+  const index=direction>0?lo:lo-1;
+  if(index>=0&&index<samples.length)seek(samples[index].sim_time_s);
+}
+el('step-back').onclick=()=>step(-1);el('step-forward').onclick=()=>step(1);
 function playPause(){const bounds=buffer.bounds();if(!bounds)return;if(paused&&viewTime>=bounds.last)seek(bounds.first);paused=!paused;replayClock.seek(viewTime,performance.now()/1000);updateTimeline();}
 el('play-pause').onclick=playPause;
 el('restart-playback').onclick=()=>{seek(buffer.bounds()?.first);paused=false;};el('record-end').onclick=()=>seek(buffer.bounds()?.last);
@@ -275,8 +326,12 @@ document.addEventListener('keydown',event=>{
   }
   if(['ArrowLeft','ArrowRight'].includes(event.key)&&!target?.closest('[role=separator]')){
     event.preventDefault();seek((viewTime??0)+(event.key==='ArrowRight'?1:-1)*(event.shiftKey?10:1),false);
+    return;
   }
+  if((event.key===','||event.key==='.')&&buffer.complete){event.preventDefault();step(event.key==='.'?1:-1);}
 },true);
+// Sekme arka plandayken çizim durur; dönüşte geçen süre tek seferde eklenmesin.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&viewTime!==null)replayClock.seek(viewTime,performance.now()/1000);});
 
 function allowed(entity){return !hiddenObjects.has(entity.id)&&!hiddenObjects.has(entity.owner_id)&&(filter==='all'||entity.kind===filter||entity.team===filter);}
 function visibleEntities(){return viewTime===null?[]:buffer.entities(viewTime).filter(allowed);}
@@ -306,39 +361,77 @@ function analysis(){
       // Anahtarlar units.js ENEMY_ZONES key'leriyle aynı.
       zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dr:preferences.overlayDr,dor:preferences.overlayDor,tr:preferences.overlayTr,msr:preferences.overlayMsr}}};
 }
-// C++ aircraft.hpp enum class Phase ile aynı sırada.
+// C++ phase.hpp enum class Phase ile aynı sıra (1 boş); renkler şerit ve geçiş listesi için.
 const PHASE_NAMES=['HOLD','FIRE','OUT','COMMIT','CRANK','BEAM','RECOMMIT','NOTCH','DRAG','OFFSET','FLANK','COLLISION','FLY HEADING','SNAKE','PURE PURSUIT','LAG PURSUIT','LEAD PURSUIT'];
-function relativePanel(first,entity){
-  el('relative').hidden=first.kind!=='aircraft';
-  if(first.kind!=='aircraft')return;
+const PHASE_COLORS=['#64748b','#e11d48','#b45309','#2563eb','#9333ea','#eab308','#0891b2','#f97316','#dc2626','#c026d3','#db2777','#4f46e5','#94a3b8','#65a30d','#0284c7','#14b8a6','#1d4ed8'];
+const phaseName=phase=>PHASE_NAMES[phase]??'AŞAMA '+phase;
+const phaseColor=phase=>PHASE_COLORS[phase]??'#64748b';
+// Sahne seçimlerinin yanındaki renk/çizgi örnekleri: sahnedeki çizimle aynı renk ve stil.
+const swatches=[...document.querySelectorAll('[data-swatch]')],zoneByKey=Object.fromEntries(ENEMY_ZONES.map(zone=>[zone.key,zone]));
+function paintSwatches(entity,target){
+  const dark=document.documentElement.dataset.theme==='dark',team=value=>value==='red'?'var(--red)':'var(--blue)';
+  for(const swatch of swatches){
+    const key=swatch.dataset.swatch,zone=zoneByKey[key];
+    swatch.style.color=zone?(dark?zone.dark:zone.light):key==='line'?'var(--accent)':key==='radar'?radarColor(entity.team,dark):key==='ownWez'?team(entity.team):team(target?.team??(entity.team==='red'?'blue':'red'));
+    swatch.dataset.style=zone?zone.style:key==='line'?'line':'dash';
+  }
+}
+let phaseLogKey='',phaseLogIndex=-1;
+function updatePhaseLog(id){
+  const segments=phaseSegments(id),list=el('phase-log');
+  if(phaseLogKey!==phaseCache.key){
+    phaseLogKey=phaseCache.key;phaseLogIndex=-1;
+    list.replaceChildren(...segments.slice(0,500).map(segment=>{
+      const item=document.createElement('li'),button=document.createElement('button'),swatch=document.createElement('i'),time=document.createElement('time'),name=document.createElement('span');
+      swatch.style.background=phaseColor(segment.phase);time.textContent=formatTime(segment.start);name.textContent=phaseName(segment.phase);
+      button.title=segment.decision||'';button.append(swatch,time,name);button.onclick=()=>seek(segment.start);item.append(button);return item;
+    }));
+    el('phase-log-count').textContent=segments.length?String(segments.length):'';
+  }
+  let lo=0,hi=segments.length;
+  while(lo<hi){const mid=(lo+hi)>>1;if(segments[mid].start<=viewTime)lo=mid+1;else hi=mid;}
+  const index=lo-1;
+  if(index===phaseLogIndex)return;
+  list.children[phaseLogIndex]?.firstChild.classList.remove('current');
+  list.children[index]?.firstChild.classList.add('current');phaseLogIndex=index;
+}
+// Hesaplar bakış uçağının gözünden: seçili uçak, füze seçiliyse taşıyıcısı, seçim yoksa dost uçak.
+function relativePanel(){
+  const id=perspectiveId(),first=buffer.tracks.get(id)?.samples[0];
+  el('relative').hidden=!first||viewTime===null;
+  if(el('relative').hidden)return;
+  const entity=buffer.at(id,viewTime)??first;
   const calc=entity.calc,distance=value=>Number.isFinite(value)?distanceLabel(value,preferences.distanceUnit,2):'—';
   const target=calc?.target_entity_id?buffer.tracks.get(calc.target_entity_id)?.samples[0]:null;
-  el('relative-target').textContent=target?'→ '+target.name:calc?.target_id?'→ '+calc.target_id:'';
+  const targetName=target?target.name:calc?.target_id??'';
+  el('relative-target').textContent=(id!==selected?first.name+' ':'')+(targetName?'→ '+targetName:'');
   el('relative-empty').hidden=Boolean(calc);
-  el('calc-phase').textContent=Number.isFinite(calc?.phase)?PHASE_NAMES[calc.phase]??'AŞAMA '+calc.phase:'—';
+  const phase=Number.isFinite(calc?.phase)?calc.phase:null;
+  el('calc-phase').textContent=phase===null?'—':phaseName(phase);el('phase-color').style.background=phase===null?'':phaseColor(phase);
   el('calc-decision').textContent=calc?.decision||'—';
   el('calc-ata').textContent=sideAngleLabel(calc?.ata_deg);el('calc-bearing').textContent=angleLabel(calc?.bearing_deg);
-  el('calc-aspect').textContent=angleLabel(calc?.aspect_deg);
+  el('calc-aspect').textContent=angleLabel(calc?.aspect_deg);el('calc-closure').textContent=closureLabel(calc?.rate_of_closure_mps,preferences.speedUnit);
   el('calc-range-3d').textContent=distance(calc?.range_3d_m);el('calc-range-2d').textContent=distance(calc?.range_2d_m);
+  el('calc-radar').textContent=calc?.radar_gimbal_deg>0&&calc.radar_range_m>0?'±'+number(calc.radar_gimbal_deg)+'° · '+distanceLabel(calc.radar_range_m,preferences.distanceUnit,0):'—';
   const yes=value=>value==null?'—':value?'Evet':'Hayır';
-  el('calc-wez').textContent=Number.isFinite(calc?.wez_max_range_m)&&calc.wez_max_range_m>0
-    ?distance(calc.wez_max_range_m):'—';
+  el('calc-wez').textContent=calc?.wez_max_range_m>0?distance(calc.wez_max_range_m):'—';
+  el('calc-wez-min').textContent=calc?.wez_max_range_m>0?distance(calc.wez_min_range_m):'—';
   el('calc-enemy-in-my-wez').textContent=yes(calc?.enemy_in_my_wez??calc?.in_wez);
   el('calc-me-in-enemy-wez').textContent=yes(calc?.me_in_enemy_wez);
   el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dr').textContent=distance(calc?.dr_m);el('calc-dor').textContent=distance(calc?.dor_m);
   el('calc-stern-wez').textContent=distance(calc?.stern_wez_m);el('calc-nez').textContent=distance(calc?.nez_m);
   // Atış tahminlerinde C++ boş optional değerleri 0 olarak kaydeder.
-  for(const [id,key] of [['calc-a-pole','a_pole_m'],['calc-f-pole','f_pole_m'],['calc-tr','tr_m'],['calc-msr','msr_m']]){
-    const value=calc?.[key];el(id).textContent=value===0?'Çözüm yok':distance(value);
+  for(const [field,key] of [['calc-a-pole','a_pole_m'],['calc-f-pole','f_pole_m'],['calc-tr','tr_m'],['calc-msr','msr_m']]){
+    const value=calc?.[key];el(field).textContent=value===0?'Çözüm yok':distance(value);
   }
-  // C++ optional hesapları 0 yazar: tehdit için 0 "yok" demek.
-  const number=(value,digits)=>value.toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
   el('calc-threat').textContent=!Number.isFinite(calc?.threat_range_nm)?'—':calc.threat_range_nm<=0?'Yok'
     :distance(calc.threat_range_m)+' · M'+number(calc.threat_mach,2)+(calc.threat_pitbull?' · pitbull':'');
+  paintSwatches(first,target);updatePhaseLog(id);
 }
 function renderList(){
   if(!buffer.complete)return;
   for(const button of el('entity-list').querySelectorAll('.entity')){const active=button.closest('.aircraft-card').dataset.id===selected;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));}
+  for(const item of el('entity-list').querySelectorAll('.munition')){const active=item.dataset.id===selected;item.classList.toggle('selected',active);item.setAttribute('aria-pressed',String(active));}
   const inventories=buffer.packet.inventory||{};
   const allAircraft=[...buffer.tracks.values()].map(track=>track.samples[0]).filter(entry=>entry.kind==='aircraft');
   const matches=entry=>!query||[entry.name,entry.model,entry.team,...(inventories[entry.id]||[]).flatMap(m=>[m.name,m.model])].join(' ').toLocaleLowerCase('tr').includes(query);
@@ -346,7 +439,7 @@ function renderList(){
     .sort((a,b)=>(teamOrder[a.team]??2)-(teamOrder[b.team]??2));
   if(selected===null&&entries.length)selected=entries.find(entry=>buffer.at(entry.id,viewTime))?.id??entries[0].id;
   const state=entry=>viewTime<entry.record_start_s?'Başlamadı':viewTime>=entry.record_end_s?'Son ölçüm':'Kayıtta';
-  const signature=buffer.session+entries.map(entry=>entry.id+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)+(m.id===selected)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)+(m.id===selected)).join(',');
+  const signature=buffer.session+entries.map(entry=>entry.id+state(entry)+hiddenObjects.has(entry.id)+(inventories[entry.id]||[]).map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)).join(',')).join('|')+(buffer.packet.unassigned_inventory||[]).map(m=>m.id+munitionState(m,viewTime,preferences.missileOutcomes)).join(',');
   if(signature===listSignature)return;listSignature=signature;
   el('entity-list').replaceChildren();el('object-count').textContent=entries.length;
   el('list-empty').hidden=entries.length>0;el('list-empty').textContent=buffer.bounds()?'Bu filtrede uçak yok.':'Kayıt açarak başla.';
@@ -382,7 +475,7 @@ async function poll(){
     if(buffer.consume(packet)){viewTime=null;selected=null;paused=true;replayClock.reset();hiddenObjects.clear();listSignature='';scene.clear?.();}
     if(buffer.complete&&viewTime===null&&buffer.bounds()){
       viewTime=buffer.bounds().first;replayClock.seek(viewTime,performance.now()/1000);renderList();
-      if(preferences.camera==='all')scene.frameAll(visibleEntities());else if(!webglError&&preferences.camera==='top')scene.setView('top');
+      if(!webglError&&preferences.camera==='top')scene.setView('top');
     }
     renderList();updateTimeline();lastReceive=performance.now();connectionError=null;
     if(!buffer.complete)again=0;
@@ -412,7 +505,7 @@ function labels(){
   el('record-source').textContent=packet.catalog_root||'Dizin seçilmedi';el('record-source').title=el('record-source').textContent;
   el('record-duration').textContent=bounds?formatTime(bounds.last-bounds.first)+' · '+packet.objects+' nesne':'Tacview CSV';
   const track=buffer.tracks.get(selected),first=track?.samples[0],last=track?.samples.at(-1);
-  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','heading-command','speed','mach','roll','pitch','load-factor','throttle','east','north'])el(id).textContent='—';el('relative').hidden=true;return;}
+  if(!first){el('speed-measure').hidden=false;el('mach-measure').hidden=preferences.speedUnit==='mach';el('missing-data').hidden=true;el('selected-name').textContent='Nesne seç';el('detail-title').textContent='Nesne bilgisi';el('model').textContent='Kayıt ölçümleri';el('entity-state').textContent='';for(const id of ['altitude','heading','heading-command','speed','mach','roll','pitch','load-factor','throttle','east','north'])el(id).textContent='—';relativePanel();return;}
   const current=buffer.at(selected,viewTime),entity=current||(viewTime<first.record_start_s?first:last);
   el('detail-title').textContent=first.kind==='missile'?'Füze bilgisi':'Uçak bilgisi';el('selected-name').textContent=first.name;
   el('model').textContent=first.model+' · '+(first.team==='blue'?'Dost takım':first.team==='red'?'Karşı takım':'Takım belirtilmemiş');
@@ -436,11 +529,12 @@ function labels(){
   el('missing-data').hidden=!el('missing-data').textContent;
   el('speed-measure').title=estimatedSpeed?'Hız hesabında rüzgâr düzeltmesi uygulanmaz.':'';
   el('east').textContent=distanceLabel(entity.east_m,preferences.distanceUnit);el('north').textContent=distanceLabel(entity.north_m,preferences.distanceUnit);
-  relativePanel(first,entity);
+  relativePanel();
 }
 
 const recordingMenu=setupRecordingMenu({
-  open:()=>{closeMenus(el('record-options'));el('record-options').open=true;positionMenu(el('record-options'));}
+  open:()=>{closeMenus(el('record-options'));el('record-options').open=true;positionMenu(el('record-options'));},
+  current:()=>buffer.packet.recording
 });
 const libraries=()=>recordingMenu.refresh();
 const recordingError=message=>recordingMenu.error(message);
@@ -503,8 +597,6 @@ function render(timestamp){
   const canPlay=!connectionError&&timestamp-lastReceive<6000&&buffer.complete&&buffer.packet.phase==='ready'&&!paused&&!scrubbing;
   if(buffer.complete)viewTime=replayClock.tick(buffer,timestamp/1000,canPlay);
   const bounds=buffer.bounds();if(canPlay&&bounds&&viewTime>=bounds.last)paused=true;
-  const tracked=buffer.at(selected,viewTime);
-  if(selected&&scene.follow&&(!tracked||!allowed(tracked))){scene.follow=false;preferences.follow=false;save();updateFollow();}
   renderList();scene.analysis=analysis();const entities=buffer.complete?renderEntities():[];
   scene.draw(entities,buffer,viewTime??0,selected);ruler.draw(entities,buffer,viewTime??0);
   if(!webglError&&preferences.mode==='3d'){const north=scene.controls.target.clone().set(0,0,-1).applyQuaternion(scene.camera.quaternion.clone().invert());el('north-arrow').style.transform=`rotate(${Math.atan2(north.x,north.y)*180/Math.PI}deg)`;}
