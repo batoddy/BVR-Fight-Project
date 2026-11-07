@@ -10,7 +10,7 @@ const el=id=>document.getElementById(id);
 const defaults={left:210,right:280,dock:76,list:true,detail:true,mode:'3d',camera:'orbit',follow:true,
   altitudeGuides:true,velocityGuides:true,objectScale:1,trail:true,trailDuration:300,history:true,grid:true,basemap:false,missileOutcomes:false,labelMode:'all',labelNames:true,labelAltitude:true,labelSpeed:true,speedUnit:'mps',altitudeUnit:'ft',distanceUnit:'nm',
   overlayLine:true,overlayAta:true,overlayBearing:true,overlayRange:true,overlayAspect:false,overlayClosure:true,overlayRadar:true,overlayOwnWez:true,overlayEnemyWez:true,
-  overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDr:true,overlayDor:true,overlayTr:true};
+  overlaySternWez:true,overlayNez:true,overlayMar:true,overlayDr:true,overlayDor:true,overlayTr:true,overlayMsr:true};
 const preferences={...defaults};
 try{
   const saved=JSON.parse(localStorage.getItem('bvrgym-layout-v2')||'{}');
@@ -145,7 +145,7 @@ for(const id of ['basemap','altitude-guides','velocity-guides','object-scale','t
 viewSettings();updateFollow();
 // Sahnede gösterilecek otopilot hesapları: sağ paneldeki seçimler.
 const overlayInputs=[['overlay-line','overlayLine'],['overlay-ata','overlayAta'],['overlay-bearing','overlayBearing'],['overlay-range','overlayRange'],['overlay-aspect','overlayAspect'],['overlay-closure','overlayClosure'],['overlay-own-wez','overlayOwnWez'],['overlay-enemy-wez','overlayEnemyWez'],['overlay-radar','overlayRadar'],
-  ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dr','overlayDr'],['overlay-dor','overlayDor'],['overlay-tr','overlayTr']];
+  ['overlay-stern-wez','overlaySternWez'],['overlay-nez','overlayNez'],['overlay-mar','overlayMar'],['overlay-dr','overlayDr'],['overlay-dor','overlayDor'],['overlay-tr','overlayTr'],['overlay-msr','overlayMsr']];
 function overlaySettings(){
   for(const [id,key] of overlayInputs)preferences[key]=el(id).checked;
   for(const id of ['overlay-ata','overlay-bearing','overlay-range','overlay-aspect','overlay-closure'])el(id).disabled=!preferences.overlayLine;
@@ -304,7 +304,7 @@ function analysis(){
       range:preferences.overlayRange,aspect:preferences.overlayAspect,closure:preferences.overlayClosure,radar:preferences.overlayRadar,
       ownWez:preferences.overlayOwnWez,enemyWez:preferences.overlayEnemyWez,
       // Anahtarlar units.js ENEMY_ZONES key'leriyle aynı.
-      zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dr:preferences.overlayDr,dor:preferences.overlayDor,tr:preferences.overlayTr}}};
+      zones:{sternWez:preferences.overlaySternWez,nez:preferences.overlayNez,mar:preferences.overlayMar,dr:preferences.overlayDr,dor:preferences.overlayDor,tr:preferences.overlayTr,msr:preferences.overlayMsr}}};
 }
 // C++ aircraft.hpp enum class Phase ile aynı sırada.
 const PHASE_NAMES=['HOLD','FIRE','OUT','COMMIT','CRANK','BEAM','RECOMMIT','NOTCH','DRAG','OFFSET','FLANK','COLLISION','FLY HEADING','SNAKE','PURE PURSUIT','LAG PURSUIT','LEAD PURSUIT'];
@@ -328,7 +328,7 @@ function relativePanel(first,entity){
   el('calc-mar').textContent=distance(calc?.mar_m);el('calc-dr').textContent=distance(calc?.dr_m);el('calc-dor').textContent=distance(calc?.dor_m);
   el('calc-stern-wez').textContent=distance(calc?.stern_wez_m);el('calc-nez').textContent=distance(calc?.nez_m);
   // Atış tahminlerinde C++ boş optional değerleri 0 olarak kaydeder.
-  for(const [id,key] of [['calc-a-pole','a_pole_m'],['calc-f-pole','f_pole_m'],['calc-tr','tr_m']]){
+  for(const [id,key] of [['calc-a-pole','a_pole_m'],['calc-f-pole','f_pole_m'],['calc-tr','tr_m'],['calc-msr','msr_m']]){
     const value=calc?.[key];el(id).textContent=value===0?'Çözüm yok':distance(value);
   }
   // C++ optional hesapları 0 yazar: tehdit için 0 "yok" demek.

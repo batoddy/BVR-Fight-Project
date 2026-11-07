@@ -104,7 +104,7 @@ std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& ene
 {
     (void)enemy;   // DOR ve kapanma own.picture'da
     const MissileProfile& missile = own.profile.main_weapon;
-    const double closure_kt = own.picture.closure_kt;
+    const double closure_kt = own.picture.enemy_closure_kt + own.kinematics.tas_kt * std::cos((own.profile.radar_gimbal_deg - 5) * DEG_TO_RAD);
 
     const double gap_nm = own.picture.dor_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
     if (gap_nm < 0.0)
@@ -118,7 +118,7 @@ std::optional<double> engagement::tr_nm(const Aircraft& own, const Aircraft& ene
     {
         return std::nullopt;   // füze bu kapanmayla pitbull'a erişemez
     }
-    return own.picture.dor_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s);
+    return own.picture.dor_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s) + 0.5;
 }
 
 bool engagement::in_tr(const Aircraft& own, const Aircraft& enemy)
@@ -126,6 +126,34 @@ bool engagement::in_tr(const Aircraft& own, const Aircraft& enemy)
     const double range_nm = geometry::range_3d_nm(own.kinematics, enemy.kinematics);
     return range_nm <= tr_nm(own, enemy);
 }
+
+std::optional<double> engagement::msr_nm(const Aircraft& own, const Aircraft& enemy)
+{
+    (void)enemy;   // DOR ve kapanma own.picture'da
+    const MissileProfile& missile = own.profile.main_weapon;
+    const double closure_kt = own.picture.enemy_closure_kt + own.kinematics.tas_kt * std::cos((own.profile.radar_gimbal_deg - 5) * DEG_TO_RAD);
+
+    const double gap_nm = own.picture.mar_nm + POLE_MARGIN_NM - missile.pitbull_range_nm;
+    if (gap_nm < 0.0)
+    {
+        return std::nullopt;   // DOR pitbull mesafesinden kısa: bu tanımla TR yok
+    }
+
+    const double relative_start_kt = missile.start_speed_kt - closure_kt;
+    const std::optional<double> flight_time_s = accel_travel_time_s(gap_nm, relative_start_kt, missile.slowing_accel_kt_s);
+    if (!flight_time_s)
+    {
+        return std::nullopt;   // füze bu kapanmayla pitbull'a erişemez
+    }
+    return own.picture.mar_nm + POLE_MARGIN_NM + travel_distance_nm(closure_kt, *flight_time_s) + 0.5;
+}
+
+bool engagement::in_msr(const Aircraft& own, const Aircraft& enemy)
+{
+    const double range_nm = geometry::range_3d_nm(own.kinematics, enemy.kinematics);
+    return range_nm <= msr_nm(own, enemy);
+}
+
 
 // NEZ'imde mi: düşman şimdi out yapsa füzemden kaçamaz. NEZ benim füzeme karşı düşmanın kaçış NEZ'idir.
 bool engagement::in_nez(const Aircraft& own, const Aircraft& enemy)

@@ -22,7 +22,7 @@ Message Sim::step(const Message& state)
     else
     {
         otopilot_fighter_.step(world_.fighter, world_.hostile);  // 3. her otopilot komutunu, fazını ve atış emrini yazar
-        otopilot_hostile_.step(world_.hostile, world_.fighter);
+        // otopilot_hostile_.step(world_.hostile, world_.fighter);
     }
 
     return CommandWriter::write(state.tick, world_);          // 4. uçuş komutları, atış emirleri ve hesaplar

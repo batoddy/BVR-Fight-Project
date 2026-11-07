@@ -29,9 +29,11 @@ struct Weapons
     std::optional<double> a_pole_nm;   // NM, A-pole; çözüm yoksa yok
     std::optional<double> f_pole_nm;   // NM, F-pole; çözüm yoksa yok
     std::optional<double> tr_nm;       // NM, TR; çözüm yoksa yok
+    std::optional<double> msr_nm;      // NM, MSR; çözüm yoksa yok
     bool enemy_in_wez = false;         // düşman benim WEZ'imde mi
     bool enemy_in_nez = false;         // düşman benim NEZ'imde mi: wez.min_nm < menzil ≤ nez_nm
     bool enemy_in_tr = false;          // menzil ≤ TR mi; TR yoksa false
+    bool enemy_in_msr = false;         // menzil ≤ MSR mi; MSR yoksa false
     // TODO: m_pole_nm
 
     bool fire(const MissileProfile& profile);               // bu profilin ilk atılmamış slotu; füze yoksa ya da önceki emir henüz uçmadıysa false

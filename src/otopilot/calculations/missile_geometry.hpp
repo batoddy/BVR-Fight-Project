@@ -22,4 +22,5 @@ namespace missile_geometry
     std::optional<double> time_at_distance_s(const MissileProfile& missile_profile, double distance_nm);   // s, yolu alma süresi; erişemez ya da yol negatifse yok
 
     std::optional<double> catch_time_left_s(const Missile& missile);       // s, hedefe yetişmesine kalan süre; yetişemezse yok. target.range/closure'dan sonra
+    std::optional<double> catch_time_left_s(const Missile& missile, double closure_kt);   // aynısı, verilen kapanmayla (ör. hedef dönerse)
 }

@@ -11,6 +11,9 @@ if __package__:
 else:
     import flight_control
 
+# Füze, hızlanma evresinden sonra bu Mach'ın altına düşerse kayıp sayılır (BVRGym varsayılanı 0.6).
+MISSILE_LOST_BELOW_MACH = 1.0
+
 
 # =============================================================================
 # BVRGYM ORTAMINI HAZIRLAMA
@@ -70,6 +73,7 @@ def _create_agent(settings, sim_time_step):
     missile = _copy_config(AAM_config)
     aircraft.aircraft_simulation.Sim_time_step = sim_time_step
     missile.missile_simulation.Sim_time_step = sim_time_step
+    missile.missile_performance.target_lost_below_mach = MISSILE_LOST_BELOW_MACH   # kopyada; BVRGym kaynağı değişmez
 
     for config in (aircraft, missile):
         config.data_output_xml = None

@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "calculations/missile_geometry.hpp"
 #include "model/missile.hpp"
 
 #include "control/conditions.hpp"
@@ -137,9 +138,17 @@ Decision<ThreatResponse> decide::threat_response(const Aircraft& own, const Miss
 // K5  —  savunma bitti
 // ========================================================================================================
 
+// Peşimde füze varken: Recommit'te burnum füzeye döner, kapanma ≈ şimdiki + 2 × TAS olur.
+// O kapanmayla füze yetişebiliyorsa kaçış yönünde beklenir (Wait); yetişemiyorsa ya da füze yoksa devam.
 Decision<AfterEscape> decide::after_escape(const Aircraft& own, const Mission& mission)
 {
     (void)mission;   // örnek: Püskürt + düşman cold → Depart; Güvenli yalnız füze ≥ 2 ise Recommit
+    const Missile* threat = own.picture.threat;
+    if (threat != nullptr
+        && missile_geometry::catch_time_left_s(*threat, threat->target.closure_kt + 2.0 * own.kinematics.tas_kt))
+    {
+        return {AfterEscape::Wait, "Recommit'te füze yetişir"};
+    }
     if (own.weapons.missiles_left() > 0)
     {
         return {AfterEscape::Recommit, "füze var"};

@@ -119,7 +119,7 @@ BVRGym kaynak dosyalarına dokunulmaz; bütün uyarlamalar dışarıdan, nesne k
 |---|---|---|
 | Uçuş kontrolü | `flight_control.py` → `install()`, `_control()` | `AircraftPIDAutopilot.get_control_input` yerine bizim kontrolümüz çalışır; durum `FlightControl` nesnesindedir. Aç/kapa: `FLIGHT_CONTROL_ENABLED` (1 bizim kontrol, 0 BVRGym'in kendi PID'i; o zaman `g_limit` yok sayılır). |
 | Atış | `simulation.py` → `Simulation.fire()` | `BaseBVRAgent.launch_missile()` havada kendi füzesi varken atmaz; biz hazır slotu doğrudan kullanırız. Hedef C++'ın `target_id`'sinden gelir. Mach/m/s hatası için füze `launch()` sonrası gerçek hava hızıyla yeniden `reset()` edilir. |
-| Füze | — | Güdüm, config ve sonlanma BVRGym'deki haliyle kullanılır. |
+| Füze | `bvrgym_setup.py` → `MISSILE_LOST_BELOW_MACH` | Güdüm ve config BVRGym'deki haliyle kullanılır; yalnız kayıp eşiği değişir: füze hızlanma evresinden sonra Mach 1'in altına düşünce kayıp sayılır (BVRGym 0.6). Ajanın config kopyasında ayarlanır. |
 | Kurulum ayarları | `bvrgym_setup.py` → `_copy_config()`, `_create_agent()` | Config'ler ajan başına kopyalanır; uçak ve füzenin `Sim_time_step`'i YAML'dan gelir. `data_output_xml` ve `fg_sleep_time` kapatılır; kayıt `Recorder`, gerçek zaman beklemesi `world.sleep_s` ile yönetilir. |
 | Dış kontrol döngüsü | `sim_main.py`, `simulation.py`, `connector.py`, `recorder.py` | Python ölçüm gönderir, C++ kararını bekleyip ilerler; uçuş ve atış emirleri TCP üzerinden gelir. |
 

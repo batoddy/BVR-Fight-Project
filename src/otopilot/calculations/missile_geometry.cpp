@@ -53,6 +53,11 @@ std::optional<double> missile_geometry::time_at_distance_s(const MissileProfile&
 // Kapanma, yol kapanmadan sıfıra inerse füze yetişemez: std::nullopt.
 std::optional<double> missile_geometry::catch_time_left_s(const Missile& missile)
 {
+    return catch_time_left_s(missile, missile.target.closure_kt);
+}
+
+std::optional<double> missile_geometry::catch_time_left_s(const Missile& missile, double closure_kt)
+{
     const double blast_radius_nm = feet_to_nmile(missile.profile.blast_radius_ft);
     const double gap_nm = missile.target.range_nm - blast_radius_nm;
     if (gap_nm <= 0.0)
@@ -60,5 +65,5 @@ std::optional<double> missile_geometry::catch_time_left_s(const Missile& missile
         return 0.0;   // hedef zaten patlama yarıçapının içinde
     }
 
-    return accel_travel_time_s(gap_nm, missile.target.closure_kt, missile.profile.slowing_accel_kt_s);
+    return accel_travel_time_s(gap_nm, closure_kt, missile.profile.slowing_accel_kt_s);
 }

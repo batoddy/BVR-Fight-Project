@@ -89,6 +89,8 @@ namespace
         weapons.f_pole_nm = engagement::f_pole_nm(own, enemy);
         weapons.tr_nm = engagement::tr_nm(own, enemy);
         weapons.enemy_in_tr = engagement::in_tr(own, enemy);
+        weapons.msr_nm = engagement::msr_nm(own, enemy);
+        weapons.enemy_in_msr = engagement::in_msr(own, enemy);
         weapons.nez_nm = engagement::nez_nm(enemy, own);          // benim NEZ'im = düşmanın gözünden kaçış NEZ'i (uçaklar ters)
         weapons.enemy_in_nez = engagement::in_nez(own, enemy);
     }

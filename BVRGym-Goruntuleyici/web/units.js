@@ -28,6 +28,7 @@ export const ENEMY_ZONES=[
   {key:'dr',field:'dr_m',label:'DR',style:'dash',dark:'#a78bfa',light:'#7c3aed'},
   {key:'dor',field:'dor_m',label:'DOR',style:'line',dark:'#22d3ee',light:'#0e7490'},
   {key:'tr',field:'tr_m',label:'TR',style:'line',dark:'#f472b6',light:'#be185d'},
+  {key:'msr',field:'msr_m',label:'MSR',style:'dash',dark:'#60a5fa',light:'#1d4ed8'},
 ];
 // Radar açısı rengi takıma göre: mavi takım yeşil, kırmızı takım mor (uçak renkleriyle karışmasın).
 export const RADAR_COLORS={blue:{dark:'#4ade80',light:'#15803d'},red:{dark:'#c084fc',light:'#7e22ce'}};

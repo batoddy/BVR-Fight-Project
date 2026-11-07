@@ -16,7 +16,7 @@ enum class FirstShot { Wait, Fire };                    // K1
 enum class AfterShot { Leave, Crank, Commit };          // K2: L&L (Out) / destek
 enum class SupportLimit { Continue, Escape, FireAndEscape };   // K3
 enum class ThreatResponse { Continue, CounterFire, Beam, Drag, Notch };   // K4; savunmalar artan aciliyet sırasıyla
-enum class AfterEscape { Recommit, Depart };            // K5
+enum class AfterEscape { Recommit, Depart, Wait };      // K5; Wait: kaçış yönünde kal
 
 namespace decide
 {

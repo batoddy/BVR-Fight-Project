@@ -44,6 +44,7 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
     json["a_pole_nm"] = own.weapons.a_pole_nm.value_or(0.0);
     json["f_pole_nm"] = own.weapons.f_pole_nm.value_or(0.0);
     json["tr_nm"] = own.weapons.tr_nm.value_or(0.0);
+    json["msr_nm"] = own.weapons.msr_nm.value_or(0.0);
 
     const Missile* threat = picture.threat;                                    // füze yoksa 0
     json["threat_range_nm"] = threat ? threat->target.range_nm : 0.0;

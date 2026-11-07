@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BVR Karar Akışı</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: tek sütun teknik not; her düğüm bir bölüm, şema üstte kurallar altta; üstte yapışkan düğüm menüsü */
+  :root {
+    --bg: #f2f4f6;
+    --surface: #ffffff;
+    --fg: #17212b;
+    --muted: #586674;
+    --line: #d4dbe2;
+    --accent: #b76f0e;
+    --accent-soft: #f5e6cd;
+    --danger: #b03a31;
+    --ok: #2c7655;
+    --info: #2d5f8c;
+    --info-soft: #dbe7f2;
+    --paper: #ffffff;   /* akış şemalarının zemini: iki temada da açık, şema renkleri buna göre sabit */
+    --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f151b; --surface: #16202a; --fg: #e2e8ee; --muted: #93a1ae; --line: #2a3643;
+      --accent: #e1a13c; --accent-soft: #3a2b14; --danger: #e06a5f; --ok: #5cbf92; --info: #77a8d6; --info-soft: #1d3042;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f151b; --surface: #16202a; --fg: #e2e8ee; --muted: #93a1ae; --line: #2a3643;
+    --accent: #e1a13c; --accent-soft: #3a2b14; --danger: #e06a5f; --ok: #5cbf92; --info: #77a8d6; --info-soft: #1d3042;
+    color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 64px; display: grid; gap: 40px; }
+
+  header { display: grid; gap: 10px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; line-height: 1.1; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(34px, 6vw, 48px); letter-spacing: .01em; }
+  h2 { font-size: 30px; }
+  h3 { font-size: 21px; font-weight: 500; }
+  p { margin: 0; max-width: 68ch; }
+  .status { display: inline-flex; align-items: center; gap: 8px; width: fit-content; padding: 4px 10px; border-radius: 4px; background: var(--accent-soft); color: var(--fg); font-size: 13px; }
+  .status b { color: var(--accent); font-weight: 600; }
+
+  nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  nav a { font-family: var(--font-mono); font-size: 12px; text-decoration: none; color: var(--fg); padding: 4px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+  nav a:hover, nav a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+
+  section { display: grid; gap: 16px; scroll-margin-top: 70px; }
+  .lead { color: var(--muted); }
+  .diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  .diagram pre.mermaid { margin: 0; display: flex; justify-content: center; min-width: fit-content; background: var(--paper); color: #17212b; }
+  .diagram:has(> pre.mermaid) { background: var(--paper); }
+  .diagram svg.plain { display: block; min-width: 640px; width: 100%; height: auto; }
+  .caption { font-size: 13px; color: var(--muted); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .cols > * { min-width: 0; }
+
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  td code, p code, li code { font-family: var(--font-mono); font-size: 13px; background: var(--info-soft); padding: 1px 5px; border-radius: 3px; }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no { color: var(--muted); }
+  .tag { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.new { border-color: var(--accent); color: var(--accent); }
+  .tag.have { border-color: var(--ok); color: var(--ok); }
+
+  pre.formula { margin: 0; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--info); border-radius: 4px; padding: 12px 14px; color: var(--fg); }
+  ul.notes { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
+
+  /* inline SVG çizim renkleri temadan */
+  .s-text { fill: var(--fg); font-family: var(--font-body); font-size: 12px; }
+  .s-muted { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+  .s-axis { stroke: var(--line); stroke-width: 1; }
+  .s-strong { stroke: var(--fg); stroke-width: 1.5; }
+  .s-dash { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .f-hot { fill: var(--danger); }
+  .f-flank { fill: var(--accent); }
+  .f-beam { fill: var(--info); }
+  .f-cold { fill: var(--ok); }
+  .f-turn { fill: var(--muted); opacity: .55; }
+  .f-x { fill: var(--info); }
+  .f-ok { fill: var(--ok); }
+  .f-bad { fill: var(--danger); }
+  .f-crank { fill: var(--accent); }
+  .f-def { fill: var(--info); }
+  .lane { stroke: var(--muted); stroke-width: 2; }
+  .dot-pb { fill: var(--accent); }
+  .dot-hit { fill: var(--danger); }
+  .on-color { fill: #ffffff; font-family: var(--font-mono); font-size: 11px; }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+
+<style>*{box-sizing:border-box} body{margin:0}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Otopilot · karar tasarımı · 2026-11-07</span>
+    <h1>BVR Karar Akışı</h1>
+    <p>Durum makinesi, her fazdaki karar kuralları ve kararların dayandığı süre ve mesafe metrikleri. Kaynak: <code>src/otopilot/control/KARAR_TASARIMI.md</code>.</p>
+    <span class="status"><b>Tasarım</b> Henüz kodda yok; bugünkü otopilot eski akışla çalışıyor.</span>
+  </header>
+
+  <nav aria-label="Bölümler">
+    <a href="#genel">Genel akış</a>
+    <a href="#step">Her step</a>
+    <a href="#aspect">Aspect</a>
+    <a href="#commit">COMMIT</a>
+    <a href="#support">SUPPORT</a>
+    <a href="#trade">TRADE</a>
+    <a href="#defend">DEFEND</a>
+    <a href="#reassess">REASSESS</a>
+    <a href="#cold">COLD</a>
+    <a href="#chase">CHASE</a>
+    <a href="#abort">ABORT</a>
+    <a href="#kod">Ek kod</a>
+  </nav>
+
+  <section id="genel">
+    <h2>Genel akış</h2>
+    <p class="lead">Akış döngülü olduğu için ağaç değil, durum makinesi. Bir taahhüt (savunma, destek, kovalama) bitince REASSESS'e dönülür; aynı alt kararlar her dalda tekrar yazılmaz. Kesik çizgi kesintidir. ABORT ve tehdit kesintileri her fazdan çalışır, bir sonraki şemada.</p>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TB
+  COMMIT["COMMIT&lt;br/&gt;commit"]
+  SUPPORT["SUPPORT&lt;br/&gt;crank / kovalama"]
+  TRADE["TRADE&lt;br/&gt;crank"]
+  DEFEND["DEFEND&lt;br/&gt;beam → drag → notch"]
+  OUT["OUT&lt;br/&gt;out"]
+  COLD["COLD&lt;br/&gt;out yönü art yakıcı / hold"]
+  RECOMMIT["RECOMMIT&lt;br/&gt;recommit"]
+  CHASE["CHASE&lt;br/&gt;pure pursuit, art yakıcı"]
+  R{{"REASSESS"}}
+  ABORT(["ABORT&lt;br/&gt;kalıcı"])
+
+  COMMIT -->|"TR'de ateş"| SUPPORT
+  COMMIT -->|"düşman cold"| R
+  SUPPORT -->|"2. atış: Riskli, MSR"| SUPPORT
+  SUPPORT -->|"pitbull / DOR"| OUT
+  SUPPORT -->|"L&amp;L görevi"| ABORT
+  SUPPORT -->|"füzem bitti / düşman cold"| R
+  SUPPORT -.->|"tehdit"| TRADE
+  TRADE -->|"tehdit öldü"| SUPPORT
+  TRADE -->|"pitbull / kritik an"| DEFEND
+  DEFEND -->|"tehdit bitti"| R
+  OUT -->|"dönüş bitti"| COLD
+  COLD -->|"menzil ≥ MRR, düşman hot"| RECOMMIT
+  COLD -->|"İmha, düşman cold"| CHASE
+  RECOMMIT -->|"dönüş bitti"| COMMIT
+  RECOMMIT -->|"menzil ≤ DOR"| OUT
+  R -->|"düşman cold, İmha"| CHASE
+  R -->|"düşman cold Püskürt / ben cold"| COLD
+  R -->|"menzil ≤ DOR"| OUT
+  R -->|"diğer"| RECOMMIT
+  R -->|"füze bitti"| ABORT
+  CHASE -->|"R_cold'da ateş"| SUPPORT
+  CHASE -->|"düşman hot"| COMMIT
+  CHASE -->|"düşman hot, ≤ DOR"| OUT
+  CHASE -->|"vazgeç"| COLD
+
+  classDef hub fill:#c77d12,stroke:#8a560c,color:#1b1206
+  classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
+  class R hub
+  class ABORT stop
+</pre>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Faz</th><th>Ne zaman</th><th>Manevra</th></tr></thead>
+        <tbody>
+          <tr><td>COMMIT</td><td>Düşmana git, atış noktasını bekle</td><td><code>commit</code></td></tr>
+          <tr><td>SUPPORT</td><td>Füzem havada, tehdit yok</td><td>düşman hot: <code>crank</code> · cold: kovalama</td></tr>
+          <tr><td>TRADE</td><td>İki füze havada, benimki pitbull değil</td><td><code>crank</code></td></tr>
+          <tr><td>DEFEND</td><td>Tehdit var, destek yok</td><td><code>beam</code> → <code>drag</code> → <code>notch</code>, yalnız acilleşir</td></tr>
+          <tr><td>OUT</td><td>Düşmanı arkaya al</td><td><code>out</code></td></tr>
+          <tr><td>COLD</td><td>MRR'ye açıl, recommit anını bekle</td><td>out yönü, art yakıcı · bekleme: <code>hold</code></td></tr>
+          <tr><td>RECOMMIT</td><td>Hot'a dön</td><td><code>recommit</code></td></tr>
+          <tr><td>CHASE</td><td>İmha, düşman kaçıyor</td><td>pure pursuit, art yakıcı</td></tr>
+          <tr><td>ABORT</td><td>Kalıcı çıkış</td><td><code>out</code>, dönüşten sonra art yakıcı</td></tr>
+          <tr><td>REASSESS</td><td>Anlık düğüm, uçulmaz</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="step">
+    <h2>Her step</h2>
+    <p class="lead">Önce kesintiler, sonra fazın kendi kuralı, en son manevra. Atış faz değil, bir eylemdir: emir kabul edilene kadar tekrar denenir, sonra SUPPORT.</p>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  S(["Step başı"]) --> A{"ABORT koşulu?&lt;br/&gt;füze bitti · MAR · L&amp;L"}
+  A -->|evet| AB(["ABORT"])
+  A -->|hayır| T{"Yetişebilen tehdit var?&lt;br/&gt;COMMIT, SUPPORT, OUT,&lt;br/&gt;COLD, RECOMMIT, CHASE"}
+  T -->|hayır| F["Fazın kendi kuralı"]
+  T -->|evet| C{"Havada füzem yok ve&lt;br/&gt;karşı atış şartı var?"}
+  C -->|evet| CS["Karşı atış → SUPPORT"]
+  C -->|hayır| P{"Füzem havada,&lt;br/&gt;pitbull değil?"}
+  P -->|evet| TR["TRADE"]
+  P -->|hayır| DF["DEFEND"]
+  F --> M["Fazın manevrası uçulur"]
+
+  classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
+  classDef go fill:#2f6b52,stroke:#1f4a38,color:#eefaf4
+  class AB stop
+  class CS go
+</pre>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Risk</th><th>Karşı atış şartı (havada füzem yokken)</th></tr></thead>
+        <tbody>
+          <tr><td>Güvenli</td><td class="no">Karşı atış yok</td></tr>
+          <tr><td>Dengeli</td><td>Düşman TR'mde</td></tr>
+          <tr><td>Riskli</td><td>Düşman WEZ'imde</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caption">Destek kuralı (varsayım): pitbull'dan önce atan uçak desteği bırakırsa ya da vurulursa füze güdümü kaybeder. İki taraf için geçerli. BVRGym'de henüz yok, ayrıca eklenecek.</p>
+  </section>
+
+  <section id="aspect">
+    <h2>Aspect bantları</h2>
+    <p class="lead">Düşmanın burnunun bana göre açısı (TA). Cold'a geçiş ve hot'a dönüş farklı eşiklerde; aradaki beam bandı tampon olduğu için zamanlayıcı gerekmez.</p>
+    <div class="diagram">
+      <svg class="plain" viewBox="0 0 720 140" role="img" aria-label="TA bantları: 0-30 hot, 30-70 flank, 70-110 beam, 110-180 cold">
+        <text class="s-text" x="282" y="24" text-anchor="end">hot'a dönüş: TA ≤ 70°</text>
+        <line class="s-dash" x1="288.9" y1="30" x2="288.9" y2="94"/>
+        <text class="s-text" x="438" y="24">cold'a giriş: TA &gt; 110°</text>
+        <line class="s-dash" x1="431.1" y1="30" x2="431.1" y2="94"/>
+        <rect class="f-hot" x="40" y="50" width="106.7" height="34"/>
+        <rect class="f-flank" x="146.7" y="50" width="142.2" height="34"/>
+        <rect class="f-beam" x="288.9" y="50" width="142.2" height="34"/>
+        <rect class="f-cold" x="431.1" y="50" width="248.9" height="34"/>
+        <text class="on-color" x="93.3" y="71" text-anchor="middle">HOT</text>
+        <text class="on-color" x="217.8" y="71" text-anchor="middle">FLANK</text>
+        <text class="on-color" x="360" y="71" text-anchor="middle">BEAM · tampon</text>
+        <text class="on-color" x="555.6" y="71" text-anchor="middle">COLD</text>
+        <text class="s-muted" x="40" y="110" text-anchor="middle">0°</text>
+        <text class="s-muted" x="146.7" y="110" text-anchor="middle">30°</text>
+        <text class="s-muted" x="288.9" y="110" text-anchor="middle">70°</text>
+        <text class="s-muted" x="431.1" y="110" text-anchor="middle">110°</text>
+        <text class="s-muted" x="680" y="110" text-anchor="middle">180°</text>
+        <text class="s-muted" x="40" y="132">burnu bana dönük</text>
+        <text class="s-muted" x="680" y="132" text-anchor="end">sırtı dönük</text>
+      </svg>
+    </div>
+    <p class="caption">Titremeyi önleyen diğer iki mekanizma: geri dönüşsüz kararlar (destek bırakmak, ABORT, "vazgeçtim" bayrağı) ve yalnız acilleşen savunma.</p>
+  </section>
+
+  <section id="commit">
+    <h2>COMMIT ve RECOMMIT</h2>
+    <div class="cols">
+      <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  A{"Düşman cold?"} -->|evet| R{{"REASSESS"}}
+  A -->|hayır| B{"WEZ içi ve&lt;br/&gt;menzil ≤ TR?"}
+  B -->|evet| F["Ateş → SUPPORT"]
+  B -->|hayır| C{"TR çözümü yok,&lt;br/&gt;WEZ içi, ≤ DOR?"}
+  C -->|evet| F
+  C -->|hayır| W["Yaklaşmaya devam"]
+  classDef hub fill:#c77d12,stroke:#8a560c,color:#1b1206
+  classDef go fill:#2f6b52,stroke:#1f4a38,color:#eefaf4
+  class R hub
+  class F go
+</pre>
+      </div>
+      <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  A{"Dönüş bitti?"} -->|evet| CM["COMMIT"]
+  A -->|hayır| B{"Dönerken&lt;br/&gt;menzil ≤ DOR?"}
+  B -->|evet| OUT["OUT"]
+  B -->|hayır| T["Dönmeye devam&lt;br/&gt;art yakıcı"]
+</pre>
+      </div>
+    </div>
+    <p class="caption">İlk atış noktası şimdilik sabit: TR. Rmax ile TR arasında Pk'ye göre seçim ikinci aşamada.</p>
+  </section>
+
+  <section id="support">
+    <h2>SUPPORT</h2>
+    <p class="lead">Füzem havada, tehdit yok. Düşman hot ise crank, cold ise kovalama uçulur. Riskli olmayan görevde DOR'a gelince füze pitbull olmasa da destek bırakılır.</p>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  S0{"Füzem bitti?"} -->|evet| R{{"REASSESS"}}
+  S0 -->|hayır| S1{"İmha + Riskli, füzem var,&lt;br/&gt;havada 2'den az, menzil ≤ MSR?"}
+  S1 -->|evet| SH["2. atış&lt;br/&gt;en yeni füze desteklenir"]
+  S1 -->|hayır| S2{"En yeni füzem pitbull?"}
+  S2 -->|evet| S3{"Düşman cold?"}
+  S3 -->|evet| R
+  S3 -->|hayır| S4{"Riskli, havada tek füze,&lt;br/&gt;füzem var?"}
+  S4 -->|evet| CR["MSR'ye kadar crank"]
+  S4 -->|hayır| S5{"L&amp;L görevi?"}
+  S5 -->|evet| AB(["ABORT"])
+  S5 -->|hayır| OUT["OUT"]
+  S2 -->|hayır| S6{"Riskli değil ve&lt;br/&gt;menzil ≤ DOR?"}
+  S6 -->|evet| OUT
+  S6 -->|hayır| C["Desteğe devam"]
+  classDef hub fill:#c77d12,stroke:#8a560c,color:#1b1206
+  classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
+  classDef go fill:#2f6b52,stroke:#1f4a38,color:#eefaf4
+  class R hub
+  class AB stop
+  class SH go
+</pre>
+    </div>
+  </section>
+
+  <section id="trade">
+    <h2>TRADE</h2>
+    <p class="lead">İki füze havada ve benimki henüz pitbull değil. Soru şu: crank'i ne kadar tutabilirim?</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Süre</th><th>Anlamı</th><th>Kaynak</th></tr></thead>
+        <tbody>
+          <tr><td><code>t_pb_ben</code>, <code>t_pb_tehdit</code></td><td>Füzemin / tehdidin pitbull'a kalan süresi</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td><code>t_vur_ben</code>, <code>t_vur_tehdit</code></td><td>Füzemin / tehdidin yetişme süresi</td><td><span class="tag have">var</span> <code>catch_time_left_s</code></td></tr>
+          <tr><td><code>t_kritik</code></td><td><code>t_vur_tehdit − (out dönüşü + pay)</code>: crank'i en geç bırakma anı</td><td>türetilir</td></tr>
+          <tr><td><code>t_kritik_düşman</code></td><td><code>t_vur_ben − düşmanın savunma süresi</code></td><td><span class="tag have">var</span> <code>out_plan(enemy, own)</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Örnek zaman çizelgesi</h3>
+    <div class="diagram">
+      <svg class="plain" viewBox="0 0 720 230" role="img" aria-label="TRADE örneği: füzem 22 saniyede pitbull, kritik an 25 saniye, A kuralı tutuyor">
+        <line class="s-axis" x1="60" y1="190" x2="665" y2="190"/>
+        <g class="s-muted">
+          <text x="60" y="206" text-anchor="middle">0 s</text>
+          <text x="170" y="206" text-anchor="middle">10</text>
+          <text x="280" y="206" text-anchor="middle">20</text>
+          <text x="390" y="206" text-anchor="middle">30</text>
+          <text x="500" y="206" text-anchor="middle">40</text>
+          <text x="610" y="206" text-anchor="middle">50</text>
+        </g>
+        <text class="s-text" x="8" y="54">Füzem</text>
+        <line class="lane" x1="60" y1="50" x2="500" y2="50"/>
+        <circle class="dot-pb" cx="302" cy="50" r="6"/>
+        <text class="s-muted" x="302" y="36" text-anchor="middle">pitbull 22 s</text>
+        <circle class="dot-hit" cx="500" cy="50" r="6"/>
+        <text class="s-muted" x="500" y="36" text-anchor="middle">vurur 40 s</text>
+
+        <text class="s-text" x="8" y="104">Tehdit</text>
+        <line class="lane" x1="60" y1="100" x2="610" y2="100"/>
+        <circle class="dot-pb" cx="478" cy="100" r="6"/>
+        <text class="s-muted" x="478" y="86" text-anchor="middle">pitbull 38 s</text>
+        <circle class="dot-hit" cx="610" cy="100" r="6"/>
+        <text class="s-muted" x="610" y="86" text-anchor="middle">vurur 50 s</text>
+
+        <text class="s-text" x="8" y="154">Ben</text>
+        <rect class="f-crank" x="60" y="140" width="242" height="22"/>
+        <text class="on-color" x="181" y="155" text-anchor="middle">crank</text>
+        <rect class="f-def" x="302" y="140" width="308" height="22"/>
+        <text class="on-color" x="456" y="155" text-anchor="middle">DEFEND (out + drag)</text>
+        <line class="s-dash" x1="335" y1="120" x2="335" y2="190"/>
+        <text class="s-text" x="341" y="128">t_kritik = 50 − 25 = 25 s</text>
+      </svg>
+    </div>
+    <p class="caption">Örnek değerler. Savunma süresi 25 s (out dönüşü 15 s + 10 s pay). Füzem 22 s'de pitbull, kritik an 25 s: <b>A tutuyor</b>. Crank pitbull'a kadar sürer, sonra DEFEND. Füzem 22 s'den sonra kendi radarıyla gider.</p>
+
+    <h3>Karar</h3>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  T0{"Tehdit bitti ya da&lt;br/&gt;güdümsüz kaldı?"} -->|evet| SUP["SUPPORT"]
+  T0 -->|hayır| T1{"Füzem bitti&lt;br/&gt;ya da pitbull?"}
+  T1 -->|evet| DEF["DEFEND"]
+  T1 -->|hayır| A{"A: t_pb_ben ≤ t_kritik"}
+  A -->|evet| CR["Crank'e devam"]
+  A -->|hayır| B2{"B2: düşman benden önce&lt;br/&gt;kırmak zorunda?&lt;br/&gt;Dengeli, Riskli"}
+  B2 -->|evet| CR
+  B2 -->|hayır| B1{"B1: füzem tehdit pitbull&lt;br/&gt;olmadan vurur?&lt;br/&gt;yalnız Riskli"}
+  B1 -->|evet| CR
+  B1 -->|hayır| DROP["Desteği hemen bırak → DEFEND"]
+  classDef go fill:#2f6b52,stroke:#1f4a38,color:#eefaf4
+  classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
+  class CR go
+  class DROP stop
+</pre>
+    </div>
+    <pre class="formula">B2:  t_kritik_düşman &lt; t_pb_tehdit   ve   t_kritik_düşman + pay &lt; t_kritik
+B1:  t_vur_ben + pay &lt; t_pb_tehdit
+Tehdit zaten pitbull ise B2 ve B1 geçersiz: onu vursam da füzesi durmaz.</pre>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Risk</th><th>A</th><th>B2</th><th>B1</th></tr></thead>
+        <tbody>
+          <tr><td>Güvenli</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+          <tr><td>Dengeli</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
+          <tr><td>Riskli</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caption">Destek bir kez bırakılınca füzem güdümünü kaybeder; DEFEND'den TRADE'e dönüş yok. A, B2, B1 arasında gidip gelmek zararsız, hepsi aynı manevra.</p>
+  </section>
+
+  <section id="defend">
+    <h2>DEFEND</h2>
+    <p class="lead">Simde doppler yok; füze yalnız kinematik olarak yenilir: Mach 1'in altına düşünce ölür. Bu yüzden asıl soru "şimdi out + drag yapsam füze ölene kadar bana yetişir mi?" Cevap mesafe olarak ölçülür, böylece sınırda sıçramaz.</p>
+
+    <h3>Kaçış payı</h3>
+    <div class="diagram">
+      <svg class="plain" viewBox="0 0 720 200" role="img" aria-label="Kaçış payı örneği: 25 NM'de pay artı 8.1, 15 NM'de pay eksi 1.9">
+        <text class="s-text" x="10" y="68">Füze 25 NM'de</text>
+        <text class="s-muted" x="240" y="44" text-anchor="middle">dönüşte 7.1</text>
+        <text class="s-muted" x="410" y="44" text-anchor="middle">füze ölene kadar 9.9</text>
+        <text class="s-muted" x="589" y="44" text-anchor="middle">pay +8.1</text>
+        <rect class="f-turn" x="170" y="52" width="141.6" height="26"/>
+        <rect class="f-x" x="311.6" y="52" width="197" height="26"/>
+        <rect class="f-ok" x="508.6" y="52" width="161.4" height="26"/>
+        <line class="s-strong" x1="670" y1="46" x2="670" y2="86"/>
+        <text class="s-muted" x="665" y="100" text-anchor="end">menzil 25 NM</text>
+
+        <text class="s-text" x="10" y="148">Füze 15 NM'de</text>
+        <text class="s-muted" x="240" y="124" text-anchor="middle">dönüşte 7.1</text>
+        <text class="s-muted" x="390" y="124" text-anchor="middle">füze ölene kadar 9.9</text>
+        <rect class="f-turn" x="170" y="132" width="141.6" height="26"/>
+        <rect class="f-x" x="311.6" y="132" width="158.4" height="26"/>
+        <rect class="f-bad" x="470" y="132" width="38.6" height="26"/>
+        <line class="s-strong" x1="470" y1="126" x2="470" y2="166"/>
+        <text class="s-muted" x="465" y="180" text-anchor="end">menzil 15 NM</text>
+        <text class="s-muted" x="476" y="180">pay −1.9: kaçamam</text>
+      </svg>
+    </div>
+    <p class="caption">Örnek: füze 2000 kt, şimdiki kapanma 2270 kt, out dönüşü 15 s, dönüş sonrası kaçış hızım 600 kt, füzenin yavaşlaması −18 kt/s. Füzenin kapattığı yol menzili aşarsa pay eksidir.</p>
+    <pre class="formula">t_d  = out.turn.time_s      v_e = out.escape_kt
+v_m  = tehdidin ölçülen TAS'ı   a = profil yavaşlaması (−18 kt/s)
+dönüşte kapanan = (şimdiki kapanma + (v_m + a·t_d − v_e)) / 2 · t_d
+v_m2  = v_m + a·t_d
+v_son = max(v_e, Mach 1)          Mach 1 = tehdit TAS / tehdit Mach
+t_son = (v_m2 − v_son) / |a|
+x     = (v_m2 − v_e)·t_son + a·t_son² / 2
+pay   = füze–ben mesafesi − patlama yarıçapı − dönüşte kapanan − x</pre>
+
+    <h3>Savunma seçimi</h3>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  D0{"Tehdit bitti ya da&lt;br/&gt;güdümsüz kaldı?"} -->|evet| R{{"REASSESS"}}
+  D0 -->|hayır| D1{"pay &gt; BEAM_PAYI&lt;br/&gt;ve Güvenli değil?"}
+  D1 -->|evet| BE["Beam&lt;br/&gt;menzili koru"]
+  D1 -->|hayır| D2{"pay ≥ 0?"}
+  D2 -->|evet| DR["Drag (out)&lt;br/&gt;kaçarım"]
+  D2 -->|hayır| D3{"catch_time ≤&lt;br/&gt;notch dönüşü + pay?"}
+  D3 -->|hayır| DR2["Drag&lt;br/&gt;enerjisini tüket"]
+  D3 -->|evet| NO["Notch&lt;br/&gt;son çare"]
+  classDef hub fill:#c77d12,stroke:#8a560c,color:#1b1206
+  classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
+  class R hub
+  class NO stop
+</pre>
+    </div>
+    <ul class="notes">
+      <li>Savunma yalnız acilleşir: Beam → Drag → Notch. Geri dönülmez.</li>
+      <li>Yavaşlama sabit kabul edilir. Hız, irtifa ve füzenin manevrası hesapta yok; hata çoğunlukla güvenli tarafta (gerçek füze daha erken ölür).</li>
+      <li>Aynı formül COLD'da "recommit yapsam" sorusu için de kullanılır: bu kez ben füzeye dönmüş kabul edilirim.</li>
+    </ul>
+  </section>
+
+  <section id="reassess">
+    <h2>REASSESS</h2>
+    <p class="lead">Uçulmayan anlık düğüm. Savunma bitince, füzem bitince ya da düşman cold'a dönünce buraya gelinir; ilk tutan kural geçerli.</p>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  A{"Füzem kalmadı ve&lt;br/&gt;havada yok?"} -->|evet| AB(["ABORT"])
+  A -->|hayır| B{"Düşman cold?&lt;br/&gt;TA &gt; 110°"}
+  B -->|"evet, İmha"| CH["CHASE"]
+  B -->|"evet, Püskürt"| CO["COLD"]
+  B -->|hayır| C{"Ben cold muyum?"}
+  C -->|evet| CO
+  C -->|hayır| D{"Menzil ≤ DOR?"}
+  D -->|evet| OUT["OUT"]
+  D -->|hayır| RC["RECOMMIT"]
+  classDef stop fill:#9c3a33,stroke:#6e2722,color:#fff4f2
+  class AB stop
+</pre>
+    </div>
+  </section>
+
+  <section id="cold">
+    <h2>COLD</h2>
+    <p class="lead">Cold ops: MRR'ye açıl, recommit anını bekle. Gaz art yakıcı. Düşman beni kovalıyor ve menzil açılmıyorsa kaçmaya devam edilir; kararı tehdit kesintisi ya da MAR (ABORT) verir.</p>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  E{"Düşman ne yapıyor?"}
+  E -->|"hot, TA ≤ 70°"| H1{"Menzil ≥ MRR, füzem var,&lt;br/&gt;recommit payı ≥ 0?"}
+  H1 -->|evet| RC["RECOMMIT"]
+  H1 -->|hayır| RUN["Kaçışa devam&lt;br/&gt;out yönü, art yakıcı"]
+  E -->|"cold, TA &gt; 110°"| C1{"İmha ve&lt;br/&gt;vazgeçmedim?"}
+  C1 -->|evet| CH["CHASE"]
+  C1 -->|hayır| C2{"Menzil ≥ MRR?"}
+  C2 -->|evet| HOLD["hold: bekle"]
+  C2 -->|hayır| RUN
+  E -->|beam| RUN
+</pre>
+    </div>
+    <ul class="notes">
+      <li>Son füzem havadaysa recommit yok; füze bitince ABORT tetiklenir.</li>
+      <li>Pitbull olmuş füzemin sonucu beklenmez; MRR'de recommit yapılır.</li>
+    </ul>
+  </section>
+
+  <section id="chase">
+    <h2>CHASE</h2>
+    <p class="lead">İmha görevi, düşman kaçıyor. Pure pursuit, art yakıcı. Atış, kaçan hedefe füzemin yetişebildiği mesafede (R_cold'um).</p>
+    <div class="diagram">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
+flowchart TD
+  H{"Düşman hot'a döndü?"} -->|"evet, ≤ DOR"| OUT["OUT"]
+  H -->|"evet, DOR dışı"| CM["COMMIT"]
+  H -->|hayır| F{"Menzil ≤ R_cold'um&lt;br/&gt;ve füzem var?"}
+  F -->|evet| SH["Ateş → SUPPORT&lt;br/&gt;kovalama sürer"]
+  F -->|hayır| G{"Burun düşmanda&lt;br/&gt;ve kapanma ≤ 0?"}
+  G -->|evet| V["Vazgeç → COLD&lt;br/&gt;bayrak: vazgeçtim"]
+  G -->|hayır| K["Kovalamaya devam"]
+  classDef go fill:#2f6b52,stroke:#1f4a38,color:#eefaf4
+  class SH go
+</pre>
+    </div>
+    <ul class="notes">
+      <li>"Vazgeçtim" bayrağı varken COLD'da düşman cold görülürse CHASE'e dönülmez, <code>hold</code> uçulur. Düşman hot'a dönünce bayrak sıfırlanır.</li>
+      <li>Testte bakılacak: R_cold'um MAR'dan küçükse atış noktasına varmadan ABORT'a düşülür mü?</li>
+    </ul>
+  </section>
+
+  <section id="abort">
+    <h2>ABORT</h2>
+    <p class="lead">Kalıcı çıkış. Out dönüşü, ardından art yakıcıyla düşmandan uzaklaşma. Recommit yok; füze gelirse de savunma yapılmaz, out'a devam edilir.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tetik</th><th>Nereden</th></tr></thead>
+        <tbody>
+          <tr><td>Füzem kalmadı ve havada füzem yok</td><td>Her fazdan (kesinti) ve REASSESS</td></tr>
+          <tr><td>MAR ihlali</td><td>Her fazdan (kesinti)</td></tr>
+          <tr><td>Görev ayarı L&amp;L: destek bitince çık</td><td>SUPPORT sonu, OUT yerine</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="kod">
+    <h2>Gereken ek kod</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Alan</th><th>Ne</th><th>Durum</th></tr></thead>
+        <tbody>
+          <tr><td>Hesap</td><td><code>pitbull_time_left_s</code>: yol = menzil − pitbull mesafesi</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td>Hesap</td><td>Füze güdümlü mü: pitbull ya da atan uçağın ATA'sı gimbal içinde</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td>Hesap</td><td>Kaçış payı NM, "recommit yapsam" sürümüyle</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td>Hesap</td><td><code>picture.mrr_nm</code></td><td><span class="tag new">alan</span> <code>mrr_nm</code> var</td></tr>
+          <tr><td>Hesap</td><td><code>weapons.r_cold_nm = r_cold_nm(enemy, own)</code></td><td><span class="tag new">alan</span> fonksiyon var</td></tr>
+          <tr><td>Hesap</td><td>TR, MSR, <code>out_plan(enemy, own)</code></td><td><span class="tag have">var</span></td></tr>
+          <tr><td>Manevra</td><td><code>Pursuit</code>'e gaz parametresi; <code>chase</code> = pure + art yakıcı</td><td><span class="tag new">küçük</span></td></tr>
+          <tr><td>Manevra</td><td>Out dönüşten sonra art yakıcı (COLD ve ABORT aynı out'u sürdürür)</td><td><span class="tag new">küçük</span></td></tr>
+          <tr><td>Otopilot</td><td>Fazlar: Commit, Shot, Support, Trade, Defend, Out, Cold, Recommit, Chase, Abort</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td>Otopilot</td><td>Savunma tipi ve "vazgeçtim" bayrağı; <code>Mission</code>'a L&amp;L alanı</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td>Otopilot</td><td>Karar fonksiyonları: abort, threat_response, first_shot, support, trade, defense, reassess, cold, chase</td><td><span class="tag new">yeni</span></td></tr>
+          <tr><td>Temizlik</td><td>Yorumdaki eski <code>otopilot.cpp</code>, <code>otopilot_copy.cpp</code>, eski K1–K5</td><td>silinecek</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Ertelenenler</h3>
+    <ul class="notes">
+      <li>Pk ile ilk atış noktası seçimi (Rmax–TR arası)</li>
+      <li>Düşmanın füzeme göre aspect'i (2. atış kararı)</li>
+      <li>BVRGym'e destek kuralı</li>
+      <li>Füze yavaşlamasının irtifa ve hıza bağlı uyumu</li>
+      <li>Titreme görülürse minimum faz süresi (sim zamanı otopilota)</li>
+    </ul>
+  </section>
+</div>
+
+<!-- Şemalar Mermaid ile çizilir: internet gerekir (cdn.jsdelivr.net). -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true });</script>
+</body>
+</html>

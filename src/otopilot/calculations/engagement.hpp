@@ -25,6 +25,8 @@ namespace engagement
     std::optional<double> f_pole_nm(const Aircraft& own, const Aircraft& enemy);   // NM, füze hedefe vardığında iki uçak arası; erişemezse yok
     std::optional<double> tr_nm(const Aircraft& own, const Aircraft& enemy);       // NM, en kısa atış menzili: A-pole DOR dışında; picture.dor_nm gerekir
     bool in_tr(const Aircraft& own, const Aircraft& enemy);                     // menzil ≤ TR; TR yoksa false
+    std::optional<double> msr_nm(const Aircraft& own, const Aircraft& enemy);      // NM, MSR; çözüm yoksa yok
+    bool in_msr(const Aircraft& own, const Aircraft& enemy);                    // menzil ≤ MSR; MSR yoksa false
 
     // --- Kaçış: düşmanın füzesi ---
     OutPlan out_plan(const Aircraft& own, const Aircraft& enemy);                    // şimdi out yapsam: dönüş, kaçış hızı, dönüşte yaklaşma
