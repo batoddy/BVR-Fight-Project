@@ -30,10 +30,10 @@ Eşikler `decisions.cpp` başında: `BEAM_MARGIN_NM` 5, `DEFENSE_MARGIN_S` 10, `
 | TRADE | İki füze havada, benimki pitbull değil | `crank` |
 | DEFEND | Tehdit var, destek yok | `beam` → `drag` → `notch` (yalnız acilleşir) |
 | OUT | Düşmanı arkaya al | `out` |
-| COLD | Cold ops: MRR'ye açıl, recommit anını bekle | `out` yönü, art yakıcı; bekleme: `hold` |
+| COLD | Cold ops: MRR'ye açıl, recommit anını bekle | `out` yönü, askeri güç (MRT); bekleme: `hold` |
 | RECOMMIT | Hot'a dön | `recommit` |
-| CHASE | İmha, düşman kaçıyor | pure pursuit, art yakıcı |
-| ABORT | Kalıcı çıkış, recommit yok | `out`, Done sonrası art yakıcı |
+| CHASE | İmha, düşman kaçıyor | pure pursuit, askeri güç (MRT) |
+| ABORT | Kalıcı çıkış, recommit yok | `out`, Done sonrası askeri güç (MRT) |
 | REASSESS | Anlık düğüm | — |
 
 **Aspect bantları:** düşman cold = TA > 110°, hot = TA ≤ 70°. Aradaki beam bandı histerezis görevi görür.
@@ -66,7 +66,7 @@ ABORT'ta tehdit gelirse savunma yapılmaz, Out'a devam edilir.
 
 ### COMMIT
 1. Düşman cold → REASSESS
-2. WEZ içi ve menzil ≤ TR → ateş (Pk ikinci aşamaya kadar sabit nokta)
+2. WEZ içi ve menzil ≤ TR + erken atış payı → ateş (pay `Mission::early_shot_nm`, varsayılan 0; ör. Güvenli görevde 3 NM). Pay TR'yi Rmax'ın dışına taşırsa WEZ girişinde atılır
 3. TR çözümü yok, WEZ içi ve menzil ≤ DOR → ateş
 
 ### SUPPORT
@@ -133,7 +133,7 @@ Sabit ivme varsayımı: hız/irtifa/manevra etkisini görmez, hata çoğunlukla 
 - Dönüş bitti → COLD
 
 ### COLD
-- Gaz art yakıcı.
+- Gaz askeri güç (MRT): out dönüşü bitti.
 - Düşman hot, menzil ≥ MRR, füzem var ve recommit kaçış payı ≥ 0 → RECOMMIT
   (recommit kaçış payı: havada bana gelen füze varsa aynı formül, ben füzeye dönmüş kabul edilir)
 - Düşman cold: İmha ve vazgeçmediysem → CHASE; Püskürt ya da vazgeçtiysem → menzil ≥ MRR ise `hold`, değilse kaçışa devam
@@ -163,9 +163,10 @@ Sabit ivme varsayımı: hız/irtifa/manevra etkisini görmez, hata çoğunlukla 
 | Recommit ve notch dönüş süresi | `engagement::recommit_turn_s`, `notch_turn_s` → `picture.notch_turn_s` |
 | Düşmanın savunma süresi | `picture.enemy_out_turn_s` = `out_plan(enemy, own).turn.time_s` |
 | MRR, R_cold'um | `picture.mrr_nm`, `weapons.r_cold_nm` |
-| Kovalama | `Maneuvers::pursuit`, mod `CHASE_MODE` (otopilot.cpp, şimdilik Pure), art yakıcı |
-| Out | dönüşten sonra da art yakıcı (COLD ve ABORT aynı out'u sürdürür) |
+| Kovalama | `Maneuvers::pursuit`, mod `CHASE_MODE` (otopilot.cpp, şimdilik Pure), askeri güç (MRT) |
+| Out | dönüşte art yakıcı, dönüş bitince askeri güç (COLD ve ABORT aynı out'u sürdürür); Drag askeri güç |
 | L&L | `Mission::leave_after_support` |
+| Erken atış payı | `Mission::early_shot_nm` (sim.hpp'de uçak başına) |
 | Zararsız tehdit | `condition::threat_harmless` (DEFEND çıkışı ve tehdit kesintisi) |
 | Koşullar | `condition::enemy_cold`, `enemy_hot`, `beyond_mrr`, `enemy_in_my_msr`, `enemy_in_my_r_cold`, `has_live_missile`, `out_of_missiles`, `has_guided_threat` |
 

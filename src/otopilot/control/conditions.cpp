@@ -52,6 +52,11 @@ bool condition::enemy_in_my_tr(const Aircraft& own)
     return own.weapons.enemy_in_tr;
 }
 
+bool condition::enemy_in_my_tr_plus(const Aircraft& own, double extra_nm)
+{
+    return own.weapons.tr_nm && own.picture.range_3d_nm <= *own.weapons.tr_nm + extra_nm;
+}
+
 bool condition::enemy_in_my_msr(const Aircraft& own)
 {
     return own.weapons.enemy_in_msr;

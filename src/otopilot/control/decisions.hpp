@@ -27,7 +27,7 @@ namespace decide
 {
     Decision<AbortChoice> abort(const Aircraft& own);                                          // kesinti: füzem bitti ya da MAR ihlali
     Decision<ThreatResponse> threat_response(const Aircraft& own, const Mission& mission);     // kesinti: bana gelen güdümlü füze
-    Decision<CommitChoice> commit(const Aircraft& own);                                        // COMMIT: ilk atış noktası
+    Decision<CommitChoice> commit(const Aircraft& own, const Mission& mission);                // COMMIT: ilk atış noktası, TR + mission.early_shot_nm
     Decision<SupportChoice> support(const Aircraft& own, const Mission& mission);              // SUPPORT: 2. atış ve destek sonu
     Decision<TradeChoice> trade(const Aircraft& own, const Mission& mission);                  // TRADE: crank'i ne kadar tutarım
     Decision<Defense> defense(const Aircraft& own, const Mission& mission);                    // DEFEND: kaçış payına göre savunma tipi

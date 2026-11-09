@@ -80,7 +80,7 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
         break;
 
     case OtopilotState::FirstEscape:
-        maneuvers_.fly(own, maneuvers_.out);   // gazı Out kendisi yazar (tam art yakıcı)
+        maneuvers_.fly(own, maneuvers_.out);   // gazı Out kendisi yazar (dönüşte art yakıcı, sonra MRT)
         if (maneuvers_.out.status(own) == ManeuverStatus::Done)
         {
             go_to(OtopilotState::Commit);      // Commit kendi gazını (DEFAULT) yazar
@@ -110,7 +110,7 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 | Manevra | Faz | Gaz | g sınırı | Durumu |
 |---|---|---|---|---|
 | `hold` | Hold | DEFAULT | 4 | girişte yön/irtifayı kilitler; ±2° ve ±100 ft içinde `Satisfied`, sapınca düzeltmeye devam eder |
-| `out` | Out | MAX_THRUST, bitince DEFAULT | `out_g` | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
+| `out` | Out | dönüşte MAX_THRUST, Done olunca MRT (yeniden girişe kadar) | `out_g` | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
 | `commit` | Commit | DEFAULT | 4 | burun hedefe ±2° içinde bakıyorsa `Satisfied` |
 | `recommit` | Recommit | MAX_THRUST | `out_g` | `status()` → Done: \|ATA\| atış açısına (30° + 1°) indi; ilk varıştan sonra hedef 30°'de kalır |
 | `crank` | Crank | IDLE | 3 | sürekli; seçilen tarafta hedef ATA'ya ±2° yakın ve radar içindeyse `Satisfied`. Taraf girişte seçilir; `in_radar_sight(own)` ve `side()` ayrıca sorgulanabilir |
@@ -120,7 +120,7 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 | `notch` | Notch | DEFAULT | 4 | tehdit varken `Running`, kaçılacak tehdit kalmazsa `Done` |
 | `offset` | Offset | DEFAULT | 4 | `set(offset_deg, side)`; seçilen tarafta hedef ATA'ya ±2° içinde `Satisfied` |
 | `fly_heading` | FlyHeading | DEFAULT | 4 | `set(heading_deg)`; hedef yöne ±2° içinde `Satisfied` |
-| `pursuit` | ilgili Pursuit fazı | `set(mode, throttle)`; varsayılan DEFAULT | 4 | `set(PursuitMode::Pure/Lag/Lead)`; modun güncel hedef yönüne ±2° içinde `Satisfied`. Kovalama (CHASE) Pure + art yakıcı kullanır |
+| `pursuit` | ilgili Pursuit fazı | `set(mode, throttle)`; varsayılan DEFAULT | 4 | `set(PursuitMode::Pure/Lag/Lead)`; modun güncel hedef yönüne ±2° içinde `Satisfied`. Kovalama (CHASE) Pure + MRT kullanır |
 | `collision` | Collision | DEFAULT | 4 | yatay menzil sıfır değil, kapanma pozitif ve LOS hızı ±0,1°/s içindeyse `Satisfied` |
 
 g sınırları profildeki `max_g`'yi aşamaz (`set_g_limit(g, own.profile.max_g)`).

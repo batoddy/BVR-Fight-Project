@@ -19,6 +19,7 @@ namespace condition
     bool in_dor(const Aircraft& own);              // menzil DOR'umun içinde
     bool enemy_in_my_wez(const Aircraft& own);     // düşman benim WEZ'imde
     bool enemy_in_my_tr(const Aircraft& own);      // menzil ≤ TR (weapons.enemy_in_tr)
+    bool enemy_in_my_tr_plus(const Aircraft& own, double extra_nm);   // menzil ≤ TR + extra_nm; TR yoksa false
     bool enemy_in_my_msr(const Aircraft& own);     // menzil ≤ MSR (weapons.enemy_in_msr)
     bool enemy_in_my_r_cold(const Aircraft& own);  // menzil ≤ R_cold'um: kaçan düşmana füzem yetişir
     bool beyond_mrr(const Aircraft& own);          // menzil ≥ MRR: recommit yapıp atarsam sonraki out'ta kaçabilirim

@@ -45,7 +45,7 @@ void Otopilot::step(Aircraft& own)
 void Otopilot::step_commit(Aircraft& own)
 {
     maneuvers_.fly(own, maneuvers_.commit);
-    const Decision<CommitChoice> decision = decide::commit(own);
+    const Decision<CommitChoice> decision = decide::commit(own, mission_);
     switch (decision.choice)
     {
     case CommitChoice::Continue:
@@ -338,7 +338,7 @@ Maneuver& Otopilot::support_maneuver(const Aircraft& own)
 
 Maneuver& Otopilot::chase_maneuver()
 {
-    maneuvers_.pursuit.set(CHASE_MODE, throttle::MAX_THRUST);
+    maneuvers_.pursuit.set(CHASE_MODE, throttle::MRT);
     return maneuvers_.pursuit;
 }
 

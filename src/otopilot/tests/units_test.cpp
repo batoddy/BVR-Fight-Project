@@ -220,6 +220,7 @@ namespace
 
         own.weapons.enemy_in_wez = true;
         own.weapons.enemy_in_tr = true;
+        own.weapons.tr_nm = own.picture.range_3d_nm;   // World'deki gibi: bayrak ve değer birlikte
         pilot.step(own);
         require(own.decision.rfind("COMMIT: ateş", 0) == 0 && own.weapons.missiles_left() == 4, "fire decided at TR, order next step");
         pilot.step(own);
@@ -243,6 +244,7 @@ namespace
         own.picture.ata_deg = 180;
         pilot.step(own);
         require(own.decision.rfind("OUT → COLD", 0) == 0, "out done goes cold");
+        require(own.command.throttle() == throttle::MRT, "out after turn on military power");
         pilot.step(own);
         require(own.decision.rfind("COLD → RECOMMIT", 0) == 0, "hot enemy beyond MRR: recommit");
         own.picture.ata_deg = 0;
@@ -330,6 +332,26 @@ namespace
     }
 
     // Pitbull süresi, destek kuralı ve kaçış payı: formül adım adım yeniden hesaplanır.
+    // Erken atış payı: TR'nin dışında, TR + pay içinde ateş; pay 0 ise TR beklenir.
+    void commit_early_shot()
+    {
+        Aircraft own;
+        own.profile = aircraft_profile("F16");
+        Missile missile;
+        missile.profile = AIM120C;
+        own.weapons.missiles.push_back(missile);
+        own.weapons.enemy_in_wez = true;
+        own.weapons.tr_nm = 20;
+        own.picture.range_3d_nm = 22.5;
+
+        const Mission safe_early{MissionGoal::Destroy, RiskLevel::Safe, false, 3.0};
+        const Mission on_tr{MissionGoal::Destroy, RiskLevel::Safe};
+        require(decide::commit(own, safe_early).choice == CommitChoice::Fire, "early shot inside TR + margin");
+        require(decide::commit(own, on_tr).choice == CommitChoice::Continue, "no margin waits for TR");
+        own.picture.range_3d_nm = 23.5;
+        require(decide::commit(own, safe_early).choice == CommitChoice::Continue, "outside TR + margin waits");
+    }
+
     void missile_decision_metrics()
     {
         Missile missile;
@@ -637,6 +659,7 @@ int main()
         maneuver_lifecycle();
         otopilot_flow();
         missile_decision_metrics();
+        commit_early_shot();
         engagement_values();
         decision_range();
         world_threat_selection();

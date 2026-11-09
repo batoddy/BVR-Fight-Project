@@ -24,10 +24,10 @@ export function velocityVector(entity){
 export const ENEMY_ZONES=[
   {key:'sternWez',field:'stern_wez_m',label:'Stern WEZ',style:'line',dark:'#f9a24b',light:'#b45309'},
   {key:'nez',field:'nez_m',label:'NEZ',style:'hatch',dark:'#f05252',light:'#b91c1c'},
-  {key:'mar',field:'mar_m',label:'MAR',style:'dash',dark:'#facc15',light:'#8a6d00'},
+  {key:'mar',field:'mar_m',label:'MAR',style:'line',dark:'#facc15',light:'#8a6d00'},
   {key:'dr',field:'dr_m',label:'DR',style:'dash',dark:'#a78bfa',light:'#7c3aed'},
   {key:'dor',field:'dor_m',label:'DOR',style:'line',dark:'#22d3ee',light:'#0e7490'},
-  {key:'tr',field:'tr_m',label:'TR',style:'line',dark:'#f472b6',light:'#be185d'},
+  {key:'tr',field:'tr_m',label:'TR',style:'dash',dark:'#f472b6',light:'#be185d'},
   {key:'msr',field:'msr_m',label:'MSR',style:'dash',dark:'#60a5fa',light:'#1d4ed8'},
 ];
 // Radar açısı rengi takıma göre: mavi takım yeşil, kırmızı takım mor (uçak renkleriyle karışmasın).

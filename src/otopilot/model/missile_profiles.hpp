@@ -66,6 +66,6 @@ struct MissileProfile
 //
 // Değerler ÖRNEK. BVRGym hepsini AIM-120 fiziğiyle uçurduğu için R_cold, Rmax uyumu ve uçuş modeli hepsinde aynı.
 //                                     name        type               min_nm  speed_kt  pitbull_nm  blast_ft  r_cold          r_max          accel_kt_s start_kt
-inline const MissileProfile AIM7M   = {"AIM-7M",   MissileType::Fox1, 1,      1750,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};
+inline const MissileProfile AIM7M   = {"AIM-7M",   MissileType::Fox1, 1,      1750,     9,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};
 inline const MissileProfile AIM9X   = {"AIM-9X",   MissileType::Fox2, 0.2,    1550,     0.0,        10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};
 inline const MissileProfile AIM120C = {"AIM-120C", MissileType::Fox3, 1,      1940,     10,         10,       AIM120C_R_COLD, AIM120C_R_MAX, -18,       2700};

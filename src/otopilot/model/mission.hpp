@@ -20,6 +20,7 @@ struct Mission
     MissionGoal goal = MissionGoal::Destroy;
     RiskLevel risk = RiskLevel::Balanced;
     bool leave_after_support = false;   // L&L: destek bitince out yerine ABORT, savaşa dönülmez
+    double early_shot_nm = 0.0;         // NM, COMMIT'te TR'nin bu kadar dışından at (ör. Güvenli görevde 3); 0: TR'de
 };
 
 inline const char* goal_name(MissionGoal goal)   // karar kaydı için

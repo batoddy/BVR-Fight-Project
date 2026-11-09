@@ -34,7 +34,7 @@ private:
     void update_defense(Aircraft& own);                // savunma yalnız acilleşir: Beam → Drag → Notch
     Maneuver& defense_maneuver();                      // defense_'e göre Beam / Drag / Notch
     Maneuver& support_maneuver(const Aircraft& own);   // düşman cold ise kovalama, değilse crank
-    Maneuver& chase_maneuver();                        // kovalama: CHASE_MODE takibi, art yakıcı
+    Maneuver& chase_maneuver();                        // kovalama: CHASE_MODE takibi, askeri güç
     void go_to(OtopilotState next);                    // yalnız durumu değiştirir
     void record(Aircraft& own, const char* text, const char* reason) const;   // own.decision = "text — reason (görev)"
 

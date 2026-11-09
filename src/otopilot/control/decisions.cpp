@@ -64,10 +64,11 @@ Decision<ThreatResponse> decide::threat_response(const Aircraft& own, const Miss
 }
 
 // ========================================================================================================
-// COMMIT  —  ilk atış noktası: şimdilik sabit, TR (Pk ikinci aşamada)
+// COMMIT  —  ilk atış noktası: TR + görevin erken atış payı (Pk ikinci aşamada)
 // ========================================================================================================
 
-Decision<CommitChoice> decide::commit(const Aircraft& own)
+// TR + early_shot_nm, Rmax'tan büyükse WEZ girişinde atılır (WEZ şartı önce bakılır).
+Decision<CommitChoice> decide::commit(const Aircraft& own, const Mission& mission)
 {
     if (condition::enemy_cold(own))
     {
@@ -77,8 +78,12 @@ Decision<CommitChoice> decide::commit(const Aircraft& own)
     {
         return {CommitChoice::Continue, "WEZ dışı"};
     }
-    if (condition::enemy_in_my_tr(own))
+    if (condition::enemy_in_my_tr_plus(own, mission.early_shot_nm))
     {
+        if (mission.early_shot_nm > 0.0)
+        {
+            return {CommitChoice::Fire, "TR + erken atış payına girildi"};
+        }
         return {CommitChoice::Fire, "TR'ye girildi"};
     }
     if (!own.weapons.tr_nm && condition::in_dor(own))

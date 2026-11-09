@@ -130,12 +130,12 @@
     <a href="#cold">COLD</a>
     <a href="#chase">CHASE</a>
     <a href="#abort">ABORT</a>
-    <a href="#kod">Ek kod</a>
+    <a href="#kod">Kodda</a>
   </nav>
 
   <section id="genel">
     <h2>Genel akış</h2>
-    <p class="lead">Akış döngülü olduğu için ağaç değil, durum makinesi. Bir taahhüt (savunma, destek, kovalama) bitince REASSESS'e dönülür; aynı alt kararlar her dalda tekrar yazılmaz. Kesik çizgi kesintidir. ABORT ve tehdit kesintileri her fazdan çalışır, bir sonraki şemada.</p>
+    <p class="lead">Akış döngülü olduğu için karar ağacı yerine durum makinesi kullanılır. Savunma, destek ya da kovalama gibi bir taahhüt bittiğinde REASSESS düğümüne dönülür; böylece aynı alt kararlar her dalda yeniden yazılmaz. Kesik çizgiler kesintileri gösterir. ABORT ve tehdit kesintileri her fazda çalışır; ayrıntıları bir sonraki şemada.</p>
     <div class="diagram">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
@@ -145,9 +145,9 @@ flowchart TB
   TRADE["TRADE&lt;br/&gt;crank"]
   DEFEND["DEFEND&lt;br/&gt;beam → drag → notch"]
   OUT["OUT&lt;br/&gt;out"]
-  COLD["COLD&lt;br/&gt;out yönü art yakıcı / hold"]
+  COLD["COLD&lt;br/&gt;out yönü / hold"]
   RECOMMIT["RECOMMIT&lt;br/&gt;recommit"]
-  CHASE["CHASE&lt;br/&gt;pure pursuit, art yakıcı"]
+  CHASE["CHASE&lt;br/&gt;pure pursuit"]
   R{{"REASSESS"}}
   ABORT(["ABORT&lt;br/&gt;kalıcı"])
 
@@ -191,19 +191,20 @@ flowchart TB
           <tr><td>TRADE</td><td>İki füze havada, benimki pitbull değil</td><td><code>crank</code></td></tr>
           <tr><td>DEFEND</td><td>Tehdit var, destek yok</td><td><code>beam</code> → <code>drag</code> → <code>notch</code>, yalnız acilleşir</td></tr>
           <tr><td>OUT</td><td>Düşmanı arkaya al</td><td><code>out</code></td></tr>
-          <tr><td>COLD</td><td>MRR'ye açıl, recommit anını bekle</td><td>out yönü, art yakıcı · bekleme: <code>hold</code></td></tr>
+          <tr><td>COLD</td><td>MRR'ye açıl, recommit anını bekle</td><td>out yönü · bekleme: <code>hold</code></td></tr>
           <tr><td>RECOMMIT</td><td>Hot'a dön</td><td><code>recommit</code></td></tr>
-          <tr><td>CHASE</td><td>İmha, düşman kaçıyor</td><td>pure pursuit, art yakıcı</td></tr>
-          <tr><td>ABORT</td><td>Kalıcı çıkış</td><td><code>out</code>, dönüşten sonra art yakıcı</td></tr>
+          <tr><td>CHASE</td><td>İmha, düşman kaçıyor</td><td>pure pursuit</td></tr>
+          <tr><td>ABORT</td><td>Kalıcı çıkış</td><td><code>out</code></td></tr>
           <tr><td>REASSESS</td><td>Anlık düğüm, uçulmaz</td><td>—</td></tr>
         </tbody>
       </table>
     </div>
+    <p class="caption">Gaz: art yakıcı yalnızca out dönüşünde ve recommit dönüşünde açılır. Out dönüşü bittikten sonra (COLD ve ABORT da bu out'u sürdürür), drag'de ve kovalamada askeri güç (MRT) kullanılır.</p>
   </section>
 
   <section id="step">
     <h2>Her step</h2>
-    <p class="lead">Önce kesintiler, sonra fazın kendi kuralı, en son manevra. Atış faz değil, bir eylemdir: emir kabul edilene kadar tekrar denenir, sonra SUPPORT.</p>
+    <p class="lead">Her step'te önce kesintiler kontrol edilir, sonra bulunulan fazın kuralı çalışır, en son o fazın manevrası uçulur. Atış ayrı bir faz değil, bir eylemdir: atış emri kabul edilene kadar her step yeniden denenir, ardından SUPPORT'a geçilir.</p>
     <div class="diagram">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
@@ -235,12 +236,12 @@ flowchart TD
         </tbody>
       </table>
     </div>
-    <p class="caption">Destek kuralı (varsayım): pitbull'dan önce atan uçak desteği bırakırsa ya da vurulursa füze güdümü kaybeder. İki taraf için geçerli. BVRGym'de henüz yok, ayrıca eklenecek.</p>
+    <p class="caption">Destek kuralı (varsayım): Füze pitbull olmadan önce, atan uçak desteği bırakırsa (hedef radar açısının dışına çıkarsa) ya da vurulursa füze güdümünü kaybeder. Kural iki taraf için de geçerlidir. BVRGym'de henüz yok; ayrıca eklenecek.</p>
   </section>
 
   <section id="aspect">
     <h2>Aspect bantları</h2>
-    <p class="lead">Düşmanın burnunun bana göre açısı (TA). Cold'a geçiş ve hot'a dönüş farklı eşiklerde; aradaki beam bandı tampon olduğu için zamanlayıcı gerekmez.</p>
+    <p class="lead">TA, düşmanın burnunun bana göre açısıdır. Düşmanın cold sayılması ve yeniden hot sayılması farklı eşiklerde olur. Aradaki beam bandı tampon görevi gördüğü için karar sınırda gidip gelmez; ayrıca bir zamanlayıcıya gerek kalmaz.</p>
     <div class="diagram">
       <svg class="plain" viewBox="0 0 720 140" role="img" aria-label="TA bantları: 0-30 hot, 30-70 flank, 70-110 beam, 110-180 cold">
         <text class="s-text" x="282" y="24" text-anchor="end">hot'a dönüş: TA ≤ 70°</text>
@@ -264,7 +265,7 @@ flowchart TD
         <text class="s-muted" x="680" y="132" text-anchor="end">sırtı dönük</text>
       </svg>
     </div>
-    <p class="caption">Titremeyi önleyen diğer iki mekanizma: geri dönüşsüz kararlar (destek bırakmak, ABORT, "vazgeçtim" bayrağı) ve yalnız acilleşen savunma.</p>
+    <p class="caption">Titremeyi önleyen iki mekanizma daha var: bazı kararlar geri alınmaz (desteği bırakmak, ABORT, "vazgeçtim" bayrağı) ve savunma yalnızca daha acil bir tipe geçebilir.</p>
   </section>
 
   <section id="commit">
@@ -275,7 +276,7 @@ flowchart TD
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
 flowchart TD
   A{"Düşman cold?"} -->|evet| R{{"REASSESS"}}
-  A -->|hayır| B{"WEZ içi ve&lt;br/&gt;menzil ≤ TR?"}
+  A -->|hayır| B{"WEZ içi ve menzil ≤&lt;br/&gt;TR + erken atış payı?"}
   B -->|evet| F["Ateş → SUPPORT"]
   B -->|hayır| C{"TR çözümü yok,&lt;br/&gt;WEZ içi, ≤ DOR?"}
   C -->|evet| F
@@ -297,12 +298,13 @@ flowchart TD
 </pre>
       </div>
     </div>
-    <p class="caption">İlk atış noktası şimdilik sabit: TR. Rmax ile TR arasında Pk'ye göre seçim ikinci aşamada.</p>
+    <p class="caption">İlk atış TR'de yapılır. Görev ayarındaki erken atış payı TR'ye eklenir: pay 3 NM ise füze TR + 3 NM'de atılır (varsayılan 0). Bu mesafe Rmax'ı aşarsa füze WEZ'e girildiği anda atılır. TR hesaplanamıyorsa yedek atış noktası DOR'dur. Pk'ye göre atış noktası seçimi ikinci aşamada.</p>
+    <p class="caption">Recommit dönüşü art yakıcıyla yapılır. Dönerken DOR'a girilirse recommit bırakılır ve OUT'a geçilir.</p>
   </section>
 
   <section id="support">
     <h2>SUPPORT</h2>
-    <p class="lead">Füzem havada, tehdit yok. Düşman hot ise crank, cold ise kovalama uçulur. Riskli olmayan görevde DOR'a gelince füze pitbull olmasa da destek bırakılır.</p>
+    <p class="lead">Füzem havada ve bana gelen tehdit yok. Düşman hot ise crank, cold ise kovalama uçulur.</p>
     <div class="diagram">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
@@ -329,22 +331,36 @@ flowchart TD
   class SH go
 </pre>
     </div>
+    <ul class="notes">
+      <li>Riskli görev dışında, menzil DOR'a inince füze pitbull olmasa da destek bırakılır; füze güdümünü kaybetse de güvenlik önceliklidir.</li>
+      <li>İmha + Riskli görevde MSR'de ikinci füze atılır; bundan sonra en yeni füze desteklenir.</li>
+      <li>L&amp;L görevinde destek bitince OUT yerine ABORT seçilir: savaşa geri dönülmez.</li>
+    </ul>
   </section>
 
   <section id="trade">
     <h2>TRADE</h2>
-    <p class="lead">İki füze havada ve benimki henüz pitbull değil. Soru şu: crank'i ne kadar tutabilirim?</p>
+    <p class="lead">İki füze havada ve benimki henüz pitbull olmadı. Asıl soru, crank'i ne kadar sürdürebileceğim: desteği erken bırakırsam füzem güdümünü kaybeder, geç bırakırsam tehdit bana yetişir.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Süre</th><th>Anlamı</th><th>Kaynak</th></tr></thead>
         <tbody>
-          <tr><td><code>t_pb_ben</code>, <code>t_pb_tehdit</code></td><td>Füzemin / tehdidin pitbull'a kalan süresi</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td><code>t_vur_ben</code>, <code>t_vur_tehdit</code></td><td>Füzemin / tehdidin yetişme süresi</td><td><span class="tag have">var</span> <code>catch_time_left_s</code></td></tr>
-          <tr><td><code>t_kritik</code></td><td><code>t_vur_tehdit − (out dönüşü + pay)</code>: crank'i en geç bırakma anı</td><td>türetilir</td></tr>
-          <tr><td><code>t_kritik_düşman</code></td><td><code>t_vur_ben − düşmanın savunma süresi</code></td><td><span class="tag have">var</span> <code>out_plan(enemy, own)</code></td></tr>
+          <tr><td><code>t_pb_ben</code>, <code>t_pb_tehdit</code></td><td>Füzemin / tehdidin pitbull'a kalan süresi</td><td><code>pitbull_time_left_s</code></td></tr>
+          <tr><td><code>t_vur_ben</code>, <code>t_vur_tehdit</code></td><td>Füzemin / tehdidin hedefe yetişme süresi</td><td><code>catch_time_left_s</code></td></tr>
+          <tr><td><code>t_kritik</code></td><td><code>t_vur_tehdit − (out dönüşü + 10 s)</code>: crank'i en geç bırakmam gereken an</td><td>karar içinde hesaplanır</td></tr>
+          <tr><td><code>t_kritik_düşman</code></td><td><code>t_vur_ben − (düşmanın out dönüşü + 10 s)</code>: düşmanın en geç kırması gereken an</td><td><code>picture.enemy_out_turn_s</code></td></tr>
         </tbody>
       </table>
     </div>
+
+    <h3>Kurallar</h3>
+    <p>Kritik an, tehdidin bana yetişmesinden önce savunmaya geçmem gereken son andır: tehdidin vuruş süresinden out dönüşü ve 10 s pay çıkarılır. Crank'i bu andan sonraya taşıyabilmem için aşağıdaki kurallardan biri tutmalıdır.</p>
+    <ul class="notes">
+      <li><b>A, füzem önce pitbull olur:</b> Füzem kritik andan önce pitbull olacaksa crank'e devam edilir. Pitbull olan füze kendi radarıyla gider ve artık desteğe ihtiyaç duymaz; savunmaya zamanında geçilebilir. Her risk seviyesinde geçerlidir.</li>
+      <li><b>B2, düşman önce kırmak zorunda:</b> Füzem düşmana yaklaştıkça düşman da savunmaya geçmek zorunda kalır. Bu an hem onun füzesi pitbull olmadan önce hem de benim kritik anımdan en az 5 s önce geliyorsa crank'e devam edilir. Düşman kırdığında desteği bırakmış olur ve onun füzesi güdümünü kaybeder. Dengeli ve Riskli görevde geçerlidir.</li>
+      <li><b>B1, füzem önce vurur:</b> Füzem, tehdit pitbull olmadan en az 5 s önce düşmanı vuracaksa crank'e devam edilir. Vurulan uçak füzesini destekleyemez; tehdit güdümünü kaybeder. Yalnızca Riskli görevde geçerlidir.</li>
+    </ul>
+    <p class="caption">Tehdit zaten pitbull olmuşsa B2 ve B1 geçersizdir: düşmanı kırdırsam ya da vursam bile onun füzesi kendi radarıyla gelmeye devam eder.</p>
 
     <h3>Örnek zaman çizelgesi</h3>
     <div class="diagram">
@@ -381,7 +397,7 @@ flowchart TD
         <text class="s-text" x="341" y="128">t_kritik = 50 − 25 = 25 s</text>
       </svg>
     </div>
-    <p class="caption">Örnek değerler. Savunma süresi 25 s (out dönüşü 15 s + 10 s pay). Füzem 22 s'de pitbull, kritik an 25 s: <b>A tutuyor</b>. Crank pitbull'a kadar sürer, sonra DEFEND. Füzem 22 s'den sonra kendi radarıyla gider.</p>
+    <p class="caption">Örnek değerler: tehdit 50 s'de vuruyor, savunma için 25 s gerekiyor (15 s out dönüşü + 10 s pay); kritik an 25 s. Füzem 22 s'de pitbull olduğu için <b>A kuralı tutar</b>: crank pitbull'a kadar sürer, ardından DEFEND'e geçilir. Füzem 22 s'den sonra kendi radarıyla hedefe gider.</p>
 
     <h3>Karar</h3>
     <div class="diagram">
@@ -419,12 +435,12 @@ Tehdit zaten pitbull ise B2 ve B1 geçersiz: onu vursam da füzesi durmaz.</pre>
         </tbody>
       </table>
     </div>
-    <p class="caption">Hiçbir kural tutmasa da kritik ana kadar crank sürer: bu sırada düşman kırarsa füzesi ölür, benimki yaşar. Destek bir kez bırakılınca füzem güdümünü kaybeder; DEFEND'den TRADE'e dönüş yok.</p>
+    <p class="caption">Hiçbir kural tutmasa bile crank kritik ana kadar sürer: bu sürede düşman kırarsa onun füzesi güdümünü kaybeder, benimki yaşamaya devam eder. Destek bir kez bırakıldığında füzem güdümünü kaybeder; bu yüzden DEFEND'den TRADE'e geri dönülmez.</p>
   </section>
 
   <section id="defend">
     <h2>DEFEND</h2>
-    <p class="lead">Simde doppler yok; füze yalnız kinematik olarak yenilir: Mach 1'in altına düşünce ölür. Bu yüzden asıl soru "şimdi out + drag yapsam füze ölene kadar bana yetişir mi?" Cevap mesafe olarak ölçülür, böylece sınırda sıçramaz.</p>
+    <p class="lead">Simde doppler yok; füze yalnızca kinematik olarak yenilir, yani Mach 1'in altına düşünce ölür. Bu yüzden asıl soru şudur: şimdi out + drag yapsam, füze ölene kadar bana yetişir mi? Cevap mesafe (NM) olarak ölçülür; böylece karar sınırda bir anda değişmez.</p>
 
     <h3>Kaçış payı</h3>
     <div class="diagram">
@@ -450,7 +466,7 @@ Tehdit zaten pitbull ise B2 ve B1 geçersiz: onu vursam da füzesi durmaz.</pre>
         <text class="s-muted" x="476" y="180">pay −1.9: kaçamam</text>
       </svg>
     </div>
-    <p class="caption">Örnek: füze 2000 kt, şimdiki kapanma 2270 kt, out dönüşü 15 s, dönüş sonrası kaçış hızım 600 kt, füzenin yavaşlaması −18 kt/s. Füzenin kapattığı yol menzili aşarsa pay eksidir.</p>
+    <p class="caption">Örnek: füze 2000 kt, şimdiki kapanma 2270 kt, out dönüşü 15 s, dönüşten sonra kaçış hızım 600 kt, füzenin yavaşlaması −18 kt/s. Füzenin dönüşte ve ölene kadar kapattığı yol menzilden büyükse pay eksi çıkar: kaçamam.</p>
     <pre class="formula">t_d  = out.turn.time_s      v_e = out.escape_kt
 v_m  = tehdidin ölçülen TAS'ı   a = profil yavaşlaması (−18 kt/s)
 dönüşte kapanan = (şimdiki kapanma + (v_m + a·t_d − v_e)) / 2 · t_d
@@ -482,16 +498,16 @@ flowchart TD
 </pre>
     </div>
     <ul class="notes">
-      <li>Savunma yalnız acilleşir: Beam → Drag → Notch. Geri dönülmez.</li>
-      <li>Zararsız füze (benden yavaş, füzeye dönsem bile ≥ 1 NM pay kalıyor) savunmayı bitirir ve tehdit kesintisini de tetiklemez. Ben cold olduğum için REASSESS COLD'u seçer, recommit MRR kuralıyla gelir. Pay 1 NM'nin altına inerse füze yeniden tehdit olur.</li>
-      <li>Yavaşlama sabit kabul edilir. Hız, irtifa ve füzenin manevrası hesapta yok; hata çoğunlukla güvenli tarafta (gerçek füze daha erken ölür).</li>
-      <li>Aynı formül COLD'da "recommit yapsam" sorusu için de kullanılır: bu kez ben füzeye dönmüş kabul edilirim.</li>
+      <li>Savunma yalnızca acilleşir: Beam → Drag → Notch. Daha hafif bir savunmaya geri dönülmez.</li>
+      <li>Zararsız füze savunmayı bitirir: füze benden yavaşsa ve ona doğru dönsem bile en az 1 NM pay kalıyorsa tehdit sayılmaz, tehdit kesintisini de tetiklemez. O sırada cold olduğum için REASSESS COLD'u seçer; recommit MRR kuralıyla gelir. Pay 1 NM'nin altına inerse füze yeniden tehdit olur.</li>
+      <li>Füzenin yavaşlaması sabit (−18 kt/s) kabul edilir. Kayıtlar, havadaki füzenin (1000–1500 kt) bundan daha yavaş yavaşladığını gösteriyor; bu yüzden pay olduğundan büyük çıkabilir. Füze modeli gözden geçirilecek.</li>
+      <li>Aynı formül COLD'da "şimdi recommit yapsam" sorusu için de kullanılır; bu kez ben füzeye doğru dönmüş kabul edilirim.</li>
     </ul>
   </section>
 
   <section id="reassess">
     <h2>REASSESS</h2>
-    <p class="lead">Uçulmayan anlık düğüm. Savunma bitince, füzem bitince ya da düşman cold'a dönünce buraya gelinir; ilk tutan kural geçerli.</p>
+    <p class="lead">Uçulmayan, anlık bir karar düğümü. Savunma bittiğinde, füzem bittiğinde ya da düşman cold'a döndüğünde buraya gelinir. Kurallar yukarıdan aşağı denenir; ilk tutan kural yeni fazı belirler.</p>
     <div class="diagram">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
@@ -513,7 +529,7 @@ flowchart TD
 
   <section id="cold">
     <h2>COLD</h2>
-    <p class="lead">Cold ops: MRR'ye açıl, recommit anını bekle. Gaz art yakıcı. Düşman beni kovalıyor ve menzil açılmıyorsa kaçmaya devam edilir; kararı tehdit kesintisi ya da MAR (ABORT) verir.</p>
+    <p class="lead">Cold ops: MRR'nin dışına açıl ve recommit anını bekle. Düşman beni kovalıyorsa ve menzil açılmıyorsa kaçmaya devam edilir; bu durumda kararı tehdit kesintisi ya da MAR (ABORT) verir.</p>
     <div class="diagram">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
@@ -521,7 +537,7 @@ flowchart TD
   E{"Düşman ne yapıyor?"}
   E -->|"hot, TA ≤ 70°"| H1{"Menzil ≥ MRR, füzem var,&lt;br/&gt;recommit payı ≥ 0?"}
   H1 -->|evet| RC["RECOMMIT"]
-  H1 -->|hayır| RUN["Kaçışa devam&lt;br/&gt;out yönü, art yakıcı"]
+  H1 -->|hayır| RUN["Kaçışa devam&lt;br/&gt;out yönü"]
   E -->|"cold, TA &gt; 110°"| C1{"İmha ve&lt;br/&gt;vazgeçmedim?"}
   C1 -->|evet| CH["CHASE"]
   C1 -->|hayır| C2{"Menzil ≥ MRR?"}
@@ -531,14 +547,14 @@ flowchart TD
 </pre>
     </div>
     <ul class="notes">
-      <li>Son füzem havadaysa recommit yok; füze bitince ABORT tetiklenir.</li>
-      <li>Pitbull olmuş füzemin sonucu beklenmez; MRR'de recommit yapılır.</li>
+      <li>Son füzem havadaysa recommit yapılmaz; füze bitince ABORT tetiklenir.</li>
+      <li>Pitbull olmuş füzemin sonucu beklenmez; MRR'nin dışına çıkınca recommit yapılır.</li>
     </ul>
   </section>
 
   <section id="chase">
     <h2>CHASE</h2>
-    <p class="lead">İmha görevi, düşman kaçıyor. Pure pursuit, art yakıcı. Atış, kaçan hedefe füzemin yetişebildiği mesafede (R_cold'um).</p>
+    <p class="lead">İmha görevinde düşman kaçıyorsa kovalanır (pure pursuit). Füze, kaçan hedefe yetişebileceği mesafede (benim R_cold'um) atılır.</p>
     <div class="diagram">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"IBM Plex Sans, sans-serif","fontSize":"14px","background":"#ffffff","primaryColor":"#e3ebf2","primaryTextColor":"#17212b","nodeTextColor":"#17212b","primaryBorderColor":"#6f8396","lineColor":"#56687a","textColor":"#17212b","edgeLabelBackground":"#ffffff","tertiaryColor":"#ffffff"}}}%%
@@ -555,14 +571,14 @@ flowchart TD
 </pre>
     </div>
     <ul class="notes">
-      <li>"Vazgeçtim" bayrağı varken COLD'da düşman cold görülürse CHASE'e dönülmez, <code>hold</code> uçulur. Düşman hot'a dönünce bayrak sıfırlanır.</li>
-      <li>Testte bakılacak: R_cold'um MAR'dan küçükse atış noktasına varmadan ABORT'a düşülür mü?</li>
+      <li>"Vazgeçtim" bayrağı varken COLD'da düşman yine cold görülürse CHASE'e dönülmez, <code>hold</code> uçulur. Düşman hot'a dönünce bayrak sıfırlanır.</li>
+      <li>Testte bakılacak: R_cold'um MAR'dan küçükse atış noktasına varmadan ABORT'a düşülüyor mu?</li>
     </ul>
   </section>
 
   <section id="abort">
     <h2>ABORT</h2>
-    <p class="lead">Kalıcı çıkış. Out dönüşü, ardından art yakıcıyla düşmandan uzaklaşma. Recommit yok; füze gelirse de savunma yapılmaz, out'a devam edilir.</p>
+    <p class="lead">Kalıcı çıkış: out dönüşü yapılır, ardından düşmandan uzaklaşılır. Recommit yoktur; füze gelse bile savunma yapılmaz, out sürdürülür.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Tetik</th><th>Nereden</th></tr></thead>
@@ -576,32 +592,30 @@ flowchart TD
   </section>
 
   <section id="kod">
-    <h2>Gereken ek kod</h2>
+    <h2>Kodda karşılıkları</h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Alan</th><th>Ne</th><th>Durum</th></tr></thead>
+        <thead><tr><th>Kavram</th><th>Kodda</th></tr></thead>
         <tbody>
-          <tr><td>Hesap</td><td><code>pitbull_time_left_s</code>: yol = menzil − pitbull mesafesi</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td>Hesap</td><td>Füze güdümlü mü: pitbull ya da atan uçağın ATA'sı gimbal içinde</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td>Hesap</td><td>Kaçış payı NM, "recommit yapsam" sürümüyle</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td>Hesap</td><td><code>picture.mrr_nm</code></td><td><span class="tag new">alan</span> <code>mrr_nm</code> var</td></tr>
-          <tr><td>Hesap</td><td><code>weapons.r_cold_nm = r_cold_nm(enemy, own)</code></td><td><span class="tag new">alan</span> fonksiyon var</td></tr>
-          <tr><td>Hesap</td><td>TR, MSR, <code>out_plan(enemy, own)</code></td><td><span class="tag have">var</span></td></tr>
-          <tr><td>Manevra</td><td><code>Pursuit</code>'e gaz parametresi; <code>chase</code> = pure + art yakıcı</td><td><span class="tag new">küçük</span></td></tr>
-          <tr><td>Manevra</td><td>Out dönüşten sonra art yakıcı (COLD ve ABORT aynı out'u sürdürür)</td><td><span class="tag new">küçük</span></td></tr>
-          <tr><td>Otopilot</td><td>Fazlar: Commit, Shot, Support, Trade, Defend, Out, Cold, Recommit, Chase, Abort</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td>Otopilot</td><td>Savunma tipi ve "vazgeçtim" bayrağı; <code>Mission</code>'a L&amp;L alanı</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td>Otopilot</td><td>Karar fonksiyonları: abort, threat_response, first_shot, support, trade, defense, reassess, cold, chase</td><td><span class="tag new">yeni</span></td></tr>
-          <tr><td>Temizlik</td><td>Yorumdaki eski <code>otopilot.cpp</code>, <code>otopilot_copy.cpp</code>, eski K1–K5</td><td>silinecek</td></tr>
+          <tr><td>Kararlar</td><td><code>decide::</code> (control/decisions.cpp): abort, threat_response, commit, support, trade, defense, reassess, cold, chase</td></tr>
+          <tr><td>Koşullar</td><td><code>condition::</code> (control/conditions.cpp)</td></tr>
+          <tr><td>Durum makinesi</td><td><code>Otopilot</code> (control/otopilot.cpp)</td></tr>
+          <tr><td>Görev ayarı</td><td><code>Mission</code>: hedef, risk, L&amp;L (<code>leave_after_support</code>), erken atış payı (<code>early_shot_nm</code>); uçak başına sim.hpp'de</td></tr>
+          <tr><td>Pitbull'a ve hedefe kalan süre</td><td><code>missile.target.pitbull_time_left_s</code>, <code>catch_time_left_s</code></td></tr>
+          <tr><td>Güdüm (destek kuralı)</td><td><code>missile.target.is_guided</code>; aktif füzeler <code>weapons.active_missiles()</code></td></tr>
+          <tr><td>Kaçış payı</td><td><code>picture.threat_escape_margin_nm</code>, <code>threat_recommit_margin_nm</code></td></tr>
+          <tr><td>TR, MSR, MRR, R_cold'um</td><td><code>weapons.tr_nm</code>, <code>msr_nm</code>, <code>picture.mrr_nm</code>, <code>weapons.r_cold_nm</code></td></tr>
+          <tr><td>Kovalama</td><td><code>maneuvers.pursuit</code>, mod <code>CHASE_MODE</code> (şimdilik Pure)</td></tr>
         </tbody>
       </table>
     </div>
     <h3>Ertelenenler</h3>
     <ul class="notes">
-      <li>Pk ile ilk atış noktası seçimi (Rmax–TR arası)</li>
+      <li>Pk'ye göre ilk atış noktası seçimi</li>
       <li>Düşmanın füzeme göre aspect'i (2. atış kararı)</li>
       <li>BVRGym'e destek kuralı</li>
-      <li>Füze yavaşlamasının irtifa ve hıza bağlı uyumu</li>
+      <li>Füze yavaşlamasının hıza bağlı uyumu: kayıtlarda yavaşlama ilk 10 s'de −60…−75, havadaki füzede −3…−10 kt/s</li>
+      <li>Karşı atış algoritması: şimdi atmak düşmanın desteğini kırar mı, TR'ye zamanım var mı</li>
       <li>Titreme görülürse minimum faz süresi (sim zamanı otopilota)</li>
     </ul>
   </section>
