@@ -22,7 +22,7 @@ Kurulum ve terminal sırası [çalıştırma kılavuzunda](../../docs/CALISTIRMA
 
 `load_scenario()` bu paket içindeki `scenario.yaml` dosyasını okur. Yollar terminalin konumundan değil kaynak dosyasının konumundan türetilir. `validate_scenario()` pozitif tamsayı `sim_time_step`, sonlu/negatif olmayan süre ve bekleme ile boş olmayan ajan listesi ister. Komut alanlarının doğrulaması fizik ilerlemeden önce ayrıca yapılır.
 
-`sim_main.py --duration 1200` süreyi yalnız o çalıştırma için değiştirir. `main.exe --maneuver-test` genel manevra planının tamamını görmek için 1200 s süre kullanır; bu modda karşı uçak düz uçar ve Notch/Drag adımlarında birer test füzesi atar. Plan ve terminal komutları [otopilot kullanımında](../otopilot/KULLANIM.md#otopilotla-genel-manevra-testi) açıklanır.
+`sim_main.py --duration 1200` süreyi yalnız o çalıştırma için değiştirir.
 
 `create_agents()` BVRGym'i yoluna ekler ve nesne oluştururken geçici olarak model dizinine geçer. Her ajan için F-16 ve füze ayarları derin kopyalanır; bir uçağın ayarı diğerine sızmaz. Nesne kurulumu başarısız olsa da çağıranın çalışma dizini geri yüklenir.
 

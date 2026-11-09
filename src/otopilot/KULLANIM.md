@@ -145,39 +145,6 @@ Pursuit, otopilotla yeniden denemek için eski LOS işaretiyle taraf seçimine a
 
 Manevralar hazırdır. Mevcut gösterim otopilotunun seçim/geçiş kuralları ayrıca belirlenir; yeni manevralar kendiliğinden akışa girmez.
 
-### Otopilotla genel manevra testi
-
-İlk terminalde Python sunucusunu, ikinci terminalde test otopilotunu başlat:
-
-```powershell
-.venv/Scripts/python.exe src/sim/sim_main.py --duration 1200 --name manevra_deneme
-```
-
-```powershell
-src/otopilot/main.exe --maneuver-test
-```
-
-Test planı [control/otopilot_maneuver_test.cpp](control/otopilot_maneuver_test.cpp) içindeki `LEGS` tablosundadır. Her adım fizik saatine göre sabit süre uçar; `Satisfied` veya `Done` erken geçiş yapmaz. Hedef sağlanamazsa da sıra ilerler. Toplam plan 1155 s sürer ve sonrasında Hold devam eder; 1200 s simülasyon tamamını kaydeder.
-
-| Sıra | Manevra | Süre (s) |
-|---|---|---|
-| 1 | Hold | 10 |
-| 2–3 | Başlangıç yönüne göre FlyHeading +60° ve −60° | 60 + 60 |
-| 4 | Commit | 40 |
-| 5 | Crank | 45 |
-| 6 | Beam | 60 |
-| 7–8 | Offset 40° sağ ve sol | 45 + 45 |
-| 9 | Pure Pursuit | 40 |
-| 10–11 | Lag ve Lead Pursuit | 60 + 60 |
-| 12–13 | Flank +40° ve −40° | 120 + 120 |
-| 14 | Collision | 90 |
-| 15–16 | Out ve Recommit | 60 + 60 |
-| 17–18 | Notch ve Drag | 90 + 90 |
-
-Karşı uçak başlangıç yönü ve irtifasında Hold uçar. Notch ve Drag girişlerinde birer füze atar; bu iki adım için red'de en az iki hazır füze gerekir. Atışın ölçüme yansıması sonraki adımdadır; ilk satırda henüz tehdit görülmediği için `Done` görünebilir. Mühimmat yoksa terminal `NO_TEST_MISSILE` bildirir. Snake test planında yoktur.
-
-Terminal saniyede bir test adını, geçen/sınır süreyi, `Running/Satisfied/Done`, ölçülen/komut yönünü, ATA, TA ve LOS hızını gösterir. CSV'deki `phase` alanı uçulan manevrayı belirtir. Test `Satisfied` göründüğünde de aynı manevrayı sürdürdüğünden açının korunmasını inceleyebilirsin. Akış boyunca uçaklar sıfırlanmaz; her manevra öncekinin bıraktığı konum ve hızdan başlar. `main.exe` parametresiz çalıştırıldığında mevcut muharebe akışı seçilir.
-
 ### Doğrulama
 
 ```powershell
@@ -188,14 +155,6 @@ ctest --test-dir src/otopilot/build --output-on-failure
 ```
 
 `maneuver_probe`, Python'un gerçek JSBSim ölçümlerini üretim kodundaki `StateReader`, `World`, `Maneuvers` ve `CommandWriter` üzerinden geçirir. Python scripti 17 başlangıç/açı durumunda sonlu komutları, g sınırlarını, irtifa kaybını ve ilgili `Satisfied`/`Done` durumlarını kontrol eder; Notch/Drag denemelerinde gerçek simülasyon füzesi bulunur. Sonuçlar `tmp/maneuver-validation/results.json` içine yazılır. `--mode flank` gibi bir seçenek yalnız ilgili denemeleri çalıştırır. Bu kontroller belirli başlangıç koşulları içindir; her hız, irtifa ve hedef hareketini kapsamaz.
-
-Genel test planının tamamını gerçek `main.exe --maneuver-test`, TCP ve kayıt üzerinden doğrulamak için:
-
-```powershell
-.venv/Scripts/python.exe src/otopilot/tests/autopilot_maneuvers.py
-```
-
-Bu doğrulama 1200 s uçar, 18 adımı ve son Hold'u, iki test atışını ve sonlu uçuş durumunu kontrol eder. Loglar, sonuç JSON'u ve görüntüleyicide açılabilen kayıt `tmp/autopilot-maneuver-test/<deneme>/` altına yazılır. Boş bir yerel port seçer; normal sunucunun 6000 portunu kullanmaz. Bu kontrol bir akış testidir; her manevranın her başlangıç koşulunda `Satisfied` olmasını beklemez. Eski LOS işaretli Lead davranışı da bu akışta gözlenebilir.
 
 ## Atış ve füzeler
 

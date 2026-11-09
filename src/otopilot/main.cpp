@@ -13,18 +13,16 @@ namespace
     {
         std::string host = "127.0.0.1";
         unsigned short port = 6000;
-        bool maneuver_test = false;
     };
 
-    Address read_address(int argc, char* argv[])   // kullanım: main.exe [--maneuver-test] [IPv4] [port]
+    Address read_address(int argc, char* argv[])   // kullanım: main.exe [IPv4] [port]
     {
         Address address;
         std::vector<std::string> positional;
         for (int index = 1; index < argc; ++index)
         {
             const std::string argument = argv[index];
-            if (argument == "--maneuver-test") { address.maneuver_test = true; }
-            else if (argument.rfind("--", 0) == 0)
+            if (argument.rfind("--", 0) == 0)
             {
                 throw std::runtime_error("Bilinmeyen secenek: " + argument);
             }
@@ -32,7 +30,7 @@ namespace
         }
         if (positional.size() > 2)
         {
-            throw std::runtime_error("Kullanim: main.exe [--maneuver-test] [IPv4] [port]");
+            throw std::runtime_error("Kullanim: main.exe [IPv4] [port]");
         }
 
         if (!positional.empty())
@@ -72,7 +70,7 @@ int main(int argc, char* argv[])   // ana döngü: ölçümü al → Sim'e ver �
     {
         const Address address = read_address(argc, argv);
         Connection connection(address.host, address.port);
-        Sim sim(address.maneuver_test);
+        Sim sim;
         Message state;
 
         while (connection.receive(state))    // Python "end" gönderince false döner

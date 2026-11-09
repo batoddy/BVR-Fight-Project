@@ -17,7 +17,7 @@ agents:
     name: KZL
     type: F16
     team: Blue
-    ammo: 4
+    ammo: 6
     throttle: 0.45  # Başlangıç gaz komutu. 
     spawn:  # lat/long/heading: derece; alt: MSL metre; vel: m/s.
       lat: 59.0
@@ -30,7 +30,7 @@ agents:
     name: Hostile
     type: F16
     team: Red
-    ammo: 2
+    ammo: 6
     throttle: 0.45  # [0 - 0.5] normal güç,  [0.5 - 1.0] arası art yakıcı
     spawn:
       lat: 60.2

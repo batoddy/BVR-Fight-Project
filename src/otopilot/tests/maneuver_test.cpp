@@ -8,7 +8,6 @@
 #include "common/formulas.hpp"
 #include "common/units.hpp"
 #include "control/maneuver.hpp"
-#include "control/otopilot_maneuver_test.hpp"
 #include "model/missile.hpp"
 #include "model/world.hpp"
 
@@ -287,66 +286,6 @@ namespace
                 "threat maneuvers set g limits even without a threat");
     }
 
-    void timed_autopilot_sequence()
-    {
-        Aircraft own, enemy;
-        own.profile = enemy.profile = aircraft_profile("F16");
-        own.kinematics.heading_deg = 170;
-        own.kinematics.altitude_ft = enemy.kinematics.altitude_ft = 30000;
-        enemy.kinematics.heading_deg = 180;
-        own.command.set_altitude_ft(30000);
-        for (int slot = 0; slot < 2; ++slot)
-        {
-            Missile missile;
-            missile.slot = slot;
-            missile.profile = AIM120C;
-            enemy.weapons.missiles.push_back(missile);
-        }
-        OtopilotManeuverTest pilot;
-        double time_s = 100;   // testin sıfır olmayan fizik zamanında da aynı sürelerle başlaması gerekir
-        pilot.step(own, enemy, time_s);
-        require(own.phase == Phase::Hold && pilot.leg_index() == 0, "test starts at hold");
-        double total_s = 0;
-        for (std::size_t index = 0; index < OtopilotManeuverTest::LEG_COUNT; ++index)
-        {
-            require(pilot.leg_index() == index && !pilot.finished(), "each test leg is visited in order");
-            require(enemy.phase == Phase::Hold, "test target follows hold rather than combat pilot");
-            if (index == 1) { near_angle(own.command.heading_deg(), -130, "first heading is relative to initial heading"); }
-            if (index == 2) { near_angle(own.command.heading_deg(), 110, "second heading uses same initial reference"); }
-            if (own.phase == Phase::Notch || own.phase == Phase::Drag)
-            {
-                require(enemy.weapons.has_launch_order && !pilot.shot_failed(), "threat test requests one enemy shot at entry");
-                for (Missile& missile : enemy.weapons.missiles)
-                {
-                    if (missile.is_fired) { missile.python_id = "matched-" + std::to_string(missile.slot); }
-                }
-                require(pilot.status(own) != ManeuverStatus::Done, "without missile threat maneuver flies against enemy aircraft");
-            }
-            else
-            {
-                require(!enemy.weapons.has_launch_order, "other test legs do not fire");
-            }
-            const double duration_s = pilot.duration_s();
-            const int remaining = enemy.weapons.missiles_left();
-            enemy.weapons.has_launch_order = false;
-            pilot.step(own, enemy, time_s + duration_s / 2);
-            require(pilot.leg_index() == index, "satisfied or done does not advance a timed test early");
-            require(!enemy.weapons.has_launch_order && enemy.weapons.missiles_left() == remaining,
-                    "test entry shot does not repeat within leg");
-            total_s += duration_s;
-            time_s += duration_s + 0.01;
-            pilot.step(own, enemy, time_s);
-        }
-        require(total_s == 1155 && pilot.finished() && own.phase == Phase::Hold, "all legs finish with indefinite hold");
-        require(enemy.weapons.missiles_left() == 0 && !own.weapons.has_launch_order, "only two enemy test missiles are used");
-        pilot.step(own, enemy, time_s + 100);
-        require(pilot.finished() && own.phase == Phase::Hold, "completed test does not wrap or index past end");
-        bool rejected = false;
-        try { pilot.step(own, enemy, time_s); }
-        catch (const std::invalid_argument&) { rejected = true; }
-        require(rejected, "test rejects backwards simulation clock");
-    }
-
     void advance(Kinematics& kinematics, double time_s)
     {
         const double earth_radius_nm = meter_to_nmile(6371000.0);
@@ -405,7 +344,6 @@ int main()
         offset_and_heading_status();
         pursuit_and_collision_status();
         explicit_g_limits();
-        timed_autopilot_sequence();
         flank_tracks_moving_target(40);
         flank_tracks_moving_target(-40);
         std::cout << "Maneuver status and flank tracking checks passed.\n";

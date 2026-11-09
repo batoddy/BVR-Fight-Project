@@ -3,7 +3,6 @@
 #include <iomanip>
 #include <iostream>
 
-#include "control/otopilot_maneuver_test.hpp"
 
 namespace
 {
@@ -64,33 +63,4 @@ void ConsoleLog::print_decision(const Aircraft& aircraft, std::string& last_deci
     last_decision = aircraft.decision;
     std::cout << std::fixed << std::setprecision(1) << "t " << sim_time_s << " s | KARAR " << aircraft.id
               << ": " << aircraft.decision << '\n';
-}
-
-void ConsoleLog::print_maneuver_test(const World& world, const OtopilotManeuverTest& pilot)
-{
-    const int second = static_cast<int>(world.sim_time_s);
-    if (second == last_test_print_s_ && pilot.leg_index() == last_test_leg_)
-    {
-        return;
-    }
-    last_test_print_s_ = second;
-    last_test_leg_ = pilot.leg_index();
-    const char* status = "Running";
-    switch (pilot.status(world.fighter))
-    {
-    case ManeuverStatus::Running: status = "Running"; break;
-    case ManeuverStatus::Satisfied: status = "Satisfied"; break;
-    case ManeuverStatus::Done: status = "Done"; break;
-    }
-    std::cout << std::fixed << std::setprecision(1) << "[maneuver-test] t=" << world.sim_time_s
-              << " step=" << pilot.leg_index() + 1 << " " << pilot.leg_name()
-              << " " << pilot.elapsed_s() << "/" << pilot.duration_s() << " s"
-              << " " << status
-              << " hdg=" << world.fighter.kinematics.heading_deg
-              << " cmd=" << world.fighter.command.heading_deg()
-              << " ATA=" << world.fighter.picture.ata_deg
-              << " TA=" << world.fighter.picture.ta_deg
-              << " LOS=" << world.fighter.picture.los_rate_deg_s;
-    if (pilot.shot_failed()) { std::cout << " NO_TEST_MISSILE"; }
-    std::cout << std::endl;
 }

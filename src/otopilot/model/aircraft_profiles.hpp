@@ -36,7 +36,7 @@ inline const std::map<std::string, AircraftProfile>& aircraft_profiles()   // ti
 {
     static const std::map<std::string, AircraftProfile> table = {
         //                   name               main_weapon  loadout (slot sırasıyla)                    mach   g     radar  gimbal  out_g  out_offset_nm
-        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C},       2.05,  9.0,  200,    60,     6.0,   0.5}},
+        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C},       2.05,  9.0,  200,    60,     6.0,   0.5}},
         {"Su57",           {"Su-57",            AIM120C,     {AIM120C, AIM120C, AIM120C, AIM9X, AIM9X},  2.0,   9.0,  200,    60,     6.0,   0.5}},
         {"CustomAircraft", {"Ornek ozel ucak",  AIM7M,       {AIM7M, AIM7M, AIM9X, AIM9X},               1.2,   4.0,  200,    45,     6.0,   0.5}},
     };
