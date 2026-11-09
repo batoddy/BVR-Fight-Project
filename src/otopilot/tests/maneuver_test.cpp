@@ -227,7 +227,10 @@ namespace
         own.picture.bearing_deg = 170;
         own.picture.los_rate_deg_s = 1;
         own.picture.enemy_velocity_ned_kt.east = -100;
-        Pursuit lead(PursuitMode::Lead), lag(PursuitMode::Lag), pure(PursuitMode::Pure);
+        Pursuit lead, lag, pure;
+        lead.set(PursuitMode::Lead);
+        lag.set(PursuitMode::Lag);
+        pure.set(PursuitMode::Pure);
         near_angle(lead.update(own).heading_deg(), -170, "lead crosses wrap boundary");
         near_angle(lag.update(own).heading_deg(), 155, "lag is behind positive LOS motion");
         near_angle(pure.update(own).heading_deg(), 170, "pure tracks bearing");
@@ -272,8 +275,7 @@ namespace
         Maneuvers maneuvers;
         Maneuver* implemented[] = {&maneuvers.hold, &maneuvers.out, &maneuvers.commit, &maneuvers.recommit,
             &maneuvers.crank, &maneuvers.beam, &maneuvers.notch, &maneuvers.drag, &maneuvers.offset,
-            &maneuvers.flank, &maneuvers.collision, &maneuvers.fly_heading, &maneuvers.pure_pursuit,
-            &maneuvers.lag_pursuit, &maneuvers.lead_pursuit};
+            &maneuvers.flank, &maneuvers.collision, &maneuvers.fly_heading, &maneuvers.pursuit};
         for (Maneuver* maneuver : implemented)
         {
             own.command.set_g_limit(9, 9);

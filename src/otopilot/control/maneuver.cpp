@@ -542,6 +542,12 @@ FlightCommand Snake::update(const Aircraft& own)
 // PURSUIT  —  pure, lag, lead takip
 // ========================================================================================================
 
+void Pursuit::set(PursuitMode mode, double throttle)
+{
+    mode_ = mode;
+    throttle_ = throttle;
+}
+
 Phase Pursuit::phase() const
 {
     switch (mode_)

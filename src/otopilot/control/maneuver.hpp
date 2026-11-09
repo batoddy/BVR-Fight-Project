@@ -327,11 +327,11 @@ enum class PursuitMode
     Lead,   // burun düşmanın önünde: menzil hızlı kapanır
 };
 
-// Tek sınıf, üç mod: maneuvers.pure_pursuit, lag_pursuit, lead_pursuit.
+// Tek sınıf, üç mod: maneuvers.pursuit.set(PursuitMode::Lag) sonra fly.
 class Pursuit : public Maneuver
 {
 public:
-    explicit Pursuit(PursuitMode mode, double throttle = throttle::DEFAULT) : mode_(mode), throttle_(throttle) {}
+    void set(PursuitMode mode, double throttle = throttle::DEFAULT);   // fly'dan önce çağrılır
 
     Phase phase() const override;                         // moda göre PurePursuit, LagPursuit, LeadPursuit
     FlightCommand update(const Aircraft& own) override;   // Pure bearing; Lag LOS yönünün gerisine LAG_DEG; Lead önüne LEAD_DEG; LOS dönmüyorsa pure
@@ -345,8 +345,8 @@ private:
 
     double target_heading_deg(const Aircraft& own) const;  // derece, ilgili modun güncel hedef yönü
 
-    PursuitMode mode_;
-    double throttle_;                                     // kurulurken verilir; varsayılan DEFAULT
+    PursuitMode mode_ = PursuitMode::Pure;
+    double throttle_ = throttle::DEFAULT;
 };
 
 // =============================================================================
@@ -368,10 +368,7 @@ public:
 
     Notch notch;                                   // füzeye dik uç
     Drag drag;                                     // füzeye sırt dön
-    Pursuit pure_pursuit{PursuitMode::Pure};          // burun düşmanda
-    Pursuit lag_pursuit{PursuitMode::Lag};            // burun düşmanın gerisinde
-    Pursuit lead_pursuit{PursuitMode::Lead};          // burun düşmanın önünde
-    Pursuit chase{PursuitMode::Pure, throttle::MAX_THRUST};   // kaçan düşmanı kovala: saf takip, art yakıcı
+    Pursuit pursuit;                               // takip: Pure, Lag ya da Lead (set)
     Collision collision;                           // çarpışma rotası
     FlyHeading fly_heading;                        // sabit yön
     Flank flank;                                   // düşmanın verilen yan açısını koru

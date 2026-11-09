@@ -21,7 +21,6 @@ otopilot/
 │   ├── world.hpp / world.cpp
 │   ├── picture.hpp                        (hesaplanan durum resmi)
 │   ├── turn_result.hpp                    (dönüş hesabının sonuç tipi)
-│   ├── tactic_id.hpp
 │   ├── kinematics.hpp
 │   ├── missile.hpp
 │   ├── flight_command.hpp

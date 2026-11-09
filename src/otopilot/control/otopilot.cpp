@@ -4,11 +4,14 @@
 
 #include "control/conditions.hpp"
 
-// Gazı ve g sınırını manevralar yazar; Shot yalnız atış emri verir, manevra uçmaz.
-void Otopilot::step(Aircraft& own, const Aircraft& enemy)
+namespace
 {
-    (void)enemy;
+    constexpr PursuitMode CHASE_MODE = PursuitMode::Pure;   // kovalama takibi: Pure, Lag ya da Lead
+}
 
+// Gazı ve g sınırını manevralar yazar; Shot yalnız atış emri verir, manevra uçmaz.
+void Otopilot::step(Aircraft& own)
+{
     if (condition::enemy_hot(own))
     {
         gave_up_chase_ = false;   // düşman döndü: kaçarsa yeniden kovalanabilir
@@ -188,7 +191,7 @@ void Otopilot::step_recommit(Aircraft& own)
 
 void Otopilot::step_chase(Aircraft& own)
 {
-    maneuvers_.fly(own, maneuvers_.chase);
+    maneuvers_.fly(own, chase_maneuver());
     const Decision<ChaseChoice> decision = decide::chase(own);
     switch (decision.choice)
     {
@@ -328,9 +331,15 @@ Maneuver& Otopilot::support_maneuver(const Aircraft& own)
 {
     if (condition::enemy_cold(own))
     {
-        return maneuvers_.chase;
+        return chase_maneuver();
     }
     return maneuvers_.crank;
+}
+
+Maneuver& Otopilot::chase_maneuver()
+{
+    maneuvers_.pursuit.set(CHASE_MODE, throttle::MAX_THRUST);
+    return maneuvers_.pursuit;
 }
 
 // ========================================================================================================

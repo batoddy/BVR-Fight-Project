@@ -18,13 +18,11 @@ own.kinematics.tas_kt          // gerçek hava hızı, KTAS
 own.picture.range_3d_nm        // atanmış düşmana mesafe, NM (World::update)
 own.picture.ata_deg            // + sağda, - solda
 own.picture.mar_nm             // NM, düşmanın ana silahına karşı Minimum Abort Range
-own.picture.threat             // const Missile*: bana gelen en yakın düşman füzesi; yoksa nullptr
+own.picture.threat             // const Missile*: bana gelen en yakın güdümlü düşman füzesi; yoksa nullptr
 own.picture.threats            // std::vector<const Missile*>: bana gelen bütün düşman füzeleri
 own.picture.is_spiked          // bana gelen düşman füzesi var mı
-own.picture.me_in_enemy_mar    // ben düşmanın MAR'ının içinde miyim (düşmanın hesabından kopyalanır)
 
 own.weapons.wez                // benim WEZ'im (profile.main_weapon'a göre)
-own.weapons.nez_nm             // benim NEZ'im: düşman şimdi out yapsa füzemden kaçamaz
 own.weapons.enemy_in_wez       // düşman WEZ'imde mi
 own.weapons.enemy_in_nez       // düşman NEZ'imde mi
 own.weapons.f_pole_nm          // std::optional<double>: füze yetişemiyorsa değer yok
@@ -97,7 +95,7 @@ void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
 
 `Maneuvers::fly` fazı manevradan alır (`own.phase = manevra.phase()`) ve komutu yazar. Aynı manevra sürerken `enter()` tekrarlanmaz; araya başka manevra girdikten sonra geri dönülürse yeniden çalışır. Aynı manevrayı kullanan iki state arasında geçiş, yeniden giriş sayılmaz. İlk manevranın girişi de otomatik yapılır.
 
-Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `in_dor`, `nose_on_target`, `inside_enemy_mar`, `enemy_in_my_wez`, `enemy_in_my_nez`, `enemy_aspect`, `my_aspect`, `is_spiked`, `own_missile_pitbull(own, fire_order)` (1: ilk attığım füze, 2: ikinci, ...). Hepsi yalnız `own`'u okur.
+Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar yapısı ileride karar ağacına geçerse koşullar aynen kullanılır. Hazır koşullar: `in_mar`, `in_dor`, `enemy_in_my_wez`, `enemy_in_my_tr`, `enemy_aspect`, `my_aspect`, `has_live_missile`, `threat_alive`, `supporting`, `is_spiked` ve diğerleri (tam liste `conditions.hpp`'de). Hepsi yalnız `own`'u okur.
 
 `enemy_aspect(own)` düşmanın burnunun bana göre durumunu (`picture.ta_deg`), `my_aspect(own)` benim burnumun düşmana göre durumunu (`picture.ata_deg`) `Aspect` olarak verir: `Hot` (≤ 30°), `Flank` (≤ 70°), `Beam` (≤ 110°), `Cold` (ötesi). Sağ/sol ayrılmaz; eşikler `conditions.cpp` içindeki sabitlerdedir.
 
@@ -122,7 +120,7 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 | `notch` | Notch | DEFAULT | 4 | tehdit varken `Running`, kaçılacak tehdit kalmazsa `Done` |
 | `offset` | Offset | DEFAULT | 4 | `set(offset_deg, side)`; seçilen tarafta hedef ATA'ya ±2° içinde `Satisfied` |
 | `fly_heading` | FlyHeading | DEFAULT | 4 | `set(heading_deg)`; hedef yöne ±2° içinde `Satisfied` |
-| `pure_pursuit`, `lag_pursuit`, `lead_pursuit` | ilgili Pursuit fazı | DEFAULT | 4 | ilgili modun güncel hedef yönüne ±2° içinde `Satisfied` |
+| `pursuit` | ilgili Pursuit fazı | `set(mode, throttle)`; varsayılan DEFAULT | 4 | `set(PursuitMode::Pure/Lag/Lead)`; modun güncel hedef yönüne ±2° içinde `Satisfied`. Kovalama (CHASE) Pure + art yakıcı kullanır |
 | `collision` | Collision | DEFAULT | 4 | yatay menzil sıfır değil, kapanma pozitif ve LOS hızı ±0,1°/s içindeyse `Satisfied` |
 
 g sınırları profildeki `max_g`'yi aşamaz (`set_g_limit(g, own.profile.max_g)`).
@@ -151,10 +149,7 @@ Manevralar hazırdır. Mevcut gösterim otopilotunun seçim/geçiş kuralları a
 cmake -S src/otopilot -B src/otopilot/build
 cmake --build src/otopilot/build
 ctest --test-dir src/otopilot/build --output-on-failure
-.venv/Scripts/python.exe src/otopilot/tests/jsbsim_maneuvers.py
 ```
-
-`maneuver_probe`, Python'un gerçek JSBSim ölçümlerini üretim kodundaki `StateReader`, `World`, `Maneuvers` ve `CommandWriter` üzerinden geçirir. Python scripti 17 başlangıç/açı durumunda sonlu komutları, g sınırlarını, irtifa kaybını ve ilgili `Satisfied`/`Done` durumlarını kontrol eder; Notch/Drag denemelerinde gerçek simülasyon füzesi bulunur. Sonuçlar `tmp/maneuver-validation/results.json` içine yazılır. `--mode flank` gibi bir seçenek yalnız ilgili denemeleri çalıştırır. Bu kontroller belirli başlangıç koşulları içindir; her hız, irtifa ve hedef hareketini kapsamaz.
 
 ## Atış ve füzeler
 

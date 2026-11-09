@@ -38,7 +38,6 @@ struct Picture
     // Kaçış: düşmanın füzesine karşı | engagement::
     OutPlan out;                       // şimdi out yapsam
     bool me_in_enemy_wez = false;      // ben düşmanın WEZ'inde miyim (onun weapons.enemy_in_wez'i)
-    bool me_in_enemy_mar = false;      // ben düşmanın MAR'ının içinde miyim: düşman şimdi out yapmalı (onun picture.is_in_mar'ı)
     std::optional<double> enemy_a_pole_nm;   // NM, düşman şimdi atsa A-pole'u (onun weapons.a_pole_nm'i)
     std::optional<double> enemy_f_pole_nm;   // NM, düşman şimdi atsa F-pole'u (onun weapons.f_pole_nm'i)
     double r_cold_nm = 0;              // NM, kaçarken düşman füzesinin (main_weapon) yetişebileceği mesafe

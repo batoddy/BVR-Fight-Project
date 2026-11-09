@@ -309,11 +309,7 @@ bool engagement::in_mar(const Aircraft& own, const Aircraft& enemy)
 double engagement::mrr_nm(const Aircraft& own, const Aircraft& enemy)
 {
     const double planned_mar_nm = mar_nm(own, enemy, own.profile.recommit_fire_ata_deg);
-
-    const double speed_kt = own.kinematics.tas_kt;
-    const double radius_m = turn::radius_m(speed_kt, own.profile.out_g);
-    const double in_turn_s = turn::time_s(180 - own.profile.recommit_fire_ata_deg, radius_m, speed_kt);
-    const double enemy_approach_nm = travel_distance_nm(enemy.kinematics.tas_kt, in_turn_s);
+    const double enemy_approach_nm = travel_distance_nm(enemy.kinematics.tas_kt, recommit_turn_s(own));
 
     return planned_mar_nm + enemy_approach_nm + 0.5;
 }
@@ -338,11 +334,7 @@ double engagement::dor_nm(const Aircraft& own, const Aircraft& enemy)
 
 double engagement::dor_nm(const Aircraft& own, const Aircraft& enemy, double ata_deg)
 {
-    const double speed_kt = own.kinematics.tas_kt;
-    const double radius_m = turn::radius_m(speed_kt, own.profile.out_g);
-    const double in_turn_s = turn::time_s(180 - own.profile.recommit_fire_ata_deg, radius_m, speed_kt);
-    const double enemy_approach_nm = travel_distance_nm(enemy.kinematics.tas_kt, in_turn_s);
-
+    const double enemy_approach_nm = travel_distance_nm(enemy.kinematics.tas_kt, recommit_turn_s(own));
     return engagement::mar_nm(own, enemy, ata_deg) + enemy_approach_nm + 0.5;
 }
 

@@ -16,7 +16,6 @@ struct AircraftProfile
     MissileProfile main_weapon;              // WEZ, NEZ, pole'lar ve düşmanın bana karşı R_cold/MAR hesabı bununla (yükten bağımsız)
     std::vector<MissileProfile> loadout;     // slot sırasıyla tipler; Python yalnız sayıyı (ammo) verir, o kadar slot baştan alınır
 
-    double max_mach = 0;                     // birimsiz; TODO: henüz kullanılmıyor
     double max_g = 0;                        // g, yapısal sınır: komuttaki g_limit bunu aşamaz (FlightCommand::set_g_limit)
 
     double radar_range_nm = 0;     // NM, algılama menzili
@@ -29,16 +28,16 @@ struct AircraftProfile
 };
 
 // Değerlerin kaynağı:
-//   F16  max_mach, max_g, radar: açık kaynak (F-16C Block 50/52, AN/APG-68).
+//   F16  max_g, radar: açık kaynak (F-16C Block 50/52, AN/APG-68).
 //   Su57, CustomAircraft: tamamen örnek. Fizik modeli her tipte F-16.
 //   Out g'si ve payı: yaklaşık simülasyon ayarları; ölçülmüş performans verisi değil. Menziller NM'dir.
 inline const std::map<std::string, AircraftProfile>& aircraft_profiles()   // tip → profil; anahtar scenario.yaml type, değerler struct sırasıyla
 {
     static const std::map<std::string, AircraftProfile> table = {
-        //                   name               main_weapon  loadout (slot sırasıyla)                    mach   g     radar  gimbal  out_g  out_offset_nm
-        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C},       2.05,  9.0,  200,    60,     6.0,   0.5}},
-        {"Su57",           {"Su-57",            AIM120C,     {AIM120C, AIM120C, AIM120C, AIM9X, AIM9X},  2.0,   9.0,  200,    60,     6.0,   0.5}},
-        {"CustomAircraft", {"Ornek ozel ucak",  AIM7M,       {AIM7M, AIM7M, AIM9X, AIM9X},               1.2,   4.0,  200,    45,     6.0,   0.5}},
+        //                   name               main_weapon  loadout (slot sırasıyla)                    g     radar  gimbal  out_g  out_offset_nm
+        {"F16",            {"F-16",             AIM120C,     {AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C, AIM120C},       9.0,  200,    60,     6.0,   0.5}},
+        {"Su57",           {"Su-57",            AIM120C,     {AIM120C, AIM120C, AIM120C, AIM9X, AIM9X},  9.0,  200,    60,     6.0,   0.5}},
+        {"CustomAircraft", {"Ornek ozel ucak",  AIM7M,       {AIM7M, AIM7M, AIM9X, AIM9X},               4.0,  200,    45,     6.0,   0.5}},
     };
     return table;
 }

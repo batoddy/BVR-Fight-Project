@@ -12,26 +12,6 @@ namespace
     constexpr double TRADE_MARGIN_S = 5.0;     // s, TRADE'de B2 ve B1 karşılaştırmalarının payı
     constexpr double NOTCH_MARGIN_S = 3.0;     // s, notch dönüşüne eklenen pay: tehdide bu kadar kala notch
 
-    // En son atılan canlı füzem: desteklediğim füze. Yoksa nullptr.
-    const Missile* newest_live_missile(const Aircraft& own)
-    {
-        const Missile* newest = nullptr;
-        for (const Missile& missile : own.weapons.missiles)
-        {
-            if (condition::is_live(missile) && (newest == nullptr || missile.fire_order > newest->fire_order))
-            {
-                newest = &missile;
-            }
-        }
-        return newest;
-    }
-
-    bool supporting(const Aircraft& own)   // desteklediğim füze var ve henüz pitbull değil
-    {
-        const Missile* missile = newest_live_missile(own);
-        return missile != nullptr && !missile->target.is_pitbull;
-    }
-
     bool counter_fire_allowed(const Aircraft& own, RiskLevel risk)   // havada füzem yokken karşı atış, riske göre
     {
         if (condition::has_live_missile(own) || own.weapons.missiles_left() == 0)
@@ -45,12 +25,6 @@ namespace
         case RiskLevel::Aggressive: return condition::enemy_in_my_wez(own);
         }
         return false;
-    }
-
-    bool threat_alive(const Aircraft& own)   // bana gelen güdümlü, yetişebilen ve zararsız olmayan füze var
-    {
-        return condition::has_guided_threat(own) && own.picture.threat->target.catch_time_left_s.has_value()
-               && !condition::threat_harmless(own);
     }
 }
 
@@ -74,19 +48,15 @@ Decision<AbortChoice> decide::abort(const Aircraft& own)
 // Havada füzem yoksa riske göre karşı atış; füzem pitbull değilse TRADE; diğer durumda savunma.
 Decision<ThreatResponse> decide::threat_response(const Aircraft& own, const Mission& mission)
 {
-    if (!condition::has_guided_threat(own))
+    if (!condition::threat_alive(own))
     {
-        return {ThreatResponse::Continue, "güdümlü tehdit yok"};
-    }
-    if (!threat_alive(own))
-    {
-        return {ThreatResponse::Continue, "tehdit yetişemiyor"};
+        return {ThreatResponse::Continue, "aktif tehdit yok"};
     }
     if (counter_fire_allowed(own, mission.risk))
     {
         return {ThreatResponse::CounterFire, "karşı atış şartı var"};
     }
-    if (supporting(own))
+    if (condition::supporting(own))
     {
         return {ThreatResponse::Trade, "füzem havada, pitbull değil"};
     }
@@ -126,14 +96,18 @@ Decision<CommitChoice> decide::commit(const Aircraft& own)
 // Diğerleri füzem pitbull olunca ya da DOR'da (pitbull olmasa da) çıkar.
 Decision<SupportChoice> decide::support(const Aircraft& own, const Mission& mission)
 {
-    const Missile* missile = newest_live_missile(own);
+    if (own.weapons.launch_pending())
+    {
+        return {SupportChoice::Continue, "füzem henüz uçmadı"};
+    }
+    const Missile* missile = own.weapons.active_missile();
     if (missile == nullptr)
     {
         return {SupportChoice::Reassess, "füzem bitti"};
     }
 
     const bool aggressive_destroy = mission.goal == MissionGoal::Destroy && mission.risk == RiskLevel::Aggressive;
-    const bool second_shot_left = own.weapons.missiles_left() > 0 && condition::live_missile_count(own) < 2;
+    const bool second_shot_left = own.weapons.missiles_left() > 0 && own.weapons.active_missiles().size() < 2;
     SupportChoice leave = SupportChoice::Out;
     if (mission.leave_after_support)
     {
@@ -176,11 +150,15 @@ Decision<SupportChoice> decide::support(const Aircraft& own, const Mission& miss
 // Tehdit zaten pitbull ise yalnız A. Hiçbiri tutmazsa da t_kritik'e kadar crank sürer: bu sırada düşman kırabilir.
 Decision<TradeChoice> decide::trade(const Aircraft& own, const Mission& mission)
 {
-    if (!threat_alive(own))
+    if (!condition::threat_alive(own))
     {
         return {TradeChoice::Support, "tehdit bitti"};
     }
-    const Missile* missile = newest_live_missile(own);
+    if (own.weapons.launch_pending())
+    {
+        return {TradeChoice::Continue, "füzem henüz uçmadı"};
+    }
+    const Missile* missile = own.weapons.active_missile();
     if (missile == nullptr)
     {
         return {TradeChoice::Defend, "füzem bitti"};
@@ -188,10 +166,6 @@ Decision<TradeChoice> decide::trade(const Aircraft& own, const Mission& mission)
     if (missile->target.is_pitbull)
     {
         return {TradeChoice::Defend, "füzem pitbull"};
-    }
-    if (!missile->has_kinematics)
-    {
-        return {TradeChoice::Continue, "füzem henüz uçmadı"};
     }
 
     const MissileTargetInfo& threat = own.picture.threat->target;

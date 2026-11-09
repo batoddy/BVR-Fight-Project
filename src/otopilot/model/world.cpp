@@ -109,9 +109,7 @@ namespace
         weapons.enemy_in_tr = engagement::in_tr(own, enemy);
         weapons.msr_nm = engagement::msr_nm(own, enemy);
         weapons.enemy_in_msr = engagement::in_msr(own, enemy);
-        weapons.nez_nm = engagement::nez_nm(enemy, own);          // benim NEZ'im = düşmanın gözünden kaçış NEZ'i (uçaklar ters)
         weapons.enemy_in_nez = engagement::in_nez(own, enemy);
-        weapons.r_cold_nm = engagement::r_cold_nm(enemy, own);    // benim R_cold'um = düşman benden kaçarken füzemin yetişebileceği mesafe (uçaklar ters)
     }
 }
 
@@ -135,10 +133,10 @@ void World::update()
 
     fighter.picture.me_in_enemy_wez = hostile.weapons.enemy_in_wez;   // "ben onun WEZ'inde miyim" = onun "düşman WEZ'imde mi"
     hostile.picture.me_in_enemy_wez = fighter.weapons.enemy_in_wez;
-    fighter.picture.me_in_enemy_mar = hostile.picture.is_in_mar;       // menzil iki taraftan aynı
-    hostile.picture.me_in_enemy_mar = fighter.picture.is_in_mar;
     fighter.picture.enemy_a_pole_nm = hostile.weapons.a_pole_nm;       // düşman şimdi atsa
     hostile.picture.enemy_a_pole_nm = fighter.weapons.a_pole_nm;
     fighter.picture.enemy_f_pole_nm = hostile.weapons.f_pole_nm;
     hostile.picture.enemy_f_pole_nm = fighter.weapons.f_pole_nm;
+    fighter.weapons.r_cold_nm = hostile.picture.r_cold_nm;             // benim R_cold'um = düşmanın benden kaçarken R_cold'u
+    hostile.weapons.r_cold_nm = fighter.picture.r_cold_nm;
 }

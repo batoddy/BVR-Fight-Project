@@ -13,7 +13,7 @@ class Otopilot
 {
 public:
     explicit Otopilot(Mission mission) : mission_(mission) {}
-    void step(Aircraft& own, const Aircraft& enemy);   // yazdıkları: own.command, own.phase, own.decision, atış emri
+    void step(Aircraft& own);                          // yazdıkları: own.command, own.phase, own.decision, atış emri
 
 private:
     void step_commit(Aircraft& own);
@@ -34,6 +34,7 @@ private:
     void update_defense(Aircraft& own);                // savunma yalnız acilleşir: Beam → Drag → Notch
     Maneuver& defense_maneuver();                      // defense_'e göre Beam / Drag / Notch
     Maneuver& support_maneuver(const Aircraft& own);   // düşman cold ise kovalama, değilse crank
+    Maneuver& chase_maneuver();                        // kovalama: CHASE_MODE takibi, art yakıcı
     void go_to(OtopilotState next);                    // yalnız durumu değiştirir
     void record(Aircraft& own, const char* text, const char* reason) const;   // own.decision = "text — reason (görev)"
 

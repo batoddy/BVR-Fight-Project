@@ -14,8 +14,8 @@ Message Sim::step(const Message& state)
 
     world_.fighter.weapons.has_launch_order = false;          // önceki step'in emri gitti; bu step'in emri yoksa gönderilmez
     world_.hostile.weapons.has_launch_order = false;
-    otopilot_fighter_.step(world_.fighter, world_.hostile);  // 3. her otopilot komutunu, fazını ve atış emrini yazar
-    otopilot_hostile_.step(world_.hostile, world_.fighter);
+    otopilot_fighter_.step(world_.fighter);                  // 3. her otopilot komutunu, fazını ve atış emrini yazar
+    otopilot_hostile_.step(world_.hostile);
 
     return CommandWriter::write(state.tick, world_);          // 4. uçuş komutları, atış emirleri ve hesaplar
 }

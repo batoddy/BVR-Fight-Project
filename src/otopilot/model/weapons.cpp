@@ -46,13 +46,26 @@ int Weapons::missiles_left() const
     return count;
 }
 
-// Slotlar atış sırasında değil; havadakiler toplanıp fire_order'a göre sıralanır (en çok slot sayısı kadar).
+bool Weapons::launch_pending() const
+{
+    for (const Missile& missile : missiles)
+    {
+        if (missile.is_fired && !missile.has_kinematics)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Aktif: havada ve güdümünü kaybetmemiş (destek kuralı). Güdümü kopan füze sonuç getirmez, sayılmaz.
+// Slotlar atış sırasında değil; aktifler toplanıp fire_order'a göre sıralanır (en çok slot sayısı kadar).
 std::vector<const Missile*> Weapons::active_missiles() const
 {
     std::vector<const Missile*> active;
     for (const Missile& missile : missiles)
     {
-        if (missile.in_flight())
+        if (missile.in_flight() && missile.target.is_guided)
         {
             active.push_back(&missile);
         }
@@ -64,13 +77,10 @@ std::vector<const Missile*> Weapons::active_missiles() const
 
 const Missile* Weapons::active_missile() const
 {
-    const Missile* active = nullptr;
-    for (const Missile& missile : missiles)
+    const std::vector<const Missile*> active = active_missiles();
+    if (active.empty())
     {
-        if (missile.in_flight() && (active == nullptr || missile.fire_order > active->fire_order))
-        {
-            active = &missile;
-        }
+        return nullptr;
     }
-    return active;
+    return active.back();
 }

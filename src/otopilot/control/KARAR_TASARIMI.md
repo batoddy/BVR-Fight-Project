@@ -163,11 +163,11 @@ Sabit ivme varsayımı: hız/irtifa/manevra etkisini görmez, hata çoğunlukla 
 | Recommit ve notch dönüş süresi | `engagement::recommit_turn_s`, `notch_turn_s` → `picture.notch_turn_s` |
 | Düşmanın savunma süresi | `picture.enemy_out_turn_s` = `out_plan(enemy, own).turn.time_s` |
 | MRR, R_cold'um | `picture.mrr_nm`, `weapons.r_cold_nm` |
-| Kovalama | `Maneuvers::chase` (pure pursuit, art yakıcı) |
+| Kovalama | `Maneuvers::pursuit`, mod `CHASE_MODE` (otopilot.cpp, şimdilik Pure), art yakıcı |
 | Out | dönüşten sonra da art yakıcı (COLD ve ABORT aynı out'u sürdürür) |
 | L&L | `Mission::leave_after_support` |
 | Zararsız tehdit | `condition::threat_harmless` (DEFEND çıkışı ve tehdit kesintisi) |
-| Koşullar | `condition::enemy_cold`, `enemy_hot`, `beyond_mrr`, `enemy_in_my_msr`, `enemy_in_my_r_cold`, `is_live`, `has_live_missile`, `live_missile_count`, `out_of_missiles`, `has_guided_threat` |
+| Koşullar | `condition::enemy_cold`, `enemy_hot`, `beyond_mrr`, `enemy_in_my_msr`, `enemy_in_my_r_cold`, `has_live_missile`, `out_of_missiles`, `has_guided_threat` |
 
 ## 7. Ertelenenler ve testte bakılacaklar
 

@@ -11,15 +11,7 @@ enum class MissileState
 {
     Ready = 0,      // atılmadı, rampada    | "ready"     | BVRGym is_ready_to_launch()
     InFlight = 1,   // havada               | "in_flight" | BVRGym is_active()
-    Ended = 2,      // vurdu ya da kaybetti | "ended"     | sonuç outcome'da
-};
-
-// Füzenin sonucu: vurdu mu, kaybetti mi.
-enum class MissileOutcome
-{
-    None,   // henüz sonuç yok (atılmadı ya da havada) | outcome null
-    Hit,    // hedefi vurdu                             | "hit"
-    Lost,   // ıskaladı / enerjisi bitti                | "lost"
+    Ended = 2,      // vurdu ya da kaybetti | "ended"
 };
 
 // Atılmış füzenin kendi hedefine göre bilgileri | World::update (missile_geometry)
@@ -52,12 +44,9 @@ struct Missile
     std::string target_id;         // hedef uçağın id'si; atılmadan önce boş        | target_id
     bool has_kinematics = false;   // eşleşip ilk ölçüm gelince true
     MissileState state = MissileState::Ready;        // | state
-    MissileOutcome outcome = MissileOutcome::None;   // | outcome
     Kinematics kinematics;         // füzenin konumu                               | kinematics
 
     MissileTargetInfo target;      // hedefe göre                                  | World::update
 
     bool in_flight() const { return state == MissileState::InFlight; }   // havada mı
-    bool hit() const { return outcome == MissileOutcome::Hit; }          // hedefi vurdu mu
-    bool lost() const { return outcome == MissileOutcome::Lost; }        // ıskaladı ya da enerjisi bitti mi
 };
