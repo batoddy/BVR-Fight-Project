@@ -1,0 +1,38 @@
+# Süre: simülasyon saniyesi; sleep: her dış adım sonunda gerçek saniye.
+world:
+  duration_s: 420
+  sleep_s: 0.0           # 0 = beklemeden; 0.08 ≈ gerçek zaman
+  physics_steps_per_tick: 10   # bir C++ adımı = 10 × 1/120 s = 1/12 s (BVRGym f16_config Control_time_step)
+
+# Python TCP sunucusu; C++ bu adrese istemci olarak bağlanır.
+connection:
+  host: 127.0.0.1
+  port: 6000
+
+# blue/red: benzersiz anahtar. name: görünen isim. type: C++ hesap profili etiketi (fizik şimdilik F-16).
+agents:
+  blue:
+    name: KZL
+    type: F16
+    team: Blue
+    ammo: 6
+    throttle: 0.45       # 0..0.5 normal güç, 0.5..1 art yakıcı
+    spawn:               # lat/long/heading: derece (lat WGS84 jeodezik); alt: MSL metre; vel: m/s
+      lat: 59.0
+      long: 18.0
+      alt: 10000
+      vel: 300
+      heading: 0
+
+  red:
+    name: Hostile
+    type: F16
+    team: Red
+    ammo: 6
+    throttle: 0.45
+    spawn:
+      lat: 60.2
+      long: 18.0
+      alt: 10000
+      vel: 300
+      heading: 180

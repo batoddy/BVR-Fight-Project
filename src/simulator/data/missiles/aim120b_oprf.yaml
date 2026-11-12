@@ -1,0 +1,26 @@
+# AIM-120B — alternatif profil, tamamen OPRF (FlightGear F-16 paketi Systems/f16-payload.xml <aim-120>).
+# Motor iki kademeli; bu profilde 1. kademe kullanılır, 2. kademe sustain_* alanlarında. Kütle resmi değerin altında (291 lb).
+name: AIM-120 AMRAAM
+
+mass_launch_kg: 131.995        # 291 lb, OPRF weight-launch-lbs
+propellant_kg: 58.967          # 130 lb, OPRF weight-fuel-lbm
+thrust_n: 12010.3              # 2700 lbf, OPRF thrust-lbf-stage-1
+burn_s: 10.0                   # OPRF stage-1-duration-sec
+sustain_thrust_n: 1245.5       # 280 lbf, OPRF thrust-lbf-stage-2
+sustain_s: 18.0                # OPRF stage-2-duration-sec
+
+diameter_m: 0.1800             # OPRF cross-section-sqft 0.2739 ft² → eşdeğer çap
+drag_coeff_base: 0.3           # OPRF drag-coeff
+plume_drag_factor: 1.0         # OPRF varsayılanı
+max_g: 30.0                    # OPRF max-g
+
+min_guide_mach: 0.6            # OPRF
+self_destruct_s: 110.0         # OPRF ("guess")
+arming_s: 1.6                  # OPRF
+
+launcher_field_of_regard_deg: 60.0
+pitbull_nm: 10.0
+seeker_field_deg: 135.0
+seeker_range_nm: 38.8
+navigation_constant: 3.0
+fuze_radius_m: 65.0

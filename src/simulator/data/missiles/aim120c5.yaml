@@ -1,0 +1,29 @@
+# AIM-120C-5 — ana profil. Kaynaklar: docs/veri_info/FUZE_VERI_TABLOSU.md
+# "analiz" = docs/Dokuman/BVR dokuman/AIM120C5-Performance-Assessment-rev2.pdf (açık analiz)
+# "OPRF"   = FlightGear OPRF F-16 paketi Systems/f16-payload.xml <aim-120> ve missile-code.nas (topluluk)
+name: AIM-120 AMRAAM           # kayıt dosya adı; görüntüleyici 3B modeli buradan seçer
+
+# --- Kütle ve motor ---
+mass_launch_kg: 157.0          # analiz s.5 Tablo 1 (resmi C-5/6/7: 161.5 kg ile uyumlu)
+propellant_kg: 51.2559         # analiz s.7-8 (Hazard Classification Rev 14 kaynaklı)
+thrust_n: 16771.9              # analiz s.8, tek kademe
+burn_s: 7.75                   # analiz s.8 (7-9 s aralığının ortası)
+
+# --- Aerodinamik ---
+diameter_m: 0.1778             # 7 in, Donanma bilgi dosyası (resmi); referans alanı π·d²/4
+drag_coeff_base: 0.3           # OPRF drag-coeff; OPRF drag() Mach eğrisinin çarpanı. Motor verisi farklı kaynaktan: menzil kıyasıyla kalibre edilecek (geçici)
+plume_drag_factor: 1.0         # OPRF varsayılanı (AIM-120 bloğu ayarlamıyor); analiz s.9 %2-20 azalma der, OPRF yorumu 0.6 der: çelişkili, nötr değer
+max_g: 30.0                    # OPRF max-g; analiz s.30 (30 g tutma) ile uyumlu
+
+# --- Uçuş sınırları ---
+min_guide_mach: 0.6            # OPRF min-speed-for-guiding-mach: altında güdüm yok, yanma sonrası kayıp sayılır
+self_destruct_s: 110.0         # OPRF self-destruct-time-sec (OPRF notu: "guess")
+arming_s: 1.6                  # OPRF arming-time-sec
+
+# --- Güdüm / arayıcı / tapa parametreleri (fonksiyonları kullanıcı yazacak) ---
+launcher_field_of_regard_deg: 60.0   # OPRF apg-68.nas: atan uçak radarı ±60° azimut/yükseklik
+pitbull_nm: 10.0               # OPRF station-manager.nas AIM-120
+seeker_field_deg: 135.0        # OPRF seeker-field-deg (toplam açı)
+seeker_range_nm: 38.8          # OPRF detect-range tanımsız → max-fire-range-nm
+navigation_constant: 3.0       # OPRF proportionality-constant varsayılanı ("normally 3-6")
+fuze_radius_m: 65.0            # OPRF max-report-distance (metre, missile-code.nas satır 2027)

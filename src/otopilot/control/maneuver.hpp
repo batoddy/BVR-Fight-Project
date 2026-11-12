@@ -83,7 +83,7 @@ private:
     static constexpr double DESCEND_FT = 3300.0;                  // ft, out'ta ne kadar alçalınacak
     static constexpr double FLOOR_FT = 10000.0;                   // ft, out bunun altına indirmez
     static constexpr double TURN_THROTTLE = throttle::MAX_THRUST; // dönüşte art yakıcı
-    static constexpr double RUN_THROTTLE = throttle::MRT;         // dönüş bitince askeri güç: COLD ve ABORT aynı out'u sürdürür
+    static constexpr double RUN_THROTTLE = throttle::MAX_THRUST;         // dönüş bitince askeri güç: COLD ve ABORT aynı out'u sürdürür
     static constexpr double DONE_ATA_DEG = 177.0;                 // derece, |ATA| bunu geçince düşman arkada
 
     double target_altitude_ft_ = 0;                               // ft, enter()'da bir kez hesaplanır
