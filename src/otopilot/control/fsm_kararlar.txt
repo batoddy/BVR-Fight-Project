@@ -31,10 +31,15 @@ Trade:
     if(havada füzem var mı?)
 
     var:    
-     - pitbull mu? goto->Defend
+     - pitbull mu?: goto->Defend
      
+     - pitbull değil: 
+        - füze değerlendirmesi
 
     yok:
+    - atmalıyım kaçmalımıyım?
+        atmalıyım:  fire & goto->Trade
 
+        kaçmalıyım: goto->Defend
 
 Defend:
