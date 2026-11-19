@@ -130,7 +130,7 @@ def declarations(body):
 def inventory(root):
     base = root / "src/otopilot"
     paths = sorted(p for p in base.rglob("*") if p.suffix in {".hpp", ".cpp"}
-                   and not {"third_party", "build"}.intersection(p.relative_to(base).parts))
+                   and not {"third_party", "build", "fsm"}.intersection(p.relative_to(base).parts))   # fsm: yazılıyor, legacy ile aynı adlı tipler var
     types, sources = [], {}
     definition = re.compile(r"\b(enum\s+class|struct|class)\s+([A-Za-z_]\w*(?:::\w+)*)\s*(?::\s*([^;{]+))?\s*\{")
     for path in paths:
@@ -225,11 +225,13 @@ def relationships(types):
 
 
 LANES = [
-    ("Adım ve bağımsız otopilotlar", ["Sim", "OtopilotFighter", "OtopilotHostile", "World", "FlightCommand"]),
-    ("Manevralar ve kalıtım", ["Maneuvers", "Maneuver", "Hold", "Out", "In", "Crank", "Notch", "CrankSide"]),
-    ("Uçak ve hesaplanan durum", ["Aircraft", "Kinematics", "EnemyInfo", "Wez", "Phase"]),
-    ("Profil ve füze modeli", ["AircraftProfile", "AltitudeFactor", "Missile", "MissileProfile", "MissileTargetInfo", "MissileType", "MissileState", "MissileOutcome"]),
-    ("Geometri ve taktik hesaplar", ["Geometry", "Engagement", "MissileGeometry", "Ned", "Lla", "Ecef"]),
+    ("Adım ve otopilot", ["Sim", "Otopilot", "OtopilotState", "World", "FlightCommand", "CommandMode", "Mission", "MissionGoal", "RiskLevel", "Decision",
+                          "AbortChoice", "ThreatResponse", "CommitChoice", "SupportChoice", "TradeChoice", "Defense", "ReassessChoice", "ColdChoice", "ChaseChoice"]),
+    ("Manevralar ve kalıtım", ["Maneuvers", "Maneuver", "ManeuverStatus", "ManeuverSide", "Hold", "Out", "Crank", "Notch", "Beam", "Commit", "Recommit",
+                               "Drag", "Offset", "Flank", "FlyHeading", "Pursuit", "PursuitMode", "CountingManeuver"]),
+    ("Uçak ve hesaplanan durum", ["Aircraft", "Kinematics", "Wez", "Phase", "Aspect", "Picture", "Weapons", "OutPlan", "TurnResult"]),
+    ("Profil ve füze modeli", ["AircraftProfile", "Missile", "MissileProfile", "MissileTargetInfo", "MissileState", "MissileOutcome", "GuidanceMode", "RColdFit", "RmaxFit"]),
+    ("Geometri ve taktik hesaplar", ["Ned"]),
     ("Otopilot giriş / çıkış sınırı", ["StateReader", "CommandWriter", "CalculationWriter", "ConsoleLog", "Message", "Connection", "Connection::Impl"]),
 ]
 

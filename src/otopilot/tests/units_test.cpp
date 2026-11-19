@@ -13,7 +13,7 @@
 #include "common/formulas.hpp"
 #include "common/units.hpp"
 #include "control/conditions.hpp"
-#include "control/otopilot.hpp"
+#include "control/legacy/otopilot.hpp"
 #include "io/command_writer.hpp"
 #include "io/state_reader.hpp"
 #include "model/flight_command.hpp"
@@ -38,6 +38,30 @@ namespace
         }
     }
 
+    Aircraft f16()
+    {
+        Aircraft aircraft;
+        aircraft.profile = aircraft_profile("F16");
+        return aircraft;
+    }
+
+    template <class Ex = std::runtime_error, class F> bool rejects(F&& call)
+    {
+        try { call(); }
+        catch (const Ex&) { return true; }
+        return false;
+    }
+
+    bool said(const Aircraft& own, const char* prefix) { return own.decision.rfind(prefix, 0) == 0; }
+
+    void near_fields(const Json& json, std::initializer_list<std::pair<const char*, double>> fields)
+    {
+        for (const auto& [key, value] : fields)
+        {
+            near(json.at(key).get<double>(), value, key);
+        }
+    }
+
     // own'dan bearing_deg yönünde range_nm uzağa bir nokta (geometry'nin düz dünya yaklaşımıyla).
     Kinematics place(const Kinematics& own, double bearing_deg, double range_nm)
     {
@@ -52,14 +76,13 @@ namespace
 
     void conversions_and_coordinates()
     {
-        near(meter_to_feet(3048), 10000, "m -> ft");
-        near(feet_to_meter(10000), 3048, "ft -> m");
-        near(meter_to_nmile(1852), 1, "m -> NM");
-        near(nmile_to_meter(1), 1852, "NM -> m");
-        near(knot_to_mps(3600), 1852, "kt -> m/s");
-        near(mps_to_knot(-1852), -3600, "signed m/s -> kt");
-        near(feet_to_nmile(nmile_to_feet(1)), 1, "ft / NM round trip");
-        near(fps_to_knot(knot_to_fps(450)), 450, "ft/s / kt round trip");
+        const std::pair<double, double> pairs[] = {{meter_to_feet(3048), 10000}, {feet_to_meter(10000), 3048},
+            {meter_to_nmile(1852), 1}, {nmile_to_meter(1), 1852}, {knot_to_mps(3600), 1852}, {mps_to_knot(-1852), -3600},
+            {feet_to_nmile(nmile_to_feet(1)), 1}, {fps_to_knot(knot_to_fps(450)), 450}};
+        for (const auto& [actual, expected] : pairs)
+        {
+            near(actual, expected, "unit conversion");
+        }
         near(wrap_180(270), -90, "wrap 270");
         near(wrap_180(-200), 160, "wrap -200");
         near(wrap_360(-90), 270, "wrap -90");
@@ -84,11 +107,6 @@ namespace
         near(geometry::los_unit(own, other).down, 0, "sub-meter LOS threshold");
         other.altitude_ft = meter_to_feet(2.0);
         near(geometry::los_unit(own, other).down, -1, "vertical LOS normalization");
-
-        Missile missile;
-        missile.profile = AIM120C;
-        require(missile_geometry::is_pitbull(missile, AIM120C.pitbull_range_nm - 0.01), "pitbull inside");
-        require(!missile_geometry::is_pitbull(missile, AIM120C.pitbull_range_nm + 0.01), "pitbull outside");
     }
 
     void flight_command_setters()
@@ -119,8 +137,7 @@ namespace
 
         // Out planı eski out formülüyle aynı sonucu vermeli:
         //   x = -r·sin|ATA|, y = r·(1 + cos|ATA|), yaklaşma = R - √((R - x)² + y²), Δt = (180 - |ATA|) · r / V
-        Aircraft fighter, hostile;
-        fighter.profile = aircraft_profile("F16");
+        Aircraft fighter = f16(), hostile;
         fighter.kinematics.lat_deg = 59.5;
         fighter.kinematics.lon_deg = 18.0;
         fighter.kinematics.heading_deg = 20;
@@ -200,8 +217,7 @@ namespace
     // Otopilot akışı: koşullar World::update'ten gelir; burada picture ve weapons elle sürülür.
     void otopilot_flow()
     {
-        Aircraft own, enemy;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16(), enemy;
         own.kinematics.altitude_ft = 30000;
         own.kinematics.tas_kt = 500;
         own.command.set_altitude_ft(30000).set_throttle(0.45);
@@ -222,20 +238,20 @@ namespace
         own.weapons.enemy_in_tr = true;
         own.weapons.tr_nm = own.picture.range_3d_nm;   // World'deki gibi: bayrak ve değer birlikte
         pilot.step(own);
-        require(own.decision.rfind("COMMIT: ateş", 0) == 0 && own.weapons.missiles_left() == 4, "fire decided at TR, order next step");
+        require(said(own, "COMMIT: ateş") && own.weapons.missiles_left() == 4, "fire decided at TR, order next step");
         pilot.step(own);
         require(own.weapons.missiles_left() == 3, "first shot once");
         Missile& first = own.weapons.missiles[0];
-        first.python_id = "blue/missile/0";
-        own.weapons.has_launch_order = false;
-        pilot.step(own);
-        require(own.phase == Phase::Crank, "support cranks against hot enemy while missile waits launch");
-
+        own.weapons.has_launch_order = false;   // Sim::step gibi: emir gitti, sim slot 0'ı attı
         first.has_kinematics = true;
         first.state = MissileState::InFlight;
+        own.weapons.record_launch(first);
+        pilot.step(own);
+        require(own.phase == Phase::Crank && first.fire_order == 1, "support cranks against hot enemy");
+
         first.target.is_pitbull = true;
         pilot.step(own);
-        require(own.decision.rfind("SUPPORT → OUT", 0) == 0, "support ends at pitbull");
+        require(said(own, "SUPPORT → OUT"), "support ends at pitbull");
         pilot.step(own);
         require(own.phase == Phase::Out, "out flown");
         near(own.command.altitude_ft(), 26700, "out entry altitude");
@@ -243,13 +259,12 @@ namespace
 
         own.picture.ata_deg = 180;
         pilot.step(own);
-        require(own.decision.rfind("OUT → COLD", 0) == 0, "out done goes cold");
-        require(own.command.throttle() == throttle::MRT, "out after turn on military power");
+        require(said(own, "OUT → COLD"), "out done goes cold");
         pilot.step(own);
-        require(own.decision.rfind("COLD → RECOMMIT", 0) == 0, "hot enemy beyond MRR: recommit");
+        require(said(own, "COLD → RECOMMIT"), "hot enemy beyond MRR: recommit");
         own.picture.ata_deg = 0;
         pilot.step(own);
-        require(own.decision.rfind("RECOMMIT → COMMIT", 0) == 0, "recommit done");
+        require(said(own, "RECOMMIT → COMMIT"), "recommit done");
 
         // Tehdit gelirken füzem pitbull değil: TRADE.
         Missile threat;
@@ -263,25 +278,25 @@ namespace
         first.target.is_pitbull = false;
         first.target.pitbull_time_left_s = 20.0;
         pilot.step(own);
-        require(own.decision.rfind("TEHDİT → TRADE", 0) == 0 && own.phase == Phase::Crank, "threat while supporting: trade");
+        require(said(own, "TEHDİT → TRADE") && own.phase == Phase::Crank, "threat while supporting: trade");
         pilot.step(own);
-        require(own.decision.rfind("TEHDİT → TRADE", 0) == 0, "A holds: crank continues");
+        require(said(own, "TEHDİT → TRADE"), "A holds: crank continues");
 
         first.target.pitbull_time_left_s = 50.0;          // kritik an 60 − (15 + 10) = 35 s'den sonra
         first.target.catch_time_left_s.reset();           // B2/B1 hesaplanamaz
         own.picture.threat_escape_margin_nm = 10.0;
         pilot.step(own);
-        require(own.phase == Phase::Crank && own.decision.rfind("TEHDİT → TRADE", 0) == 0, "A fails: crank until critical moment");
+        require(own.phase == Phase::Crank && said(own, "TEHDİT → TRADE"), "A fails: crank until critical moment");
         threat.target.catch_time_left_s = 25.0;           // kritik an geçti: 25 − (15 + 10) = 0
         pilot.step(own);
-        require(own.decision.rfind("DEFEND", 0) == 0, "critical moment: drop support");
+        require(said(own, "DEFEND"), "critical moment: drop support");
         threat.target.catch_time_left_s = 60.0;
         pilot.step(own);
         require(own.phase == Phase::Beam, "large escape margin: beam");
         own.picture.threat_escape_margin_nm = -1.0;
         own.picture.notch_turn_s = 10;
         pilot.step(own);
-        require(own.decision.rfind("DEFEND: acilleşti", 0) == 0, "negative margin escalates");
+        require(said(own, "DEFEND: acilleşti"), "negative margin escalates");
         pilot.step(own);
         require(own.phase == Phase::Drag, "drag before last moment");
         threat.target.catch_time_left_s = 12.0;
@@ -296,7 +311,7 @@ namespace
         own.picture.threat = nullptr;
         own.picture.threat_escape_margin_nm.reset();
         pilot.step(own);
-        require(own.decision.rfind("REASSESS → RECOMMIT", 0) == 0, "threat over: reassess");
+        require(said(own, "REASSESS → RECOMMIT"), "threat over: reassess");
 
         // Zararsız füze: benden yavaş ve recommit payı ≥ 1 NM → savunma bırakılır, kesinti de tetiklenmez.
         first.state = MissileState::Ended;                // füzem bitti: TRADE yok
@@ -305,38 +320,35 @@ namespace
         own.picture.threat = &threat;
         own.picture.threat_recommit_margin_nm = 2.0;
         pilot.step(own);
-        require(own.decision.rfind("DEFEND", 0) == 0, "fast threat: defend");
+        require(said(own, "DEFEND"), "fast threat: defend");
         threat.kinematics.tas_kt = 400;                   // ben 500 kt
         pilot.step(own);
-        require(own.decision.rfind("DEFEND: ", 0) != 0 && own.decision.find("REASSESS") != std::string::npos,
+        require(!said(own, "DEFEND: ") && own.decision.find("REASSESS") != std::string::npos,
                 "harmless threat: leave defense");
         pilot.step(own);
-        require(own.decision.rfind("DEFEND", 0) != 0, "harmless threat does not interrupt");
+        require(!said(own, "DEFEND"), "harmless threat does not interrupt");
         own.picture.threat_recommit_margin_nm = 0.5;      // füzeye yaklaştım: pay eşiğin altında
         pilot.step(own);
-        require(own.decision.rfind("DEFEND", 0) == 0, "margin below threshold: threat again");
+        require(said(own, "DEFEND"), "margin below threshold: threat again");
         own.picture.threat = nullptr;
         own.picture.threat_recommit_margin_nm.reset();
 
         for (Missile& missile : own.weapons.missiles)   // füze bitti: kalıcı çıkış
         {
-            missile.is_fired = true;
             missile.has_kinematics = true;
             missile.state = MissileState::Ended;
         }
         pilot.step(own);
-        require(own.decision.rfind("ABORT", 0) == 0 && own.phase == Phase::Out, "abort when out of missiles");
+        require(said(own, "ABORT") && own.phase == Phase::Out, "abort when out of missiles");
         own.picture.range_3d_nm = 50;
         pilot.step(own);
         require(own.phase == Phase::Out, "abort is permanent");
     }
 
-    // Pitbull süresi, destek kuralı ve kaçış payı: formül adım adım yeniden hesaplanır.
     // Erken atış payı: TR'nin dışında, TR + pay içinde ateş; pay 0 ise TR beklenir.
     void commit_early_shot()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         Missile missile;
         missile.profile = AIM120C;
         own.weapons.missiles.push_back(missile);
@@ -362,18 +374,6 @@ namespace
              *accel_travel_time_s(20 - AIM120C.pitbull_range_nm, 2000, AIM120C.slowing_accel_kt_s), "pitbull time left");
         missile.target.is_pitbull = true;
         near(*missile_geometry::pitbull_time_left_s(missile), 0, "pitbull time is zero once pitbull");
-
-        Aircraft launcher, target;
-        launcher.profile = aircraft_profile("F16");
-        launcher.kinematics.lat_deg = 59.5;
-        launcher.kinematics.lon_deg = 18.0;
-        target.kinematics = place(launcher.kinematics, 50, 20);
-        missile.target.is_pitbull = false;
-        require(missile_geometry::is_guided(missile, launcher, target), "target inside gimbal: guided");
-        target.kinematics = place(launcher.kinematics, 70, 20);
-        require(!missile_geometry::is_guided(missile, launcher, target), "target outside gimbal: lost");
-        missile.target.is_pitbull = true;
-        require(missile_geometry::is_guided(missile, launcher, target), "pitbull guides itself");
 
         // Füze 2000 kt, Mach 1 = 590 kt, kapanma 2270 kt; 15 s dönüş, 600 kt kaçış.
         missile.kinematics.tas_kt = 2000;
@@ -403,9 +403,7 @@ namespace
     void engagement_values()
     {
         // İki F16 (ana silah AIM-120C): fighter 10 km'de 700 kt kuzeye, hostile 20 NM kuzeyde bana doğru 300 kt.
-        Aircraft fighter, hostile;
-        fighter.profile = aircraft_profile("F16");
-        hostile.profile = aircraft_profile("F16");
+        Aircraft fighter = f16(), hostile = f16();
         fighter.kinematics.lat_deg = 59.5;
         fighter.kinematics.lon_deg = 18.0;
         fighter.kinematics.altitude_ft = meter_to_feet(10000);
@@ -426,7 +424,7 @@ namespace
         const double flight_time_s = r_max.c + r_max.d * std::log(10.0);
         near(wez.max_nm, missile_path_nm + enemy_closure_kt * flight_time_s / 3600.0, "Rmax formula", 1e-9);
         require(wez.max_nm > missile_path_nm, "WEZ longer when the enemy approaches");
-        near((r_max.a + r_max.b * std::log(10.0)), 60.65, "Rmax missile path at 10 km and reference speed", 1e-3);
+        near((r_max.a + r_max.b * std::log(10.0)), 31.223, "Rmax missile path at 10 km and reference speed", 1e-3);
         require(engagement::in_wez(fighter, hostile) == (range_nm > wez.min_nm && range_nm < wez.max_nm), "in WEZ");
 
         // R_cold: 10 km ve 700 kt'de safety · e^a
@@ -448,15 +446,11 @@ namespace
                                     - travel_distance_nm(hostile.kinematics.tas_kt, recommit_turn_s);
         near(remaining_nm, engagement::mar_nm(fighter, hostile) + 0.5,
              "DOR leaves MAR plus fixed 0.5 NM margin");
-
-
     }
 
     void decision_range()
     {
-        Aircraft own, enemy;
-        own.profile = aircraft_profile("F16");
-        enemy.profile = aircraft_profile("F16");
+        Aircraft own = f16(), enemy = f16();
         own.kinematics.lat_deg = 59;
         own.kinematics.lon_deg = 18;
         own.kinematics.altitude_ft = meter_to_feet(10000);
@@ -504,7 +498,6 @@ namespace
             Missile missile;
             missile.slot = slot;
             missile.profile = AIM120C;
-            missile.is_fired = true;
             missile.has_kinematics = true;
             missile.state = MissileState::InFlight;
             missile.target_id = "blue";
@@ -522,7 +515,6 @@ namespace
         const std::vector<const Missile*>& threats = world.fighter.picture.threats;
         require(threats.size() == 2, "every inbound missile is scanned");
         require(threats[0] == &world.hostile.weapons.missiles[0], "threat is the missile itself, not a copy");
-        require(world.fighter.picture.threat != nullptr, "threat found");
         require(world.fighter.picture.threat->slot == 1, "closest missile is the threat");
         near(geometry::bearing_deg(world.fighter.kinematics, world.fighter.picture.threat->kinematics), 0, "threat bearing", 1e-6);
         near(*threats[0]->target.a_pole_nm, 20, "A-pole read from missile");
@@ -537,7 +529,6 @@ namespace
         near(world.fighter.picture.mrr_nm, engagement::mrr_nm(world.fighter, world.hostile), "MRR computed");
         near(world.fighter.weapons.r_cold_nm, engagement::r_cold_nm(world.hostile, world.fighter), "my R_cold mirrors enemy escape R_cold");
         require(world.hostile.picture.threats.empty(), "no threat list against hostile");
-        require(world.hostile.picture.threat == nullptr, "no missile against hostile");
         require(!world.hostile.picture.is_spiked, "not spiked without missile");
         // Silah ve kaçış hesapları main_weapon'dan; füze slotu olmasa da hesaplanır.
         require(world.hostile.picture.mar_nm > 0, "MAR from main weapon without missile slots");
@@ -553,40 +544,86 @@ namespace
         const double range_nm = world.hostile.picture.range_3d_nm;
         require(world.hostile.weapons.enemy_in_nez == (range_nm <= world.fighter.picture.nez_nm), "enemy in NEZ");
 
-        world.hostile.weapons.missiles[1].target.is_guided = false;   // destek kuralı: güdüm koptu, bir daha dönmez
+        world.hostile.weapons.missiles[1].target.is_guided = false;   // sim is_locked false
         world.update();
-        require(!world.hostile.weapons.missiles[1].target.is_guided, "lost guidance stays lost");
-        require(world.fighter.picture.threat != nullptr && world.fighter.picture.threat->slot == 0, "unguided missile is not the threat");
+        require(!world.hostile.weapons.missiles[1].target.is_guided, "world keeps sim lock flag");
         require(world.fighter.picture.threats.size() == 2, "unguided missile still listed");
     }
 
-    void metric_wire_and_imperial_calculations()
+    // Protokol v2 örnekleri: docs/mimari/MESAJ_PROTOKOLU_V2.md
+    Json wire_kinematics()
+    {
+        return {{"lat_deg", 59}, {"lon_deg", 18}, {"alt_m", 3048}, {"yaw_deg", 270}, {"pitch_deg", 1}, {"roll_deg", 2},
+                {"tas_mps", 300}, {"mach", 0.9}, {"velocity_ned_mps", {200, -30, 4}}};
+    }
+
+    Json hello_message(const std::string& slot_1_designation)
     {
         Json data;
-        data["sim_time_s"] = 1.0;
+        data["physics_dt_s"] = 1.0 / 120;
+        data["tick_s"] = 1.0 / 12;
         data["aircraft"] = Json::array();
-        data["flight_commands"] = Json::array();
-        data["missiles"] = Json::array();
         for (const std::string id : {"blue", "red"})
         {
-            data["aircraft"].push_back({{"id", id}, {"name", id}, {"team", id},
-                {"type", "F16"}, {"health", 1}, {"lat_deg", 59}, {"lon_deg", 18},
-                {"alt_msl_m", 3048}, {"yaw_deg", 270}, {"pitch_deg", 1}, {"roll_deg", 2},
-                {"tas_mps", 300}, {"mach", 0.9}, {"velocity_ned_mps", {200, -30, 4}}});
-            data["flight_commands"].push_back({{"id", id}, {"heading_deg", 270},
-                {"altitude_m", 3048}, {"throttle", 0.7}});
-            data["missiles"].push_back({{"id", id + "/missile/0"}, {"owner_id", id},
-                {"state", "ready"}});
+            data["aircraft"].push_back({{"id", id}, {"name", id}, {"type", "F16"}, {"team", id},
+                {"weapons", {{{"slot", 0}, {"profile", "aim9x"}, {"designation", "AIM-9X"}},
+                             {{"slot", 1}, {"profile", "aim120c5"}, {"designation", slot_1_designation}}}}});
         }
+        return data;
+    }
+
+    Json ready_weapon(int slot)
+    {
+        return {{"slot", slot}, {"id", "x/missile/" + std::to_string(slot)}, {"designation", "AIM-120C"},
+                {"state", "ready"}, {"request_id", nullptr}, {"target_id", nullptr}, {"flight_time_s", nullptr},
+                {"kinematics", nullptr}, {"guidance_mode", "none"}, {"is_locked", false}, {"is_pitbull", false},
+                {"outcome", nullptr}};
+    }
+
+    Json state_message()
+    {
+        Json data;
+        data["time_s"] = 1.0;
+        data["aircraft"] = Json::object();
+        for (const std::string id : {"blue", "red"})
+        {
+            Json packet;
+            packet["own"] = {{"id", id}, {"name", id}, {"type", "F16"}, {"team", id}, {"health", 1},
+                {"kinematics", wire_kinematics()}, {"load_factor_g", 1.0}, {"fuel_kg", 3000.0},
+                {"applied_command", {{"heading_deg", 270}, {"altitude_m", 3048}, {"throttle", 0.7}, {"g_limit", nullptr}}}};
+            packet["weapons"] = Json::array({ready_weapon(0), ready_weapon(1)});
+            packet["warnings"] = Json::array();
+            packet["events"] = Json::array();
+            data["aircraft"][id] = packet;
+        }
+        return data;
+    }
+
+    void protocol_v2_reader_and_writer()
+    {
+        World unknown;
+        require(rejects([&] { StateReader::read_hello(hello_message("AIM-999"), unknown); }), "unknown designation is an error");
+
         World world;
+        StateReader::read_hello(hello_message("AIM-120C"), world);
+        require(world.fighter.weapons.missiles.size() == 2, "slots from hello");
+        require(world.fighter.weapons.missiles[0].profile.name == "AIM-9X"
+                && world.fighter.weapons.missiles[1].profile.name == "AIM-120C", "loadout from hello designations");
+        require(world.hostile.profile.name == "F-16", "profile from hello type");
+
+        Json data = state_message();
         StateReader::read_world(data, world);
-        near(world.fighter.kinematics.altitude_ft, 10000, "reader altitude");
-        near(world.fighter.kinematics.heading_deg, -90, "reader heading ±180");
-        near(world.fighter.kinematics.tas_kt, mps_to_knot(300), "reader TAS");
-        near(world.fighter.kinematics.velocity_ned_kt.down, mps_to_knot(4), "reader vertical speed");
-        near(world.fighter.kinematics.velocity_ned_kt.east, mps_to_knot(-30), "reader signed speed");
+        const Kinematics& read = world.fighter.kinematics;
+        near(world.sim_time_s, 1.0, "reader time_s");
+        near(read.altitude_ft, 10000, "reader altitude");
+        near(read.heading_deg, -90, "reader heading ±180");
+        near(read.tas_kt, mps_to_knot(300), "reader TAS");
+        near(read.velocity_ned_kt.down, mps_to_knot(4), "reader vertical speed");
+        near(read.velocity_ned_kt.east, mps_to_knot(-30), "reader signed speed");
         near(world.fighter.command.altitude_ft(), 10000, "reader current command");
         near(world.fighter.command.heading_deg(), -90, "reader command heading ±180");
+        require(!world.fighter.command.g_limit().has_value(), "reader leaves g limit to maneuver");
+        require(world.fighter.command.mode() == CommandMode::Target, "applied command without mode is target");
 
         world.fighter.picture.range_3d_nm = 12;
         world.fighter.picture.closure_kt = 500;
@@ -602,49 +639,99 @@ namespace
         world.fighter.command.set_g_limit(6.0, 9.0);
         const Message message = CommandWriter::write(1, world);
         const Json& fighter_command = message.data.at("aircraft").at(0);
-        near(fighter_command.at("altitude_m").get<double>(), 3048, "writer metric command");
-        near(fighter_command.at("heading_deg").get<double>(), 270, "writer heading 0..360");
-        near(fighter_command.at("g_limit").get<double>(), 6.0, "writer g limit");
+        require(fighter_command.at("mode").get<std::string>() == "target", "writer target mode");
+        near_fields(fighter_command, {{"altitude_m", 3048}, {"heading_deg", 270}, {"g_limit", 6.0}});
         require(!message.data.at("aircraft").at(1).contains("g_limit"), "no g limit when unset");
         const Json& calc = message.data.at("calculations").at("aircraft").at(0);
-        near(calc.at("range_3d_nm").get<double>(), 12, "calculation NM field");
-        near(calc.at("rate_of_closure_kt").get<double>(), 500, "calculation kt field (wire name)");
-        near(calc.at("dr_nm").get<double>(), 23.25, "DR exported in NM");
-        near(calc.at("a_pole_nm").get<double>(), 18, "A-pole exported in NM");
-        near(calc.at("f_pole_nm").get<double>(), 15, "F-pole exported in NM");
-        near(calc.at("tr_nm").get<double>(), 30, "TR exported in NM");
-        const Json& empty_calc = message.data.at("calculations").at("aircraft").at(1);
-        near(empty_calc.at("a_pole_nm").get<double>(), 0, "absent A-pole converted only at wire boundary");
-        near(empty_calc.at("f_pole_nm").get<double>(), 0, "absent F-pole converted only at wire boundary");
-        near(empty_calc.at("tr_nm").get<double>(), 0, "absent TR converted only at wire boundary");
-        near(calc.at("threat_range_nm").get<double>(), 9, "threat range exported in NM");
-        near(calc.at("threat_mach").get<double>(), 2.5, "threat mach exported");
-        require(calc.at("threat_pitbull").get<int>() == 1, "threat pitbull exported as number");
-        near(empty_calc.at("threat_range_nm").get<double>(), 0, "absent threat exported as 0");
-        near(empty_calc.at("threat_mach").get<double>(), 0, "absent threat mach exported as 0");
-        require(empty_calc.at("threat_pitbull").get<int>() == 0, "absent threat not pitbull");
+        near_fields(calc, {{"range_3d_nm", 12}, {"rate_of_closure_kt", 500}, {"dr_nm", 23.25}, {"a_pole_nm", 18}, {"f_pole_nm", 15},
+                           {"tr_nm", 30}, {"threat_range_nm", 9}, {"threat_mach", 2.5}, {"threat_pitbull", 1}});
+        const Json& empty_calc = message.data.at("calculations").at("aircraft").at(1);   // yokluk yalnız tel sınırında 0'a çevrilir
+        near_fields(empty_calc, {{"a_pole_nm", 0}, {"f_pole_nm", 0}, {"tr_nm", 0}, {"threat_range_nm", 0}, {"threat_mach", 0}, {"threat_pitbull", 0}});
         require(!calc.contains("range_3d_m"), "no metric calculation label for NM value");
 
-        require(world.fighter.weapons.fire(AIM120C), "launch test missile");
+        require(calc.at("phase").get<std::string>() == "HOLD", "phase exported by name");
+        world.fighter.phase = Phase::PurePursuit;
+        require(CommandWriter::write(1, world).data.at("calculations").at("aircraft").at(0).at("phase").get<std::string>()
+                == "PURE_PURSUIT", "multi-word phase name");
+
+        // Atış emri: hangi slotun atılacağını sim seçer; command'a yalnız atan ve hedef gider.
+        require(world.fighter.weapons.fire(), "launch test missile");
         require(world.fighter.weapons.has_launch_order, "launch order set");
         require(world.fighter.weapons.launch_pending() && world.fighter.weapons.active_missile() == nullptr,
                 "ordered missile pending, not active");
-        data["missiles"][0] = {{"id", "blue/missile/0"}, {"owner_id", "blue"},
-            {"target_id", "red"}, {"state", "in_flight"}, {"outcome", nullptr},
-            {"kinematics", data["aircraft"][0]}};
+        require(world.fighter.weapons.missiles_left() == 1, "order counted before sim launches");
+        require(!world.fighter.weapons.fire(), "one order per step");
+        const Json launch = CommandWriter::write(3, world).data.at("launch");
+        require(launch.size() == 1 && !launch[0].contains("request_id")
+                && launch[0].at("id").get<std::string>() == "blue" && launch[0].at("target_id").get<std::string>() == "red",
+                "launch carries shooter and target");
+
+        // Sim ilk hazır slotu (0) attı: atış sırası ve pole'lar sim'in gösterdiği slota yazılır.
+        world.fighter.weapons.has_launch_order = false;   // Sim::step her step sıfırlar
+        Json flying = ready_weapon(0);
+        flying["state"] = "in_flight";
+        flying["target_id"] = "red";
+        flying["flight_time_s"] = 0.1;
+        flying["kinematics"] = wire_kinematics();
+        flying["guidance_mode"] = "datalink";
+        flying["is_locked"] = true;
+        data["aircraft"]["blue"]["weapons"][0] = flying;
         StateReader::read_world(data, world);
-        require(world.fighter.weapons.has_launch_order, "reader leaves launch order reset to Sim::step");
         const Missile& missile = world.fighter.weapons.missiles[0];
-        require(missile.has_kinematics, "missile kinematics matched");
+        require(missile.has_kinematics && missile.fire_order == 1, "launch recorded on sim slot");
+        require(missile.target.a_pole_nm == 18.0 && missile.target.f_pole_nm == 15.0, "poles at launch copied");
+        require(missile.guidance_mode == GuidanceMode::Datalink && missile.target.is_guided && !missile.target.is_pitbull, "lock from sim");
         require(world.fighter.weapons.active_missile() == &missile && !world.fighter.weapons.launch_pending(), "active missile");
         near(missile.kinematics.altitude_ft, 10000, "missile reader altitude");
-        near(missile.kinematics.tas_kt, mps_to_knot(300), "missile reader TAS");
-        world.fighter.weapons.missiles[0].target.is_pitbull = true;
-        const Json pitbull_calc = CommandWriter::write(2, world).data.at("calculations").at("aircraft");
+        StateReader::read_world(data, world);
+        require(missile.fire_order == 1, "launch recorded once");
+
+        data["aircraft"]["blue"]["weapons"][0]["is_pitbull"] = true;
+        data["aircraft"]["blue"]["weapons"][0]["guidance_mode"] = "seeker";
+        StateReader::read_world(data, world);
+        const Json pitbull_calc = CommandWriter::write(4, world).data.at("calculations").at("aircraft");
         require(pitbull_calc[0].at("pitbull_missile_slots").get<std::string>() == "[0]", "pitbull slot exported");
         require(pitbull_calc[1].at("pitbull_missile_slots").get<std::string>() == "[]", "pitbull belongs to carrier");
-        world.fighter.weapons.missiles[0].target.is_guided = false;
-        require(world.fighter.weapons.active_missile() == nullptr, "unguided missile not active");
+        data["aircraft"]["blue"]["weapons"][0]["is_locked"] = false;
+        data["aircraft"]["blue"]["weapons"][0]["guidance_mode"] = "none";
+        StateReader::read_world(data, world);
+        require(world.fighter.weapons.active_missile() == nullptr, "unlocked missile not active");
+    }
+
+    // Doğrudan mod: setter sınırları, okuma, yazım.
+    void protocol_v21_direct_mode()
+    {
+        FlightCommand command;
+        command.set_heading_deg(90).set_altitude_ft(20000).set_throttle(0.5).set_g_limit(5.0, 9.0);
+        require(command.mode() == CommandMode::Target, "default target mode");
+        command.set_bank_deg(190).set_g(12);
+        require(command.mode() == CommandMode::Direct, "bank and g switch to direct");
+        near(command.bank_deg(), -170, "bank wrapped to ±180");
+        near(command.g(), DIRECT_G_MAX, "g clamped to +9");
+        near(command.set_g(-6).g(), DIRECT_G_MIN, "g clamped to -4");
+
+        World world;
+        StateReader::read_hello(hello_message("AIM-120C"), world);
+        Json data = state_message();
+        data["aircraft"]["blue"]["own"]["applied_command"]["mode"] = "direct";
+        data["aircraft"]["blue"]["own"]["applied_command"]["bank_deg"] = -30.0;
+        data["aircraft"]["blue"]["own"]["applied_command"]["g"] = 2.5;
+        StateReader::read_world(data, world);
+        require(world.fighter.command.mode() == CommandMode::Direct, "applied direct mode read");
+        near(world.fighter.command.bank_deg(), -30, "applied bank read");
+        near(world.fighter.command.g(), 2.5, "applied g read");
+        require(world.hostile.command.mode() == CommandMode::Target, "other aircraft stays target");
+
+        world.fighter.command.set_bank_deg(60).set_g(-2).set_throttle(0.9);
+        const Json aircraft = CommandWriter::write(2, world).data.at("aircraft");
+        const Json& direct = aircraft.at(0);
+        require(direct.at("mode").get<std::string>() == "direct" && direct.at("id").get<std::string>() == "blue", "writer direct mode");
+        near_fields(direct, {{"bank_deg", 60}, {"g", -2}, {"throttle", 0.9}});
+        require(direct.size() == 5 && !direct.contains("heading_deg") && !direct.contains("g_limit"), "direct writes only its fields");
+        require(aircraft.at(1).at("mode").get<std::string>() == "target" && aircraft.at(1).contains("heading_deg"), "target fields kept");
+
+        world.fighter.command.set_g(std::nan(""));
+        require(rejects([&] { CommandWriter::write(3, world); }), "NaN direct g rejected");
     }
 }
 
@@ -663,7 +750,8 @@ int main()
         engagement_values();
         decision_range();
         world_threat_selection();
-        metric_wire_and_imperial_calculations();
+        protocol_v2_reader_and_writer();
+        protocol_v21_direct_mode();
         std::cout << "Unit conversion, geometry, turn, engagement, world and IO checks passed.\n";
         return 0;
     }

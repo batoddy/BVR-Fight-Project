@@ -13,9 +13,12 @@ from simulator.physics.jsbsim_model import JSBSimModel
 from simulator.scenario import load_scenario
 from simulator.simulation import Simulation
 
-AIRCRAFT_KEYS = {"id", "name", "type", "team", "health", "lat_deg", "lon_deg", "alt_msl_m",
-                 "yaw_deg", "pitch_deg", "roll_deg", "tas_mps", "mach", "velocity_ned_mps"}   # eski src/sim read_state alanları
-MISSILE_KEYS = {"id", "owner_id", "target_id", "state", "outcome", "flight_time_s", "kinematics"}
+KIN_KEYS = {"lat_deg", "lon_deg", "alt_m", "yaw_deg", "pitch_deg", "roll_deg", "tas_mps", "mach",
+            "velocity_ned_mps"}                                     # docs/mimari/MESAJ_PROTOKOLU_V2.md KIN
+PACKET_KEYS = {"own", "rwr", "weapons", "contacts", "warnings", "events"}
+OWN_KEYS = {"id", "name", "type", "team", "health", "kinematics", "load_factor_g", "fuel_kg", "applied_command"}
+WEAPON_KEYS = {"slot", "id", "designation", "state", "request_id", "target_id", "flight_time_s", "kinematics",
+               "guidance_mode", "is_locked", "is_pitbull", "outcome"}
 
 
 class ModelTest(unittest.TestCase):
@@ -41,14 +44,23 @@ class SimulationTest(unittest.TestCase):
     def setUp(self):
         self.simulation = Simulation(load_scenario())
 
-    def test_state_schema_matches_old_sim(self):
+    def test_packet_schema(self):                                # protokol v2
         state = self.simulation.read_state()
-        self.assertEqual(set(state), {"tick", "sim_time_s", "aircraft", "missiles", "flight_commands"})
-        for item in state["aircraft"]:
-            self.assertEqual(set(item), AIRCRAFT_KEYS)
-        for item in state["missiles"]:
-            self.assertEqual(set(item), MISSILE_KEYS)
-        self.assertEqual(len(state["missiles"]), sum(p.ammo for p in self.simulation.aircraft.values()))
+        self.assertEqual(set(state), {"time_s", "aircraft"})
+        for key, packet in state["aircraft"].items():
+            self.assertEqual(set(packet), PACKET_KEYS)
+            self.assertEqual(set(packet["own"]), OWN_KEYS)
+            self.assertEqual(set(packet["own"]["kinematics"]), KIN_KEYS)
+            self.assertEqual(len(packet["weapons"]), len(self.simulation.aircraft[key].missiles))
+            for weapon in packet["weapons"]:
+                self.assertEqual(set(weapon), WEAPON_KEYS)
+            self.assertEqual([c["id"] for c in packet["contacts"]], [k for k in state["aircraft"] if k != key])   # sensörler kapalı: hep görünür
+
+    def test_hello_lists_slots(self):
+        hello = self.simulation.hello()
+        blue = next(a for a in hello["aircraft"] if a["id"] == "blue")
+        self.assertEqual([w["slot"] for w in blue["weapons"]], list(range(6)))
+        self.assertEqual(blue["weapons"][0]["designation"], "AIM-120C")
 
     def test_step_advances_one_tick(self):
         start = self.simulation.time_s

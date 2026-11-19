@@ -20,8 +20,8 @@ class Message:
     data: dict
 
     def __post_init__(self):
-        if self.kind not in ("state", "command", "end"):
-            raise ValueError("Mesaj kind alanı state, command veya end olmalı.")
+        if self.kind not in ("hello", "state", "command", "end"):
+            raise ValueError("Mesaj kind alanı hello, state, command veya end olmalı.")
         if type(self.tick) is not int or self.tick < 0:
             raise ValueError("Mesaj tick alanı negatif olmayan tam sayı olmalı.")
         if not isinstance(self.data, dict):

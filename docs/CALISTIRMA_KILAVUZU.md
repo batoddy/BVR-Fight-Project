@@ -6,7 +6,7 @@ Komutlar Windows PowerShell için ve proje kökünden verilmiştir. Simülasyon 
 
 | Araç | Kullanım |
 |---|---|
-| Git ve `BVRGym` alt modülü | Fizik/ajan kaynaklarını edinmek |
+| Git | Depoyu edinmek (`BVRGym` alt modülü yalnız eski `src/sim` ve WEZ taraması için gerekir) |
 | Python 3.11 ve sanal ortam | Simülasyon ve kayıt görüntüleyicisi |
 | MinGW g++, CMake 3.20+ ve make | Windows C++17 programını derlemek |
 | Güncel tarayıcı | 2D/3D görüntüleyici |
@@ -19,12 +19,12 @@ py -3.11 -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-`BVRGym/jsb_gym/` dolu olmalıdır. BVRGym ayrı bir paket olarak kurulmaz; `bvrgym_setup.py` depo yolunu Python arama yoluna ekler. Görüntüleyici tek başına Python standart kütüphanesiyle çalışır; JSBSim ve diğer bağımlılıklar uçuşu çalıştıran ortam içindir.
+Simülasyon `src/simulator`'dır; JSBSim'i doğrudan kullanır, F-16 XML'leri `src/simulator/jsbsim_data/` altındadır. Görüntüleyici tek başına Python standart kütüphanesiyle çalışır; JSBSim ve diğer bağımlılıklar uçuşu çalıştıran ortam içindir.
 
 Ortam etkinleştirme engelleniyorsa Python'u doğrudan çağırabilirsin:
 
 ```powershell
-.\.venv\Scripts\python.exe .\src\sim\sim_main.py
+.\.venv\Scripts\python.exe .\src\simulator\main.py
 ```
 
 MinGW araçları PATH içinde bulunmalıdır. Örneğin w64devkit kurulumu kullanılıyorsa onun `bin` dizini eklenir. Makineye özgü mutlak yollar proje komutlarına yazılmaz.
@@ -37,38 +37,40 @@ cmake --version
 ## 2. C++ programını derle
 
 ```powershell
-cmake -S src/otopilot -B src/otopilot/build -G "MinGW Makefiles"
 cmake --build src/otopilot/build
 ```
 
-Çıktı `src/otopilot/main.exe` dosyasıdır. CMake ana dizin ile `control`, `model`, `calculations`, `io`, `common` klasörlerindeki `.cpp` dosyalarını toplar. Bu klasörlere yeni kaynak eklendiğinde `CONFIGURE_DEPENDS` listeyi yeniler. `build` ve `third_party` kaynak taramasına katılmaz.
+`build/` henüz yoksa ilk kurulum komutu [otopilot KULLANIM.md](../src/otopilot/KULLANIM.md#doğrulama)'dedir (MinGW boşluklu kullanıcı yolunda olduğu için kısa yol ve `-B` bayrakları gerekir).
+
+Çıktı `src/otopilot/main.exe` dosyasıdır. CMake `control`, `model`, `calculations`, `io`, `common` klasörlerindeki (alt klasörler dahil) `.cpp` dosyalarını toplar; yeni dosya eklendiğinde `CONFIGURE_DEPENDS` listeyi yeniler.
 
 Projede Windows Winsock bağlantısı kullanılır ve `ws2_32` bağlanır. Farklı bir derleyici/generator kullanmak için mevcut yapılandırmayı karıştırmak yerine ayrı build dizini oluştur.
 
 ## 3. Senaryoyu ayarla
 
-[scenario.yaml](../src/sim/scenario.yaml) başlangıç konumlarını, mühimmat sayısını, gazı, süreyi ve TCP adresini tanımlar.
+[scenario.yaml](../src/simulator/scenario.yaml) başlangıç konumlarını, mühimmatı, gazı, süreyi ve TCP adresini tanımlar.
 
 | Alan | Anlam |
 |---|---|
-| `world.duration_s` | Başlangıçtan itibaren çalıştırılacak fizik süresi |
+| `world.duration_s` | Çalıştırılacak simülasyon süresi, s |
 | `world.sleep_s` | Her dış adım sonundaki gerçek zaman beklemesi; `0` beklemeden çalıştırır |
-| `world.sim_time_step` | BVRGym'in adım tekrar sayısı; saniye veya fizik `dt` değeri değildir |
+| `world.physics_steps_per_tick` | Bir C++ adımındaki JSBSim adımı (10 × 1/120 s = 1/12 s) |
+| `world.sensors` | `false`: düşman hep görünür, RWR boş. `true`: radar (menzil, notch) ve RWR |
 | `connection.host`, `connection.port` | Python sunucusunun dinleyeceği adres |
 | `agents.blue`, `agents.red` | Mevcut C++ sürümünün beklediği kimlikler |
 | `name`, `team`, `type` | Görünen ad, takım ve C++ profil etiketi |
-| `ammo` | Python'da oluşturulacak füze sayısı; C++ profilinin `loadout` uzunluğunu aşmamalı |
+| `ammo` | Slot sırasıyla füze profili ve adedi (`aim120c5: 6`); profil `src/simulator/data/missiles/<ad>.yaml` |
 | `spawn` | `lat`, `long`, `heading` derece; `alt` metre; `vel` m/s |
 | `throttle` | Başlangıç gaz hedefi, `0..1` |
 
-Profil etiketi `src/otopilot/model/aircraft_profiles.hpp` içinde tanımlı olmalıdır. Farklı bir `type` etiketi Python'daki fizik modelini değiştirmez.
+Profil etiketi `src/otopilot/model/profiles/aircraft_profiles.hpp` içinde tanımlı olmalıdır. Farklı bir `type` etiketi Python'daki fizik modelini değiştirmez.
 
 ## 4. Uçuşu çalıştır
 
 Birinci terminal:
 
 ```powershell
-python .\src\sim\sim_main.py
+python .\src\simulator\main.py [--name ad] [--altitude m] [--throttle 0..1] [--range NM] [--duration s]
 ```
 
 Program kayıt dizinini yazdırır ve C++ istemcisini bekler. İkinci terminal:
@@ -87,11 +89,7 @@ Süre dolunca Python `end` mesajı gönderir ve dosyaları kapatır. Her çalı�
 
 ## 5. TCP olmadan uçuş
 
-```powershell
-python .\src\sim\_sim_local_template.py
-```
-
-Bu şablon YAML'daki yön/irtifa/gaz hedefleriyle çalışır. Döngü içinde komutlar elle değiştirilebilir ve `simulation.fire("blue", "red")` çağrılabilir. C++ çalışmaz; dolayısıyla C++ hesaplarını içeren `calculations.csv` üretilmez.
+C++ olmadan uçuş denemeleri `src/simulator/tools/` altındaki ölçüm betikleriyledir ([simülatör README](../src/simulator/README.md)). Bu durumda C++ hesaplarını içeren `calculations.csv` üretilmez.
 
 ## 6. Kaydı aç
 
@@ -114,7 +112,7 @@ Kayıt tamamlandıktan sonra açılması önerilir: okuyucu iki saniye değişme
 | C++ Python'a bağlanamıyor | Önce Python'u başlat; IPv4 ve portun iki tarafta aynı olduğunu doğrula |
 | `g++` veya `cmake` bulunamadı | MinGW/w64devkit `bin` yolunu PATH'e ekle; terminali yeniden aç |
 | Bilinmeyen uçak tipi | YAML `type` ile C++ profil anahtarını eşleştir |
-| Füze sayısı/yük hatası | `ammo` sayısını azalt veya profil `loadout` listesini uzat |
+| Bilinmeyen füze | `ammo`'daki profilin designation'ı `src/otopilot/model/profiles/missile_profiles.hpp` tablosunda olmalı |
 | Python geçersiz uçuş komutunda duruyor | Her uçak için bir komut, yön `0..360`, gaz `0..1`, sonlu sayılar gönder |
 | Arayüzde otopilot hesabı görünmüyor | C++ kullanılan kayıt olmalı; `calculations.csv`, uçak kimliği ve tam zaman eşleşmesini kontrol et |
 | Harita boş, uçuş görünür | Harita katmanını ve internet erişimini kontrol et; harita uçuş oynatımından bağımsızdır |

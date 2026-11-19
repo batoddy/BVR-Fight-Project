@@ -14,6 +14,9 @@ class FlightCommand:
     altitude_m: float
     throttle: float                      # 0..1; 0.5 üstü art yakıcı (eski sim scenario.yaml notu)
     g_limit: Optional[float] = None      # dönüşte çekilecek en büyük yük; None: kontrolcünün varsayılanı
+    mode: str = "target"                 # "target": yön/irtifa; "direct": yatış + g (protokol v2.1)
+    bank_deg: Optional[float] = None     # direct: istenen yatış, derece (+ sağ)
+    g: Optional[float] = None            # direct: istenen yük faktörü
 
 
 class NeutralControl:

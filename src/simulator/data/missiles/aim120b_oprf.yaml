@@ -1,6 +1,7 @@
 # AIM-120B — alternatif profil, tamamen OPRF (FlightGear F-16 paketi Systems/f16-payload.xml <aim-120>).
 # Motor iki kademeli; bu profilde 1. kademe kullanılır, 2. kademe sustain_* alanlarında. Kütle resmi değerin altında (291 lb).
 name: AIM-120 AMRAAM
+designation: AIM-120C          # C++ missile_profiles.hpp tablosundaki ad
 
 mass_launch_kg: 131.995        # 291 lb, OPRF weight-launch-lbs
 propellant_kg: 58.967          # 130 lb, OPRF weight-fuel-lbm

@@ -1,6 +1,6 @@
 #pragma once
 
-// Görev konsepti: karar noktaları (control/decisions) eşiklerini buna göre seçer. Şimdilik C++'ta sabit.
+// Görev konsepti: karar noktaları (control/legacy/decisions) eşiklerini buna göre seçer. Şimdilik C++'ta sabit.
 enum class MissionGoal
 {
     Repel,     // püskürt: düşman dönerse yeterli

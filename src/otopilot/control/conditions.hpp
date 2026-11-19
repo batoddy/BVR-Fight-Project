@@ -29,7 +29,7 @@ namespace condition
     bool enemy_hot(const Aircraft& own);           // düşman bana dönük: Hot ya da Flank (TA ≤ 70°); aradaki Beam bandı histerezis
     bool has_live_missile(const Aircraft& own);    // atış emrim bekliyor ya da aktif füzem var (weapons.launch_pending, active_missile)
     bool out_of_missiles(const Aircraft& own);     // atılacak füzem kalmadı ve canlı füzem yok
-    bool has_guided_threat(const Aircraft& own);   // bana gelen güdümlü füze var (picture.threat yalnız güdümlüleri seçer)
+    bool has_guided_threat(const Aircraft& own);   // bana gelen havada füze var (kilitli ya da inertial; picture.threat)
     bool threat_harmless(const Aircraft& own);     // tehdit benden yavaş ve füzeye dönsem bile recommit payı yetiyor
     bool threat_alive(const Aircraft& own);        // bana gelen güdümlü, yetişebilen ve zararsız olmayan füze var
     bool supporting(const Aircraft& own);          // atış emrim bekliyor ya da desteklediğim füze henüz pitbull değil

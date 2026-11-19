@@ -45,6 +45,7 @@ class Missile:
         self.state = "ready"            # ready / in_flight / ended
         self.outcome = None             # hit / lost
         self.target_key = None
+        self.request_id = None          # C++ atış emrinin numarası (protokol v2)
         self.seeker = Seeker(profile)
         self.time_s = 0.0               # uçuş süresi
         self.position = np.zeros(3)     # ECEF, m
@@ -129,7 +130,7 @@ class Missile:
         lat, lon, alt = earth.ecef_to_geodetic(self.position)
         north, east, down = earth.ecef_to_ned(self.velocity, lat, lon)
         speed = float(np.linalg.norm(self.velocity))
-        return dict(lat_deg=lat, lon_deg=lon, alt_msl_m=alt,
+        return dict(lat_deg=lat, lon_deg=lon, alt_m=alt,
                     yaw_deg=math.degrees(math.atan2(east, north)) % 360.0,
                     pitch_deg=math.degrees(math.atan2(-down, math.hypot(north, east))), roll_deg=0.0,
                     tas_mps=speed, mach=speed / atmosphere.state(alt)[3],

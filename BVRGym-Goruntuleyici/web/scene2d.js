@@ -1,6 +1,6 @@
 import {sampleWindow} from './stream.js';
 import {Basemap} from './basemap.js';
-import {MODEL_LENGTHS,ENEMY_ZONES,radarColor,DISTANCE_UNITS,altitudeLabel,distanceScale,speedLabel,flightLabel,catchLabel,analysisLabel,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
+import {MODEL_LENGTHS,ENEMY_ZONES,radarColor,DISTANCE_UNITS,altitudeLabel,distanceScale,speedLabel,flightLabel,catchLabel,missileBadge,analysisLabel,visualLength,velocityVector,VELOCITY_PIXELS_PER_MPS} from './units.js';
 
 export function updateScaleBar(element,metersPerPixel,width,mode,unit='nm'){
   if(!element)return;
@@ -18,6 +18,11 @@ export function updateScaleBar(element,metersPerPixel,width,mode,unit='nm'){
 
 // Uzak modeller yönü okunabilen simgelere dönüşür; dünya koordinatları değişmez.
 const AIRCRAFT_OUTLINE='M0 -8 Q.2 -7.5 .3 -6.3 L.44 -4.6 .58 -3 1.15 -.7 .8 -.7 4.98 2.45 4.98 3.85 .82 2.6 .55 3.65 2.6 5.4 2.45 6.75 .43 5.8 .38 7.06 -.38 7.06 -.43 5.8 -2.45 6.75 -2.6 5.4 -.55 3.65 -.82 2.6 -4.98 3.85 -4.98 2.45 -.8 -.7 -1.15 -.7 -.58 -3 -.44 -4.6 -.3 -6.3 Q-.2 -7.5 0 -8 Z';
+
+// Füze durum rozeti renkleri (styles.css .flight-label-pitbull ile aynı): [açık, koyu] × [zemin, çerçeve, yazı].
+const BADGE_COLORS={pitbull:[['#dcfce7','#15803d','#166534'],['#143d2b','#4ade80','#86efac']],
+  datalink:[['#dbeafe','#1d4ed8','#1e3a8a'],['#172554','#60a5fa','#bfdbfe']],
+  lost:[['#fee2e2','#b91c1c','#7f1d1d'],['#450a0a','#f87171','#fecaca']]};
 
 export class Scene {
   constructor(canvas,onSelect,onPan){
@@ -190,7 +195,7 @@ export class Scene {
       }
       if(this.labelMode!=='none'&&(this.labelMode!=='selected'||entity.id===selected)){
         const name=this.labelNames?entity.name:'',speed=this.labelSpeed?speedLabel(entity,this.speedUnit):'',altitude=this.labelAltitude?altitudeLabel(entity.altitude_m,this.altitudeUnit):'';
-        const isMissile=entity.kind==='missile',pitbull=isMissile&&entity.is_pitbull===true;
+        const isMissile=entity.kind==='missile',badge=missileBadge(entity),pitbull=Boolean(badge);
         // Füze satırı: seçiliyse atıştan beri süre/yol; varış süresi hesap varsa her zaman.
         const flight=[isMissile&&entity.id===selected?flightLabel(entity,this.distanceUnit):'',isMissile?catchLabel(entity):''].filter(Boolean).join(' · ');
         if(!name&&!speed&&!altitude&&!pitbull&&!flight)continue;
@@ -199,7 +204,7 @@ export class Scene {
         ctx.font=`600 ${fontPx}px "Segoe UI",sans-serif`;const nameWidth=Math.min(isMissile&&entity.id!==selected?64:90,ctx.measureText(name).width);
         ctx.font=`${fontPx}px "Segoe UI",sans-serif`;const speedWidth=ctx.measureText(speed).width,altitudeWidth=ctx.measureText(altitude).width,flightWidth=ctx.measureText(flight).width;
         const topHeight=name||speed||pitbull?rowPx+2:0,altitudeHeight=altitude?rowPx:0,labelHeight=topHeight+altitudeHeight+(flight?rowPx:0)+6;
-        const badgeWidth=pitbull?24:0;
+        const badgeTextWidth=badge?badge.text.length*6+7:0,badgeWidth=badge?badgeTextWidth+5:0;
         const labelWidth=Math.min(this.width-16,Math.max(nameWidth+speedWidth+(name&&speed?6:0)+badgeWidth,altitudeWidth,flightWidth)+10);
         const labelOffset=Math.max(26,pixels/2+8);
         const arrowPointsRight=velocity&&velocity.east>.25*Math.hypot(velocity.east,velocity.north);
@@ -221,11 +226,12 @@ export class Scene {
         if(speed){ctx.textAlign=name?'right':'center';ctx.fillText(speed,name?labelX+labelWidth-5-badgeWidth:labelX+(labelWidth-badgeWidth)/2,labelY+baseline+2);}
         if(altitude){ctx.textAlign='center';ctx.fillText(altitude,labelX+labelWidth/2,labelY+topHeight+baseline);}
         if(flight){ctx.textAlign='center';ctx.fillText(flight,labelX+labelWidth/2,labelY+topHeight+altitudeHeight+baseline);}
-        if(pitbull){
-          const dark=document.documentElement.dataset.theme==='dark',x=labelX+labelWidth-23,y=labelY+3;
-          ctx.fillStyle=dark?'#143d2b':'#dcfce7';ctx.strokeStyle=dark?'#4ade80':'#15803d';ctx.lineWidth=1;
-          ctx.beginPath();ctx.roundRect(x,y,19,14,3);ctx.fill();ctx.stroke();
-          ctx.font='700 9px "Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillStyle=dark?'#86efac':'#166534';ctx.fillText('PB',x+9.5,y+10);
+        if(badge){
+          const dark=document.documentElement.dataset.theme==='dark',colors=BADGE_COLORS[badge.kind][dark?1:0];
+          const x=labelX+labelWidth-badgeTextWidth-4,y=labelY+3;
+          ctx.fillStyle=colors[0];ctx.strokeStyle=colors[1];ctx.lineWidth=1;
+          ctx.beginPath();ctx.roundRect(x,y,badgeTextWidth,14,3);ctx.fill();ctx.stroke();
+          ctx.font='700 9px "Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillStyle=colors[2];ctx.fillText(badge.text,x+badgeTextWidth/2,y+10);
         }
         ctx.restore();
       }

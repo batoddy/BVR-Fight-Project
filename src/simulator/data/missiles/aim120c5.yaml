@@ -2,6 +2,7 @@
 # "analiz" = docs/Dokuman/BVR dokuman/AIM120C5-Performance-Assessment-rev2.pdf (açık analiz)
 # "OPRF"   = FlightGear OPRF F-16 paketi Systems/f16-payload.xml <aim-120> ve missile-code.nas (topluluk)
 name: AIM-120 AMRAAM           # kayıt dosya adı; görüntüleyici 3B modeli buradan seçer
+designation: AIM-120C          # C++ missile_profiles.hpp tablosundaki ad: uyum profili bununla seçilir (hello mesajı)
 
 # --- Kütle ve motor ---
 mass_launch_kg: 157.0          # analiz s.5 Tablo 1 (resmi C-5/6/7: 161.5 kg ile uyumlu)

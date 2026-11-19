@@ -17,14 +17,6 @@ double missile_geometry::closure_kt(const Missile& missile, const Aircraft& targ
     return geometry::closure_kt(missile.kinematics, target.kinematics);
 }
 
-bool missile_geometry::is_pitbull(const Missile& missile, double range_nm)
-{
-    const double pitbull_range_nm = missile.profile.pitbull_range_nm;
-    const bool has_own_seeker = pitbull_range_nm > 0.0;   // yalnız Fox3; Fox1/Fox2'de 0
-    const bool close_enough = range_nm < pitbull_range_nm;
-    return has_own_seeker && close_enough;
-}
-
 // Füzenin sabit ivmeli uçuş uyumu (boost bitişinden sayılır).
 //   hız v(t) = v0 + a·t         (kt, a: kt/s, negatif)
 //   yol x(t) = v0·t + a·t²/2    (kt·s; NM için 3600'e bölünür)
@@ -56,11 +48,6 @@ std::optional<double> missile_geometry::time_at_distance_s(const MissileProfile&
 // Kapanma, yol kapanmadan sıfıra inerse füze yetişemez: std::nullopt.
 std::optional<double> missile_geometry::catch_time_left_s(const Missile& missile)
 {
-    return catch_time_left_s(missile, missile.target.closure_kt);
-}
-
-std::optional<double> missile_geometry::catch_time_left_s(const Missile& missile, double closure_kt)
-{
     const double blast_radius_nm = feet_to_nmile(missile.profile.blast_radius_ft);
     const double gap_nm = missile.target.range_nm - blast_radius_nm;
     if (gap_nm <= 0.0)
@@ -68,7 +55,7 @@ std::optional<double> missile_geometry::catch_time_left_s(const Missile& missile
         return 0.0;   // hedef zaten patlama yarıçapının içinde
     }
 
-    return accel_travel_time_s(gap_nm, closure_kt, missile.profile.slowing_accel_kt_s);
+    return accel_travel_time_s(gap_nm, missile.target.closure_kt, missile.profile.slowing_accel_kt_s);
 }
 
 // Pitbull'a kalan süre: catch_time_left_s ile aynı uyum, yol pitbull mesafesine kadar.
@@ -83,17 +70,6 @@ std::optional<double> missile_geometry::pitbull_time_left_s(const Missile& missi
     }
 
     return accel_travel_time_s(gap_nm, missile.target.closure_kt, missile.profile.slowing_accel_kt_s);
-}
-
-// Güdümlü: füze pitbull ya da atan uçağın burnu hedefe gimbal'dan dar açıyla bakıyor (|ATA| < gimbal).
-bool missile_geometry::is_guided(const Missile& missile, const Aircraft& launcher, const Aircraft& target)
-{
-    if (missile.target.is_pitbull)
-    {
-        return true;
-    }
-    const double launcher_ata_deg = geometry::ata_deg(launcher.kinematics, target.kinematics);
-    return std::abs(launcher_ata_deg) < launcher.profile.radar_gimbal_deg;
 }
 
 // Kaçış payı: şimdi dönüp run_kt ile kaçsam füze ölene kadar aramda kalan mesafe.

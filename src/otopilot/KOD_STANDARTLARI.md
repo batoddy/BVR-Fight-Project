@@ -71,16 +71,16 @@ Bu belge `src/otopilot` için geçerlidir. Yeni kod bu kurallara göre yazılır
 - **Açılar içeride her zaman ±180.** 0..360 yalnız Python sınırında (`io/`) kullanılır.
 - **SI'ya çevirme:** formül gerektiriyorsa çeviri fonksiyonun içinde yapılır; yerel değişkenin adı birimi taşır (`speed_mps`, `turn_rad`).
 - **Sabitler** `common/units.hpp`'dedir. Kodun içinde sihirli sayı yazılmaz; ayar ya profile, ya manevra/otopilot sınıfının birimli bir sabitine konur. Doğrudan yazılabilen sayılar: 0, 1, 2, 90, 180, 360.
-- **Gaz sayıyla yazılmaz:** `throttle::IDLE`, `throttle::DEFAULT`, `throttle::MRT`, `throttle::MAX_THRUST` (`model/flight_command.hpp`).
+- **Gaz sayıyla yazılmaz:** `throttle::IDLE`, `throttle::CRANK`, `throttle::DEFAULT`, `throttle::MRT`, `throttle::MAX_THRUST` (`model/flight_command.hpp`).
 
 ## 7. Manevra ve karar
 
 - **Manevra yaşam döngüsü:** Her otopilotun `Maneuvers` nesnesi son uçurulan manevrayı tutar. `maneuvers_.fly(own, manevra)` ilk kullanımda veya manevra nesnesi değiştiğinde `enter(own)` çağırır. Aynı manevra sürerken tekrarlamaz; araya başka manevra girdikten sonra geri dönülürse yeniden çağırır. `update(own)` her step `own.command`'dan başlayıp komutu döner, `status(own)` bitti mi sorusuna cevap verir. State değişse bile aynı manevra kesintisiz sürüyorsa yeniden giriş yapılmaz.
 - **`Running`** manevranın sürdüğünü, **`Satisfied`** sürerken istenen koşulun şu anda sağlandığını, **`Done`** ise bitiş koşulunun oluştuğunu bildirir. Sürekli manevralar tanımlı tolerans/koşul içindeyken `Satisfied`, koşul bozulunca yeniden `Running` döner. `is_satisfied(own)` yalnız `Satisfied` için true döner; `Done` ayrı bir durumdur. Out/Recommit hedefe varınca, Drag/Notch tehdit kalmayınca `Done` döner. Hiçbir durum otomatik geçiş yapmaz; manevrayı seçen otopilot/taktik karar verir.
 - **Gaz ve g sınırı manevranın içindedir:** uygulanmış her manevra kendi `THROTTLE` sabitini ve g sınırını `update()`'te yazar; önceki komutun sınırını devralmaz. Otopilot ve taktik gaz yazmaz. Hold girişteki ölçülen yön/irtifayı kilitler ve sapınca o hedefe döner.
-- **Atış manevra değildir:** atış durumu/adımı yalnız `own.weapons.fire(own.profile.main_weapon)` emrini verir; manevra uçmaz, önceki komut sürer. `fire` false dönerse aynı durumda kalınır.
+- **Atış manevra değildir:** atış durumu/adımı yalnız `own.weapons.fire()` emrini verir; manevra uçmaz, önceki komut sürer. `fire` false dönerse aynı durumda kalınır.
 - **Geçiş koşulları** `control/conditions.hpp` içinde isimli fonksiyonlar olarak durur. Karar kodu bu koşulları çağırır; böylece karar yapısı değişse de (switch → karar ağacı) koşullar aynı kalır.
-- **Otopilot** (`OtopilotFighter`, `OtopilotHostile`) ortak durum listesini (`OtopilotState`, `control/otopilot_state.hpp`) kullanır; `step` içinde tek switch'tir; her durum bir blok: `maneuvers_.fly(own, manevra)` ile uç, sonra çıkış koşullarına bak. Durum yalnız `go_to(durum)` ile değiştirilir (`state_ = ...` elle yazılmaz); `go_to` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; `enter()` ve komut üretimi ilk `fly()` çağrısında yapılır. Aynı manevrayı kullanan farklı statelerin çıkış koşulları bağımsızdır.
+- **Otopilot** (`Otopilot`, iki uçak için aynı sınıf) durum listesini (`OtopilotState`, `control/legacy/otopilot_state.hpp`) kullanır; `step` kesintilerden sonra durumun `step_*` fonksiyonunu çağırır: `maneuvers_.fly(own, manevra)` ile uç, sonra `decide::*` kararına göre geç. Durum yalnız `go_to` ile değiştirilir (`state_ = ...` elle yazılmaz); kayıtlı geçiş `go_to(own, durum, metin, neden)`. Manevra o state'in bloğunda seçilir; `enter()` ve komut üretimi ilk `fly()` çağrısında yapılır. Aynı manevrayı kullanan farklı statelerin çıkış koşulları bağımsızdır.
 
 ## 8. Dosya düzeni
 
@@ -113,7 +113,7 @@ Hesap ve manevra kodu bir insanın formülü kâğıttan takip eder gibi okuyabi
 - **Alan yorumu:** `birim, anlam | kaynak ya da yazan`, satır sonunda.
 - **Adı her şeyi söyleyen tek satırlık yardımcılar** (ör. `meter_to_nmile`) tek tek açıklanmaz; grubun üstüne bir `//` yeter.
 - **`.cpp`:** formülün türetmesi fonksiyonun üstünde, adımları satır sonunda `//`.
-- **Bölüm banner'ı:** bir dosyada birden çok sınıf varsa (ör. `maneuver.hpp/.cpp`) her sınıf yalnız ad ve tek satır özetli bir banner'la başlar; fonksiyon listesi yazılmaz (fonksiyonları `.hpp`'deki satır sonu yorumları anlatır):
+- **Bölüm banner'ı:** bir dosyada birden çok sınıf varsa her sınıf yalnız ad ve tek satır özetli bir banner'la başlar; fonksiyon listesi yazılmaz (fonksiyonları `.hpp`'deki satır sonu yorumları anlatır):
   ```cpp
   // =============================================================================
   // OUT  —  düşmana kuyruk dön, alçal, tam art yakıcı; düşman arkada kalınca biter

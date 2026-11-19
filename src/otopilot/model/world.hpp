@@ -10,10 +10,11 @@ struct World
     World(const World&) = delete;
     World& operator=(const World&) = delete;
 
-    double sim_time_s = 0;   // s, JSBSim saati | data.sim_time_s | simulation/sim-time-sec
+    double sim_time_s = 0;   // s, sim saati | data.time_s
 
     Aircraft fighter;        // biz    (roles.hpp FIGHTER_ID)
     Aircraft hostile;        // düşman (roles.hpp HOSTILE_ID)
+
 
     void update();           // ölçüm okunduktan sonra her step: düşman ataması, füze bilgileri, picture, weapons
 };

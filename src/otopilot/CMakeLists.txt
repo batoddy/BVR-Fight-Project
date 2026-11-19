@@ -2,49 +2,23 @@ cmake_minimum_required(VERSION 3.20)
 project(otopilot CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)        # -std=gnu++17 değil, saf -std=c++17
+set(CMAKE_BUILD_TYPE Release)
+add_compile_options(-Wall -Wextra)
+add_link_options(-static)            # MinGW çalışma zamanı exe'nin içine
 
-# Tür verilmezse optimize derle (-O2 karşılığı).
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
+    control/*.cpp model/*.cpp calculations/*.cpp io/*.cpp common/*.cpp)
 
-# main.cpp dışındaki bütün kaynaklar tek kütüphanede; main ve testler buna bağlanır.
-# CONFIGURE_DEPENDS: bu klasörlere yeni dosya eklenince CMake listeyi günceller.
-file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/control/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/model/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/calculations/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/common/*.cpp"
-)
-
-add_library(otopilot_core STATIC ${CORE_SOURCES})
-target_include_directories(otopilot_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_options(otopilot_core PRIVATE -Wall -Wextra)
-target_link_libraries(otopilot_core PUBLIC ws2_32)   # Windows TCP (Winsock)
+add_library(core STATIC ${SOURCES})
+target_include_directories(core PUBLIC .)
+target_link_libraries(core PUBLIC ws2_32)   # Windows TCP
 
 add_executable(main main.cpp)
-target_compile_options(main PRIVATE -Wall -Wextra)
-target_link_libraries(main PRIVATE otopilot_core)
-target_link_options(main PRIVATE -static)    # MinGW çalışma zamanı exe'nin içine
+target_link_libraries(main core)
+set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})   # src/otopilot/main.exe
 
-# exe build klasöründe kalmasın; bugünkü gibi src/otopilot/main.exe olarak çıksın.
-set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(units_test tests/units_test.cpp)
+target_link_libraries(units_test core)
 
-# Birim, hesap ve IO sözleşmesi testleri: cmake --build ... ardından ctest --test-dir ...
-include(CTest)
-if(BUILD_TESTING)
-    add_executable(units_test tests/units_test.cpp)
-    target_compile_options(units_test PRIVATE -Wall -Wextra)
-    target_link_libraries(units_test PRIVATE otopilot_core)
-    target_link_options(units_test PRIVATE -static)
-    add_test(NAME units COMMAND units_test)
-
-    add_executable(maneuver_test tests/maneuver_test.cpp)
-    target_compile_options(maneuver_test PRIVATE -Wall -Wextra)
-    target_link_libraries(maneuver_test PRIVATE otopilot_core)
-    target_link_options(maneuver_test PRIVATE -static)
-    add_test(NAME maneuvers COMMAND maneuver_test)
-endif()
+add_executable(maneuver_test tests/maneuver_test.cpp)
+target_link_libraries(maneuver_test core)

@@ -99,6 +99,10 @@ class JSBSimModel:
         return [self.fdm[f"velocities/v-{axis}-fps"] * METERS_PER_FOOT for axis in ("north", "east", "down")]
 
     @property
+    def fuel_kg(self):
+        return self.fdm["propulsion/total-fuel-lbs"] * 0.45359237   # 1 lb = 0.45359237 kg
+
+    @property
     def load_factor(self):
         return self.fdm["forces/load-factor"]        # g, gövde normal yükü
 
@@ -120,9 +124,9 @@ class JSBSimModel:
         return gamma, chi
 
     def kinematics(self):
-        """C++'a giden ölçüm alanları (eski sim'in _kinematics'iyle aynı adlar)."""
+        """Konum ve hareket alanları (protokol v2 KIN)."""
         return dict(
-            lat_deg=self.lat_deg, lon_deg=self.lon_deg, alt_msl_m=self.alt_m,
+            lat_deg=self.lat_deg, lon_deg=self.lon_deg, alt_m=self.alt_m,
             yaw_deg=self.yaw_deg, pitch_deg=self.pitch_deg, roll_deg=self.roll_deg,
             tas_mps=self.tas_mps, mach=self.mach, velocity_ned_mps=self.velocity_ned_mps,
         )

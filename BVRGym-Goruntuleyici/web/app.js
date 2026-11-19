@@ -226,17 +226,24 @@ function updateTimeline(){
 }
 // Kayittaki olaylar zaman cubuguna isaretlenir; olay yoksa cubuk eskisi gibi bos kalir.
 const eventLabels={target_assigned:'Hedef atandı',target_cleared:'Hedef kaldırıldı',missile_launched:'Fırlatma',
-  missile_hit:'İsabet',missile_lost:'Kayıp',health_changed:'Sağlık değişti'};
+  missile_hit:'İsabet',missile_lost:'Kayıp',health_changed:'Sağlık değişti',
+  // Protokol v2 (simülatör olayları)
+  launch_accepted:'Fırlatma',launch_rejected:'Fırlatma reddedildi',missile_pitbull:'Pitbull',
+  missile_lock_lost:'Kilit koptu',missile_lock_regained:'Kilit geri geldi',
+  missile_launch_warning:'Füze uyarısı',missile_active_warning:'Arayıcı aktif uyarısı',hit_received:'Vuruldu',
+  radar_contact:'Radar teması',radar_contact_lost:'Radar teması koptu'};
 function eventText(event){
   const parts=[eventLabels[event.type]||event.type];
   if(event.agent)parts.push(event.agent);
   if(event.ammo!=null)parts.push('mühimmat '+event.ammo);
   if(event.target)parts.push('→ '+event.target);
+  if(event.target_id)parts.push('→ '+event.target_id);
+  if(event.guidance_mode)parts.push(event.guidance_mode);
   if(event.type==='health_changed')parts.push(event.from+' → '+event.to);
   return parts.join(' · ')+' · '+formatTime(event.sim_time_s);
 }
 // Sonuç olayları (isabet, kayıp, sağlık) yalnız "Füze sonuçları" açıkken; fırlatma ve hedef olayları her zaman.
-const OUTCOME_EVENTS=new Set(['missile_hit','missile_lost','health_changed']);
+const OUTCOME_EVENTS=new Set(['missile_hit','missile_lost','health_changed','hit_received']);
 function drawEventMarks(bounds){
   const events=(buffer.packet.events||[]).filter(event=>preferences.missileOutcomes||!OUTCOME_EVENTS.has(event.type)),host=el('timeline-events');
   const span=bounds?bounds.last-bounds.first:0;
@@ -364,8 +371,10 @@ function analysis(){
 // C++ phase.hpp enum class Phase ile aynı sıra (1 boş); renkler şerit ve geçiş listesi için.
 const PHASE_NAMES=['HOLD','FIRE','OUT','COMMIT','CRANK','BEAM','RECOMMIT','NOTCH','DRAG','OFFSET','FLANK','COLLISION','FLY HEADING','SNAKE','PURE PURSUIT','LAG PURSUIT','LEAD PURSUIT'];
 const PHASE_COLORS=['#64748b','#e11d48','#b45309','#2563eb','#9333ea','#eab308','#0891b2','#f97316','#dc2626','#c026d3','#db2777','#4f46e5','#94a3b8','#65a30d','#0284c7','#14b8a6','#1d4ed8'];
-const phaseName=phase=>PHASE_NAMES[phase]??'AŞAMA '+phase;
-const phaseColor=phase=>PHASE_COLORS[phase]??'#64748b';
+// Faz eski kayıtlarda sıra numarası, protokol v2'de ad (PURE_PURSUIT); ikisi de aynı tabloya bağlanır.
+const phaseIndex=phase=>typeof phase==='string'?PHASE_NAMES.indexOf(phase.replaceAll('_',' ')):phase;
+const phaseName=phase=>PHASE_NAMES[phaseIndex(phase)]??'AŞAMA '+phase;
+const phaseColor=phase=>PHASE_COLORS[phaseIndex(phase)]??'#64748b';
 // Sahne seçimlerinin yanındaki renk/çizgi örnekleri: sahnedeki çizimle aynı renk ve stil.
 const swatches=[...document.querySelectorAll('[data-swatch]')],zoneByKey=Object.fromEntries(ENEMY_ZONES.map(zone=>[zone.key,zone]));
 function paintSwatches(entity,target){
@@ -406,9 +415,9 @@ function relativePanel(){
   const targetName=target?target.name:calc?.target_id??'';
   el('relative-target').textContent=(id!==selected?first.name+' ':'')+(targetName?'→ '+targetName:'');
   el('relative-empty').hidden=Boolean(calc);
-  const phase=Number.isFinite(calc?.phase)?calc.phase:null;
+  const phase=Number.isFinite(calc?.phase)||typeof calc?.phase==='string'?calc.phase:null;
   el('calc-phase').textContent=phase===null?'—':phaseName(phase);el('phase-color').style.background=phase===null?'':phaseColor(phase);
-  el('calc-decision').textContent=calc?.decision||'—';
+  el('calc-decision').textContent=[calc?.state,calc?.decision].filter(Boolean).join(' · ')||'—';   // durum (SUPPORT ...) ve son karar
   el('calc-ata').textContent=sideAngleLabel(calc?.ata_deg);el('calc-bearing').textContent=angleLabel(calc?.bearing_deg);
   el('calc-aspect').textContent=angleLabel(calc?.aspect_deg);el('calc-closure').textContent=closureLabel(calc?.rate_of_closure_mps,preferences.speedUnit);
   el('calc-range-3d').textContent=distance(calc?.range_3d_m);el('calc-range-2d').textContent=distance(calc?.range_2d_m);

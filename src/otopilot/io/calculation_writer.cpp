@@ -21,8 +21,9 @@ Json CalculationWriter::to_json(const Aircraft& own, const Aircraft& enemy)
     Json json;
     json["id"] = own.id;
     json["target_id"] = enemy.id;
-    json["phase"] = static_cast<int>(own.phase);   // sayı karşılıkları model/phase.hpp'de
+    json["phase"] = phase_name(own.phase);         // ad: "CRANK", "OUT" ... (model/phase.hpp)
     json["decision"] = own.decision;               // metin; henüz karar yoksa boş
+    json["state"] = own.state;                     // karar makinesinin durumu: "SUPPORT", "DEFEND" ... (otopilot_state.hpp)
 
     json["range_2d_nm"] = picture.range_2d_nm;
     json["range_3d_nm"] = picture.range_3d_nm;

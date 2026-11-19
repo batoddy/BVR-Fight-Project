@@ -1,17 +1,17 @@
 # BVR angajman sisteminin mimarisi
 
-Sistem, fizik durumu üretme, taktik karar verme ve kayıt inceleme görevlerini ayrı bileşenlerde yürütür. Python BVRGym/JSBSim nesnelerinin sahibidir. C++ ölçümlerden karar ve uçuş hedefi üretir. Görüntüleyici kayıt dosyalarını okuyarak aynı karşılaşmayı ortak bir zaman çizelgesinde gösterir.
+Sistem, fizik durumu üretme, taktik karar verme ve kayıt inceleme görevlerini ayrı bileşenlerde yürütür. Python (`src/simulator`) JSBSim nesnelerinin sahibidir. C++ ölçümlerden karar ve uçuş hedefi üretir. Görüntüleyici kayıt dosyalarını okuyarak aynı karşılaşmayı ortak bir zaman çizelgesinde gösterir.
 
 ## Süreçler ve bağlantılar
 
 ```mermaid
 flowchart TB
-    YAML[Senaryo YAML] --> PY[Python: sim_main ve Simulation]
-    PY <--> F[BVRGym ajanları ve JSBSim fiziği]
+    YAML[Senaryo YAML] --> PY[Python: main.py ve Simulation]
+    PY <--> F[JSBSim F-16, uçuş kontrolü, füzeler]
     PY -->|TCP state| CPP[C++: Sim]
     CPP -->|TCP command| PY
-    CPP --> OF[OtopilotFighter]
-    CPP --> OB[OtopilotHostile]
+    CPP --> OF[Otopilot: fighter]
+    CPP --> OB[Otopilot: hostile]
     CPP --> W[World ve ortak hesaplar]
     PY --> REC[Recorder]
     REC --> DISK[CSV + calculations + events + manifest]
@@ -65,15 +65,15 @@ dış adım süresi ≈ physics_dt × Control_time_step × sim_time_step
 
 ## Python tarafındaki iş bölümü
 
-`scenario.py` yolları ve temel senaryo doğrulamasını tutar. `bvrgym_setup.py` her ajan için ayarları derin kopyalar; nesneleri model yollarının çözüldüğü BVRGym dizininde oluşturur ve çalışma dizinini geri getirir. Her uçak için ayrı kontrol nesnesi kurulur.
+Simülasyon `src/simulator`'dır; modüller ve bağlantıları [simülatör README](../../src/simulator/README.md)'dedir. Kısaca: `scenario.py` senaryoyu okur ve doğrular. `Simulation` saati, uçakları ve füzeleri tutar: ölçüm okur (`read_state`), atış emrini uygular (`fire`: ilk hazır füze), fizik adımını yürütür (`step`). Her `Aircraft` bir JSBSim modeli ve uçuş kontrolcüsü taşır; kontrolcü yön/irtifa/gaz hedefini kumandaya çevirir. Taktik kararlar C++ tarafındadır.
 
-`Simulation` ölçüm okur, tam uçuş komutlarını doğrular, açık atış emrini uygular ve fizik adımını yürütür. `flight_control.py`, yön/irtifa hatasını yatış ve yük faktörü üzerinden kontrol yüzeylerine çevirir. Taktik kararlar C++ tarafındadır; kontrol yüzeylerini C++ doğrudan sürmez.
+`main.py` ağ, simülasyon ve kaydı bir araya getirir. `Recorder` ham ölçümü, uygulanan hedefleri ve olayları yazar; C++ geometrisini yeniden hesaplamaz. Mesaj biçimi: [protokol v2](MESAJ_PROTOKOLU_V2.md).
 
-`sim_main.py` ağ, simülasyon ve kaydı bir araya getirir. `Recorder` ham ölçümü, uygulanan hedefleri ve BVRGym olaylarını yazar; C++ geometrisini yeniden hesaplamaz.
+Eski BVRGym tabanlı `src/sim` kıyas ve WEZ taraması için duruyor; bu belge onu anlatmaz.
 
 ## C++ tarafındaki iş bölümü
 
-`Sim::step`, ölçümü ve önceki komutları okur; `World::update` çalıştırır; iki otopilotu çağırır ve `CommandWriter` ile yanıt oluşturur. `OtopilotFighter` ile `OtopilotHostile` aynı `World` bilgisini ikinci parametrede `const World&` olarak alır. Her biri kendi uçağını ilk parametrede `Aircraft&` ile günceller.
+`Sim::step`, ölçümü ve önceki komutları okur; `World::update` çalıştırır; iki otopilotu çağırır ve `CommandWriter` ile yanıt oluşturur. İki uçak da aynı `Otopilot` sınıfını kendi görev konseptiyle kullanır; her biri `step(Aircraft&)` ile kendi uçağını günceller, karşı uçağın bilgisini `World::update`'in doldurduğu `picture` ve `weapons` alanlarından okur.
 
 `World` iki uçağın karşılıklı geometrisini, angajman bilgilerini ve havadaki füzelerin hedefe göre durumunu doldurur. `Geometry` kinematikten hesap yapar, `Engagement` profil ile geometriyi birleştirir, `MissileGeometry` füze–hedef hesabını yürütür. Manevralar bu veriden yön hedefi üretir.
 

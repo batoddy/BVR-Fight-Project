@@ -1,0 +1,86 @@
+{
+  "kind": "hello",
+  "tick": 0,
+  "data": {
+    "physics_dt_s": 0.008333333333333333,
+    "tick_s": 0.08333333333333333,
+    "aircraft": [
+      {
+        "id": "blue",
+        "name": "KZL",
+        "type": "F16",
+        "team": "Blue",
+        "weapons": [
+          {
+            "slot": 0,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 1,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 2,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 3,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 4,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 5,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          }
+        ]
+      },
+      {
+        "id": "red",
+        "name": "Hostile",
+        "type": "F16",
+        "team": "Red",
+        "weapons": [
+          {
+            "slot": 0,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 1,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 2,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 3,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 4,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          },
+          {
+            "slot": 5,
+            "profile": "aim120c5",
+            "designation": "AIM-120C"
+          }
+        ]
+      }
+    ]
+  }
+}

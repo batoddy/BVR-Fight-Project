@@ -60,15 +60,14 @@ def main():
         print("Kayıt:", recorder.directory, flush=True)
         recorder.record(simulation)                                   # ilk ölçüm: C++ ilk kararını buna göre verir
         with TCPConnection(network["host"], network["port"]) as connection:
+            connection.send(Message("hello", simulation.tick, simulation.hello()))   # protokol v2: bir kez
             while not simulation.finished():
                 connection.send(Message("state", simulation.tick, simulation.read_state()))
                 command = connection.receive()                        # C++ cevabını bekle; bu sırada fizik durur
                 if command.kind != "command" or command.tick != simulation.tick:
                     raise ValueError("Komut türü veya adım numarası yanlış.")
                 recorder.record_calculations(command.data.get("calculations"))   # gönderilen state'in zamanıyla
-                for order in command.data.get("launch", []):
-                    simulation.fire(order["id"], order["target_id"])
-                simulation.step(command.data.get("aircraft"))
+                simulation.step(command.data.get("aircraft"), command.data.get("launch", []))
                 recorder.record(simulation)
                 if scenario["world"]["sleep_s"] > 0:
                     time.sleep(scenario["world"]["sleep_s"])

@@ -56,7 +56,7 @@ CASES = [
 # =============================================================================
 
 def one_aircraft_scenario(case, world):
-    agent = dict(name="TEST", type="F16", team="Blue", ammo=0, throttle=case.throttle,
+    agent = dict(name="TEST", type="F16", team="Blue", ammo={}, throttle=case.throttle,
                  spawn=dict(lat=59.0, long=18.0, alt=case.altitude_m, vel=case.speed_mps, heading=0.0))
     return dict(world=dict(duration_s=case.duration_s + 1.0, sleep_s=0.0, **world), agents=dict(blue=agent))
 

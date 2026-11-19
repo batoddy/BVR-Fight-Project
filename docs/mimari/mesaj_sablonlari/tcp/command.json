@@ -1,80 +1,107 @@
 {
-  "kind": "command",
-  "tick": 1,
   "data": {
     "aircraft": [
       {
-        "altitude_m": 5000.0,
-        "heading_deg": 0.0,
+        "altitude_m": 9999.999999999547,
+        "g_limit": 4.0,
+        "heading_deg": 359.99942282976497,
         "id": "blue",
-        "throttle": 0.8
+        "mode": "target",
+        "throttle": 0.45
       },
       {
-        "altitude_m": 5000.0,
-        "heading_deg": 180.0,
+        "altitude_m": 9999.999999999547,
+        "heading_deg": 179.99943274969812,
         "id": "red",
+        "mode": "target",
         "throttle": 0.45
       }
     ],
     "calculations": {
       "aircraft": [
         {
-          "aspect_deg": -1.1370534252819198e-05,
-          "ata_deg": -1.1486500056019934e-05,
-          "bearing_deg": -2.020299746216489e-07,
+          "a_pole_nm": 22.95251288170371,
+          "aspect_deg": -0.009695225637074145,
+          "ata_deg": -0.00964146546852418,
+          "bearing_deg": -0.0005771702350122308,
+          "decision": "",
+          "dor_nm": 25.52462249686812,
+          "dr_nm": 22.735123312408813,
+          "enemy_closing_kt": 577.5246283756162,
           "enemy_in_my_wez": true,
+          "f_pole_nm": 16.26920234868266,
           "id": "blue",
+          "los_down_nm": 2.41766929079338e-06,
+          "los_east_nm": -0.00038210888171516126,
+          "los_north_nm": 37.93200845767428,
+          "mar_nm": 22.87460932519379,
           "me_in_enemy_wez": true,
-          "phase": 1,
+          "missile_catch_times_s": "{}",
+          "msr_nm": 30.320891219296403,
+          "nez_nm": 22.372953174968586,
+          "phase": "COMMIT",
+          "pitbull_missile_slots": "[]",
           "radar_gimbal_deg": 60.0,
+          "radar_range_nm": 200.0,
+          "range_2d_nm": 37.93200845959887,
+          "range_3d_nm": 37.93200845959895,
+          "rate_of_closure_kt": 1155.0465788880624,
+          "state": "COMMIT",
+          "stern_wez_nm": 19.82876920748947,
           "target_id": "red",
-          "rate_of_closure_kt": 1165.8136574244986,
-          "dor_nm": 0.0,
-          "enemy_closing_kt": 582.3995311259765,
-          "los_down_nm": -7.340080428273381e-09,
-          "los_east_nm": -1.6871232579837162e-07,
-          "los_north_nm": 47.8468813263266,
-          "mar_nm": 0.0,
-          "radar_range_nm": 43.196544276457885,
-          "range_2d_nm": 47.8468813263266,
-          "range_3d_nm": 47.8468813263266,
-          "wez_max_range_nm": 49.121411569350194,
-          "wez_min_range_nm": 1.079913606911447
+          "threat_mach": 0.0,
+          "threat_pitbull": 0,
+          "threat_range_nm": 0.0,
+          "tr_nm": 34.99121953885927,
+          "wez_max_range_nm": 88.03564484702262,
+          "wez_min_range_nm": 1.0
         },
         {
-          "aspect_deg": -1.1486500056019934e-05,
-          "ata_deg": -1.1370534252819198e-05,
-          "bearing_deg": 179.99999979797002,
+          "a_pole_nm": 22.95251288170371,
+          "aspect_deg": -0.00964146546852418,
+          "ata_deg": -0.009695225637074145,
+          "bearing_deg": 179.999422829765,
+          "decision": "COMMIT: ateş — TR + erken atış payına girildi (Püskürt / Güvenli)",
+          "dor_nm": 25.524512794572324,
+          "dr_nm": 22.734991109013023,
+          "enemy_closing_kt": 577.5219505124461,
           "enemy_in_my_wez": true,
+          "f_pole_nm": 16.26920234868266,
           "id": "red",
+          "los_down_nm": -2.41766929079338e-06,
+          "los_east_nm": 0.00038210888171516126,
+          "los_north_nm": -37.93200845767428,
+          "mar_nm": 22.874499622897993,
           "me_in_enemy_wez": true,
-          "phase": 1,
+          "missile_catch_times_s": "{}",
+          "msr_nm": 30.32067193377545,
+          "nez_nm": 22.37285383456106,
+          "phase": "COMMIT",
+          "pitbull_missile_slots": "[]",
           "radar_gimbal_deg": 60.0,
+          "radar_range_nm": 200.0,
+          "range_2d_nm": 37.93200845959887,
+          "range_3d_nm": 37.93200845959895,
+          "rate_of_closure_kt": 1155.0465788880624,
+          "state": "SUPPORT",
+          "stern_wez_nm": 19.82864815572519,
           "target_id": "blue",
-          "rate_of_closure_kt": 1165.8136574244986,
-          "dor_nm": 0.0,
-          "enemy_closing_kt": 583.4141262985219,
-          "los_down_nm": 7.340080428273381e-09,
-          "los_east_nm": 1.6871232579837162e-07,
-          "los_north_nm": -47.8468813263266,
-          "mar_nm": 0.0,
-          "radar_range_nm": 43.196544276457885,
-          "range_2d_nm": 47.8468813263266,
-          "range_3d_nm": 47.8468813263266,
-          "wez_max_range_nm": 49.14113980881635,
-          "wez_min_range_nm": 1.079913606911447
+          "threat_mach": 0.0,
+          "threat_pitbull": 0,
+          "threat_range_nm": 0.0,
+          "tr_nm": 34.990983854997594,
+          "wez_max_range_nm": 88.03556047826066,
+          "wez_min_range_nm": 1.0
         }
       ]
     },
     "launch": [
       {
-        "id": "blue",
-        "target_id": "red"
-      },
-      {
         "id": "red",
         "target_id": "blue"
       }
     ]
-  }
+  },
+  "kind": "command",
+  "tick": 78
 }

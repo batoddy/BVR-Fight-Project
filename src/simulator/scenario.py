@@ -23,5 +23,7 @@ def validate_scenario(scenario):
         value = world[key]
         if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
             raise ValueError(f"world.{key} sonlu ve negatif olmayan sayı olmalı.")
+    if type(world.get("sensors", False)) is not bool:
+        raise ValueError("world.sensors true ya da false olmalı.")
     if not scenario["agents"]:
         raise ValueError("Senaryoda en az bir ajan bulunmalı.")

@@ -1,0 +1,40 @@
+Commit:
+
+    Atış kararı - 3 karar
+    1- Atabilir miyim?
+    2- Nerede atmalıyım ?
+    3- Düşman benden önce ateş etti
+
+    
+    1- Atabilir miyim?
+    - Atacak füzem var
+    - Hedef atış alanımda (wez) ?
+    - Attıktan sonra pitbul olana kadar destek verebilir miyim?
+    - Burun yönüm atışa uygun mu ? (düşmana bakıyor mu  (|ATA| ≤ atış limiti))
+
+    2- Nerede atmalıyım?
+    - !!!!!
+    - düşmanın hot-cold-flank-beam olması da önemli
+        if(at)
+            goto->Support
+
+    3- Düşman benden önce ateş etti - goto->Trade
+
+Support:
+    while(pitbull | lost) 
+        crank yap
+
+    if(düşman ateş etti)
+        goto -> Trade
+
+Trade: 
+    if(havada füzem var mı?)
+
+    var:    
+     - pitbull mu? goto->Defend
+     
+
+    yok:
+
+
+Defend:

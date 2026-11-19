@@ -118,7 +118,7 @@ class RollRateCommandTest(unittest.TestCase):
 
 class TurnScenarioTest(unittest.TestCase):
     def test_turn_30_deg(self):
-        agent = dict(name="T", type="F16", team="Blue", ammo=0, throttle=0.6,
+        agent = dict(name="T", type="F16", team="Blue", ammo={}, throttle=0.6,
                      spawn=dict(lat=59.0, long=18.0, alt=8000.0, vel=260.0, heading=0.0))
         simulation = Simulation(dict(world=dict(duration_s=30.0, sleep_s=0.0, physics_steps_per_tick=10),
                                      agents=dict(blue=agent)))

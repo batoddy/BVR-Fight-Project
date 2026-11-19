@@ -54,6 +54,10 @@ main{grid-column:2;grid-row:1}
 .flight-label.missile:not(.selected) .flight-label-name{max-width:64px}
 .flight-label-pitbull{grid-column:3;grid-row:1;align-self:center;font-size:9px;font-weight:700;line-height:14px;padding:0 3px;border:1px solid #15803d;border-radius:3px;background:#dcfce7;color:#166534}
 :root[data-theme=dark] .flight-label-pitbull{background:#143d2b;color:#86efac;border-color:#4ade80}
+.flight-label-pitbull[data-kind=datalink]{background:#dbeafe;color:#1e3a8a;border-color:#1d4ed8}
+:root[data-theme=dark] .flight-label-pitbull[data-kind=datalink]{background:#172554;color:#bfdbfe;border-color:#60a5fa}
+.flight-label-pitbull[data-kind=lost]{background:#fee2e2;color:#7f1d1d;border-color:#b91c1c}
+:root[data-theme=dark] .flight-label-pitbull[data-kind=lost]{background:#450a0a;color:#fecaca;border-color:#f87171}
 .flight-label.stale{opacity:.6;border-style:dashed}
 .playback-main button{display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .playback-icon{display:block;width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

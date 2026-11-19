@@ -3,7 +3,7 @@
 #include <optional>
 
 #include "model/aircraft.hpp"
-#include "model/missile_profiles.hpp"
+#include "model/profiles/missile_profiles.hpp"
 #include "model/picture.hpp"
 #include "model/weapons.hpp"
 

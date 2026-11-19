@@ -116,7 +116,7 @@ class Seeker:
 
         # Yeni blep: atan uçağın radarı hedefi görüyor → güncel konum (t_coord_sampled = t_coord).
         # İlk çağrı: atış anındaki devir (release() içinde t_coord = Tgt.get_Coord(), newTargetAssigned).
-        if self._track is None or self._launcher_tracks(launcher, tgt_pos):
+        if self._track is None or self._launcher_tracks(launcher, target):
             self._track = (tgt_pos.copy(), tgt_vel.copy(), time_s)
             self.mode = "datalink"
             return TargetEstimate(tgt_pos.copy(), tgt_vel.copy())
@@ -130,11 +130,10 @@ class Seeker:
         self.mode = "inertial"
         return TargetEstimate(p, v0.copy())
 
-    def _launcher_tracks(self, launcher, tgt_pos) -> bool:
-        """Hedef atan uçağın radar görüş alanında mı (OPRF: FCS-field-deg / 2 = fcs_fov)."""
-        half_fov = self.profile.launcher_field_of_regard_deg   # yaml değeri zaten yarım açı (OPRF apg-68.nas ±60°)
-        los = tgt_pos - _ac_position(launcher)
-        return _angle_deg(_ac_forward(launcher), los) <= half_fov
+    def _launcher_tracks(self, launcher, target) -> bool:
+        """Atan uçağın radarı hedefi görüyor mu (OPRF: blep = radar izi). Menzil, görüş alanı ve notch:
+        sensors/radar.py (protokol v2.1). Önceki sürüm yalnız görüş alanı açısına bakıyordu."""
+        return launcher.radar.sees(launcher, target)
 
     # --- guidance == "radar" (checkForGuidance() ~3440) -----------------------------------
 

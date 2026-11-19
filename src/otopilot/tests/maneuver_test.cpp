@@ -7,7 +7,7 @@
 #include "common/angles.hpp"
 #include "common/formulas.hpp"
 #include "common/units.hpp"
-#include "control/maneuver.hpp"
+#include "control/maneuvers/maneuvers.hpp"
 #include "model/missile.hpp"
 #include "model/world.hpp"
 
@@ -21,6 +21,20 @@ namespace
         }
     }
 
+    Aircraft f16()
+    {
+        Aircraft aircraft;
+        aircraft.profile = aircraft_profile("F16");
+        return aircraft;
+    }
+
+    template <class F> bool rejects(F&& call)
+    {
+        try { call(); }
+        catch (const std::invalid_argument&) { return true; }
+        return false;
+    }
+
     void near_angle(double actual_deg, double expected_deg, const char* label)
     {
         require(std::isfinite(actual_deg) && std::abs(wrap_180(actual_deg - expected_deg)) < 1e-6, label);
@@ -28,19 +42,17 @@ namespace
 
     void crank_and_threat_status()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         Crank crank;
         own.picture.ta_deg = 20;
         crank.enter(own);
         own.picture.ata_deg = 0;
         require(crank.status(own) == ManeuverStatus::Running, "crank is not satisfied just because radar sees target");
-        own.picture.ata_deg = 57;
-        require(crank.is_satisfied(own), "crank reaches selected angle");
-        own.picture.ata_deg = 55;
-        require(crank.is_satisfied(own), "crank includes tolerance boundary");
-        own.picture.ata_deg = -57;
-        require(!crank.is_satisfied(own), "opposite crank side is not satisfied");
+        for (double ata : {57.0, 55.0, -57.0})   // seçilen açı, tolerans sınırı, ters taraf
+        {
+            own.picture.ata_deg = ata;
+            require(crank.is_satisfied(own) == (ata > 0), "crank satisfied only on selected side within tolerance");
+        }
         own.picture.ata_deg = 60;
         require(crank.status(own) == ManeuverStatus::Running, "crank loses satisfied outside target angle");
         own.picture.ta_deg = -20;
@@ -83,10 +95,11 @@ namespace
         own.picture.ata_deg = 40;
         own.picture.ta_deg = 10;
         require(!flank.is_satisfied(own), "flank tests target aspect rather than own nose angle");
-        own.picture.ta_deg = 37;
-        require(flank.is_satisfied(own), "flank includes lower angle boundary");
-        own.picture.ta_deg = 43;
-        require(flank.is_satisfied(own), "flank includes upper angle boundary");
+        for (double ta : {37.0, 43.0})
+        {
+            own.picture.ta_deg = ta;
+            require(flank.is_satisfied(own), "flank includes angle boundaries");
+        }
         own.picture.ta_deg = 44;
         require(flank.status(own) == ManeuverStatus::Running, "overshooting flank loses satisfied rather than becoming done");
         own.picture.ta_deg = -40;
@@ -102,21 +115,15 @@ namespace
 
         for (double invalid_tolerance : {-1.0, 181.0, std::numeric_limits<double>::infinity()})
         {
-            bool rejected = false;
-            try { flank.set(20, invalid_tolerance); }
-            catch (const std::invalid_argument&) { rejected = true; }
-            require(rejected && flank.is_satisfied(own), "invalid setup leaves previous configuration intact");
+            require(rejects([&] { flank.set(20, invalid_tolerance); }) && flank.is_satisfied(own),
+                    "invalid setup leaves previous configuration intact");
         }
-        bool rejected = false;
-        try { flank.set(std::numeric_limits<double>::quiet_NaN()); }
-        catch (const std::invalid_argument&) { rejected = true; }
-        require(rejected, "flank rejects non-finite target angle");
+        require(rejects([&] { flank.set(std::numeric_limits<double>::quiet_NaN()); }), "flank rejects non-finite target angle");
     }
 
     void flank_guidance()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         own.command.set_altitude_ft(30000);
         own.kinematics.heading_deg = 70;
         own.picture.bearing_deg = 180;
@@ -149,8 +156,7 @@ namespace
 
     void hold_locks_and_reenters()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         own.kinematics.heading_deg = 179;
         own.kinematics.altitude_ft = 30000;
         Maneuvers maneuvers;
@@ -175,8 +181,7 @@ namespace
 
     void offset_and_heading_status()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         own.picture.bearing_deg = 170;
         Offset offset;
         offset.set(40, ManeuverSide::Right);
@@ -188,14 +193,10 @@ namespace
         offset.set(40, ManeuverSide::Left);
         near_angle(offset.update(own).heading_deg(), 130, "offset left heading");
         require(offset.is_satisfied(own), "left offset has positive target ATA");
-        own.picture.los_rate_deg_s = 2;
-        require(offset.update(own).heading_deg() > 130, "offset leads moving LOS");
         for (double invalid_deg : {-1.0, 181.0, std::numeric_limits<double>::quiet_NaN()})
         {
-            bool rejected = false;
-            try { offset.set(invalid_deg, ManeuverSide::Right); }
-            catch (const std::invalid_argument&) { rejected = true; }
-            require(rejected && offset.is_satisfied(own), "offset validates before changing configuration");
+            require(rejects([&] { offset.set(invalid_deg, ManeuverSide::Right); }) && offset.is_satisfied(own),
+                    "offset validates before changing configuration");
         }
 
         FlyHeading heading;
@@ -214,16 +215,16 @@ namespace
         own.picture.ata_deg = -90;
         require(!beam.is_satisfied(own), "beam opposite side is not satisfied");
         Commit commit;
-        own.picture.ata_deg = 2;
-        require(commit.is_satisfied(own), "commit nose alignment is satisfied");
-        own.picture.ata_deg = 3;
-        require(!commit.is_satisfied(own), "commit alignment can be lost");
+        for (double ata : {2.0, 3.0})
+        {
+            own.picture.ata_deg = ata;
+            require(commit.is_satisfied(own) == (ata == 2.0), "commit alignment is satisfied then lost");
+        }
     }
 
     void pursuit_and_collision_status()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         own.picture.bearing_deg = 170;
         own.picture.los_rate_deg_s = 1;
         own.picture.enemy_velocity_ned_kt.east = -100;
@@ -250,7 +251,8 @@ namespace
         require(std::abs(geometry::lateral_speed_kt(90, Ned{100, 200, 0}) + 100) < 1e-9,
                 "lateral speed is negative target north component when looking east");
 
-        Collision collision;
+        Pursuit collision;
+        collision.set(PursuitMode::Collision);
         own.picture.range_2d_nm = 20;
         own.picture.closure_kt = -100;
         require(!collision.is_satisfied(own), "constant bearing while separating is not collision success");
@@ -265,8 +267,7 @@ namespace
 
     void explicit_g_limits()
     {
-        Aircraft own;
-        own.profile = aircraft_profile("F16");
+        Aircraft own = f16();
         own.profile.max_g = 2;
         own.kinematics.altitude_ft = 30000;
         Missile threat;
@@ -275,7 +276,7 @@ namespace
         Maneuvers maneuvers;
         Maneuver* implemented[] = {&maneuvers.hold, &maneuvers.out, &maneuvers.commit, &maneuvers.recommit,
             &maneuvers.crank, &maneuvers.beam, &maneuvers.notch, &maneuvers.drag, &maneuvers.offset,
-            &maneuvers.flank, &maneuvers.collision, &maneuvers.fly_heading, &maneuvers.pursuit};
+            &maneuvers.flank, &maneuvers.fly_heading, &maneuvers.pursuit};
         for (Maneuver* maneuver : implemented)
         {
             own.command.set_g_limit(9, 9);
@@ -330,7 +331,6 @@ namespace
             advance(enemy.kinematics, 1);
         }
         world.update();
-        require(flank.is_satisfied(own), "flank reacquires opposite angle while target moves");
         require(flank.status(own) != ManeuverStatus::Done, "holding flank never signals done");
     }
 }

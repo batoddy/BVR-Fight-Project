@@ -1,12 +1,12 @@
 # Otopilot geliştirme rehberi
 
-Uçak davranışını değiştirmek için fighter tarafında [otopilot_fighter.cpp](control/otopilot_fighter.cpp), hostile tarafında [otopilot_hostile.cpp](control/otopilot_hostile.cpp) düzenlenir. İkisi de kendi `step` fonksiyonunda tek bir switch'le yazılmış birer durum makinesidir. Kod kuralları için: [KOD_STANDARTLARI.md](KOD_STANDARTLARI.md).
+İki uçak da aynı durum makinesini, [otopilot.cpp](control/legacy/otopilot.cpp)'deki `Otopilot` sınıfını kendi görev konseptiyle (`Mission`, [sim.hpp](control/sim.hpp)) kullanır. Her durumun ne yapacağını [decisions.cpp](control/legacy/decisions.cpp)'deki karar fonksiyonları seçer; kurallar [KARAR_TASARIMI.md](control/KARAR_TASARIMI.md)'de. Kod kuralları için: [KOD_STANDARTLARI.md](KOD_STANDARTLARI.md).
 
 Bir step'te sıra şöyledir (`Sim::step`):
 
 1. `StateReader` ölçümleri ve Python'un son uyguladığı komutu (`own.command`) okur.
 2. `World::update` düşman atamasını, füze bilgilerini ve her uçağın `picture`'ını hesaplar.
-3. Önceki step'in atış emri sıfırlanır; her otopilot `step(own, enemy)` ile aktif manevrayı uçurur, ardından geçiş kurallarını çalıştırır.
+3. Önceki step'in atış emri sıfırlanır; her otopilot `step(own)` ile önce kesintilere (ABORT, tehdit) bakar, sonra o durumun manevrasını uçurup kararına göre geçiş yapar.
 4. `CommandWriter` `own.command`'ı ve atış emirlerini Python'a gönderir.
 
 ## Ölçüm ve durum bilgisine erişim
@@ -51,47 +51,31 @@ own.command.set_heading_deg(own.picture.bearing_deg + 30.0)
            .set_g_limit(4.0, own.profile.max_g);
 ```
 
-`FlightCommand`, uçağın anlık ölçümü değil ulaşmasını istediğin hedeftir. Setter'lar yönü ±180'e sarar, gazı 0..1'e sıkıştırır, g sınırını profildeki `max_g`'ye indirir; geçersiz komut oluşamaz. Gaz sayıyla değil seviyeyle yazılır: `throttle::IDLE`, `throttle::DEFAULT` (0.45), `throttle::MRT` (0.5, askeri güç), `throttle::MAX_THRUST` (1.0, tam art yakıcı). Gazı şimdilik manevralar kendi içinde yazar. Her step `own.command` Python'un son uyguladığı komutla başlar. Bir değeri değiştirirsen başka bir değer yazılana kadar o değer kalır. g sınırı ise Python'dan geri gelmez: her step yok başlar, gerekiyorsa manevra koyar.
+`FlightCommand`, uçağın anlık ölçümü değil ulaşmasını istediğin hedeftir. Setter'lar yönü ±180'e sarar, gazı 0..1'e sıkıştırır, g sınırını profildeki `max_g`'ye indirir; geçersiz komut oluşamaz. Gaz sayıyla değil seviyeyle yazılır: `throttle::IDLE`, `throttle::CRANK` (0.35), `throttle::DEFAULT` (0.45), `throttle::MRT` (0.5, askeri güç), `throttle::MAX_THRUST` (1.0, tam art yakıcı). Gazı şimdilik manevralar kendi içinde yazar. Her step `own.command` Python'un son uyguladığı komutla başlar. Bir değeri değiştirirsen başka bir değer yazılana kadar o değer kalır. g sınırı ise Python'dan geri gelmez: her step yok başlar, gerekiyorsa manevra koyar.
 
 ## Bir aşamanın geçişini yaz
 
-Durumlar iki otopilotun ortak listesi `OtopilotState`'tedir (`control/otopilot_state.hpp`). `step` içindeki tek switch'te her durum bir bloktur: önce o durumun manevrası `maneuvers_.fly` ile uçulur, sonra çıkış koşullarına bakılır. `go_to(yeni_durum)` yalnız state'i değiştirir. Manevra o state'in bloğunda seçilir; ilk kullanımda ve manevra değiştiğinde `Maneuvers::fly` giriş hazırlığını yapar. Atış manevra değildir: yalnız `own.weapons.fire` emri verilir, önceki manevranın komutu sürer. Örnek durum makinesi:
+Durumlar `OtopilotState`'tedir (`control/legacy/otopilot_state.hpp`). Her durumun kendi `step_*` fonksiyonu vardır: önce manevrası `maneuvers_.fly` ile uçulur, sonra o durumun karar fonksiyonu (`decide::*`) çağrılır ve seçime göre geçilir. Kayıtlı geçiş `go_to(own, yeni_durum, metin, neden)` ile yapılır: karar metnini `own.decision`'a yazar ve durumu değiştirir. Atış manevra değildir: Shot durumu yalnız `own.weapons.fire()` emrini verir, önceki manevranın komutu sürer.
 
 ```cpp
-// otopilot_fighter.cpp
-void OtopilotFighter::step(Aircraft& own, const Aircraft& enemy)
+// otopilot.cpp
+void Otopilot::step_support(Aircraft& own)
 {
-    switch (state_)
+    maneuvers_.fly(own, support_maneuver(own));                      // düşman cold ise kovalama, değilse crank
+    const Decision<SupportChoice> decision = decide::support(own, mission_);
+    switch (decision.choice)
     {
-    case OtopilotState::Commit:
-        maneuvers_.fly(own, maneuvers_.commit);
-        if (condition::enemy_in_my_wez(own) && own.weapons.fire(own.profile.main_weapon))
-        {
-            go_to(OtopilotState::FirstSupport);   // taraf sonraki step'te, ilk crank kullanımında seçilir
-        }
+    case SupportChoice::Continue:
         break;
-
-    case OtopilotState::FirstSupport:
-        maneuvers_.fly(own, maneuvers_.crank);
-        if (condition::in_mar(own))
-        {
-            go_to(OtopilotState::FirstEscape);
-        }
+    case SupportChoice::Out:
+        go_to(own, OtopilotState::Out, "SUPPORT → OUT", decision.reason);
         break;
-
-    case OtopilotState::FirstEscape:
-        maneuvers_.fly(own, maneuvers_.out);   // gazı Out kendisi yazar (dönüşte art yakıcı, sonra MRT)
-        if (maneuvers_.out.status(own) == ManeuverStatus::Done)
-        {
-            go_to(OtopilotState::Commit);      // Commit kendi gazını (DEFAULT) yazar
-        }
-        break;
-
-    default:
-        break;
+    ...
     }
 }
 ```
+
+Yeni bir karar: seçimi `decisions.hpp`'deki enum'a, kuralı `decisions.cpp`'deki fonksiyona, geçişi ilgili `step_*`'a eklenir.
 
 `Maneuvers::fly` fazı manevradan alır (`own.phase = manevra.phase()`) ve komutu yazar. Aynı manevra sürerken `enter()` tekrarlanmaz; araya başka manevra girdikten sonra geri dönülürse yeniden çalışır. Aynı manevrayı kullanan iki state arasında geçiş, yeniden giriş sayılmaz. İlk manevranın girişi de otomatik yapılır.
 
@@ -103,7 +87,7 @@ Koşulları `control/conditions.hpp`'ye isimli fonksiyonlar olarak ekle. Karar y
 if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden uzaklaşıyor
 ```
 
-Şu anki fighter ve hostile taktiği şov senaryosudur; akışı ve çalıştırma komutu [OTOPILOT_MIMARISI.md](../../docs/mimari/OTOPILOT_MIMARISI.md)'dedir.
+Fighter ve hostile'ın görev konseptleri `sim.hpp`'deki `FIGHTER_MISSION` ve `HOSTILE_MISSION` sabitleridir; akış ve çalıştırma komutu [OTOPILOT_MIMARISI.md](../../docs/mimari/OTOPILOT_MIMARISI.md)'dedir.
 
 ## Manevralar
 
@@ -113,15 +97,14 @@ if (condition::enemy_aspect(own) == Aspect::Cold) { ... }   // düşman benden u
 | `out` | Out | dönüşte MAX_THRUST, Done olunca MRT (yeniden girişe kadar) | `out_g` | `status()` → Done: düşman arkada (\|ATA\| > 177°) |
 | `commit` | Commit | DEFAULT | 4 | burun hedefe ±2° içinde bakıyorsa `Satisfied` |
 | `recommit` | Recommit | MAX_THRUST | `out_g` | `status()` → Done: \|ATA\| atış açısına (30° + 1°) indi; ilk varıştan sonra hedef 30°'de kalır |
-| `crank` | Crank | IDLE | 3 | sürekli; seçilen tarafta hedef ATA'ya ±2° yakın ve radar içindeyse `Satisfied`. Taraf girişte seçilir; `in_radar_sight(own)` ve `side()` ayrıca sorgulanabilir |
+| `crank` | Crank | CRANK | 3 | sürekli; seçilen tarafta hedef ATA'ya ±2° yakın ve radar içindeyse `Satisfied`. Taraf girişte seçilir; `in_radar_sight(own)` ve `side()` ayrıca sorgulanabilir |
 | `beam` | Beam | DEFAULT | 4 | seçilen tarafta ATA ±90° hedefine ±2° içinde oturunca `Satisfied`; taraf girişte seçilir |
 | `flank` | Flank | DEFAULT | 4 | sürekli; `set(target_ta_deg, tolerance_deg = 3)` ile verilen işaretli TA tolerans içindeyse `Satisfied`, dışında `Running` |
 | `drag` | Drag | MRT | `out_g` | tehdit varken `Running`, kaçılacak tehdit kalmazsa `Done` |
 | `notch` | Notch | DEFAULT | 4 | tehdit varken `Running`, kaçılacak tehdit kalmazsa `Done` |
 | `offset` | Offset | DEFAULT | 4 | `set(offset_deg, side)`; seçilen tarafta hedef ATA'ya ±2° içinde `Satisfied` |
 | `fly_heading` | FlyHeading | DEFAULT | 4 | `set(heading_deg)`; hedef yöne ±2° içinde `Satisfied` |
-| `pursuit` | ilgili Pursuit fazı | `set(mode, throttle)`; varsayılan DEFAULT | 4 | `set(PursuitMode::Pure/Lag/Lead)`; modun güncel hedef yönüne ±2° içinde `Satisfied`. Kovalama (CHASE) Pure + MRT kullanır |
-| `collision` | Collision | DEFAULT | 4 | yatay menzil sıfır değil, kapanma pozitif ve LOS hızı ±0,1°/s içindeyse `Satisfied` |
+| `pursuit` | ilgili Pursuit fazı ya da Collision | `set(mode, throttle)`; varsayılan DEFAULT | 4 | `set(PursuitMode::Pure/Lag/Lead)`: modun güncel hedef yönüne ±2° içinde `Satisfied`. `set(PursuitMode::Collision)`: yatay menzil sıfır değil, kapanma pozitif ve LOS hızı ±0,1°/s içindeyse `Satisfied`. Kovalama (CHASE) Pure + MRT kullanır |
 
 g sınırları profildeki `max_g`'yi aşamaz (`set_g_limit(g, own.profile.max_g)`).
 
@@ -139,22 +122,31 @@ maneuvers_.fly(own, maneuvers_.offset);
 
 Flank, mevcut yatay menzilde hedefin istenen yanına bir takip noktası koyar; hedefin yer hızını ve konum hatasını kullanarak yön üretir. Tepki süresi 20 s'dir. Hız eşleme ve hedef dönüş hızını öngörme yoktur; farklı hızlarda veya sert hedef dönüşlerinde açı hatası oluşabilir ve `is_satisfied()` false döner.
 
-Pursuit, otopilotla yeniden denemek için eski LOS işaretiyle taraf seçimine alınmıştır. Lag LOS hareketinin gerisine 15°, Lead önüne 20° sabit sapma kullanır; LOS hızı tam sıfırsa Pure yönü kullanılır. Bunlar hız oranından hesaplanan kesin önleme açıları değildir. Collision kapanırken mevcut yöne LOS hızıyla orantılı düzeltme ekler; LOS sıfırlanınca edinilmiş kesişme yönünü korur. Kapanma yoksa önce hedefe yönelir. Kontrol ve durum sorgusu yatay geometriye aittir; dikey kesişme koşulu aranmaz. Snake hâlâ iskelettir.
+Pursuit, otopilotla yeniden denemek için eski LOS işaretiyle taraf seçimine alınmıştır. Lag LOS hareketinin gerisine 15°, Lead önüne 20° sabit sapma kullanır; LOS hızı tam sıfırsa Pure yönü kullanılır. Bunlar hız oranından hesaplanan kesin önleme açıları değildir. Collision modu kapanırken mevcut yöne LOS hızıyla orantılı düzeltme ekler; LOS sıfırlanınca edinilmiş kesişme yönünü korur. Kapanma yoksa önce hedefe yönelir. Kontrol ve durum sorgusu yatay geometriye aittir; dikey kesişme koşulu aranmaz. 
 
 Manevralar hazırdır. Mevcut gösterim otopilotunun seçim/geçiş kuralları ayrıca belirlenir; yeni manevralar kendiliğinden akışa girmez.
 
 ### Doğrulama
 
-```powershell
-cmake -S src/otopilot -B src/otopilot/build
+```bash
 cmake --build src/otopilot/build
-ctest --test-dir src/otopilot/build --output-on-failure
+src/otopilot/build/units_test.exe
+src/otopilot/build/maneuver_test.exe
+```
+
+`build/` silindiyse yeniden kurulur. MinGW kullanıcı klasörünün boşluklu yolunda olduğu için kısa yol ve `-B` bayrakları gerekir:
+
+```bash
+T="C:/Users/PC_100~3/tools/mingw64"
+cmake -S src/otopilot -B src/otopilot/build -G "MinGW Makefiles" -DCMAKE_CXX_COMPILER="$T/bin/g++.exe" \
+      -DCMAKE_MAKE_PROGRAM="$T/bin/mingw32-make.exe" -DCMAKE_AR="$T/bin/ar.exe" -DCMAKE_LINKER="$T/bin/ld.exe" \
+      "-DCMAKE_CXX_FLAGS=-B$T/lib/ -B$T/x86_64-w64-mingw32/lib/"
 ```
 
 ## Atış ve füzeler
 
 ```cpp
-if (own.weapons.fire(own.profile.main_weapon)) { ... }   // bu step için atış emri oluştu
+if (own.weapons.fire()) { ... }   // bu step için atış emri oluştu
 
 const Missile* supporting = own.weapons.active_missile();   // havadaki son füzem; yoksa nullptr
 for (const Missile* missile : own.weapons.active_missiles()) { ... }   // havadaki bütün füzelerim, atış sırasıyla
@@ -169,11 +161,11 @@ for (const Missile* threat : own.picture.threats) { ... }   // bütün tehditler
 int remaining = own.weapons.missiles_left();
 ```
 
-`weapons.fire` sonucu fiziksel isabet ya da Python onayı değildir. İstenen profilde atılmamış slot kalmadıysa ya da henüz eşleşmemiş bir atış bekleniyorsa `false` döner. Füze işaretçilerini sonraki step'e saklama.
+`weapons.fire` sonucu fiziksel isabet ya da Python onayı değildir. Hazır füze kalmadıysa ya da bu step zaten emir verildiyse `false` döner. Hangi slotun atılacağını sim seçer (ilk hazır füze); C++ atılan slotu sonraki state'te görür. Füze işaretçilerini sonraki step'e saklama.
 
 ## Adımlar arasında bilgi sakla
 
-Otopilota ait sayaç, zaman ya da tercih ilgili otopilot sınıfının `private` üyesi olur. Sabitler birimli isimle `static constexpr` olarak tanımlanır:
+Otopilota ait sayaç, zaman ya da tercih `Otopilot` sınıfının `private` üyesi olur. Sabitler birimli isimle `static constexpr` olarak tanımlanır:
 
 ```cpp
 static constexpr double REFIRE_INTERVAL_S = 5.0;
@@ -182,9 +174,13 @@ double last_fire_time_s_ = -1e9;
 
 ## Yeni manevra ekle
 
-`control/maneuver.hpp`:
+`control/maneuvers/right_offset.hpp`:
 
 ```cpp
+#pragma once
+
+#include "control/maneuvers/maneuver.hpp"
+
 // Düşmanın 30° sağına uç.
 class RightOffset : public Maneuver
 {
@@ -198,9 +194,11 @@ private:
 };
 ```
 
-`control/maneuver.cpp`:
+`control/maneuvers/right_offset.cpp`:
 
 ```cpp
+#include "control/maneuvers/right_offset.hpp"
+
 FlightCommand RightOffset::update(const Aircraft& own)
 {
     FlightCommand command = own.command;   // irtifa aynı kalır
@@ -210,14 +208,14 @@ FlightCommand RightOffset::update(const Aircraft& own)
 }
 ```
 
-`Maneuvers` sınıfına `RightOffset right_offset;` satırını ekle ve bir durumun bloğunda `maneuvers_.fly(own, maneuvers_.right_offset)` ile uçur. Manevra kendi içinde bitiyorsa `status()`'u, girişte bir şey kilitlemesi gerekiyorsa `enter()`'ı uygula. Yeni bir `Phase` değeri dış sözleşmeyi etkiler: `model/phase.hpp` ile görüntüleyicideki `PHASE_NAMES` listesi birlikte güncellenir.
+`control/maneuvers/maneuvers.hpp`'ye `#include "control/maneuvers/right_offset.hpp"` ve `Maneuvers` sınıfına `RightOffset right_offset;` satırını ekle ve bir durumun bloğunda `maneuvers_.fly(own, maneuvers_.right_offset)` ile uçur. Manevra kendi içinde bitiyorsa `status()`'u, girişte bir şey kilitlemesi gerekiyorsa `enter()`'ı uygula. Yeni bir `Phase` değeri dış sözleşmeyi etkiler: `model/phase.hpp` ile görüntüleyicideki `PHASE_NAMES` listesi birlikte güncellenir.
 
 ## Profil veya hesap ekle
 
 | İhtiyaç | Düzenlenecek kaynak |
 |---|---|
-| Yeni uçak etiketi / radar / yük | `model/aircraft_profiles.hpp`; YAML `type` ile aynı anahtar |
-| Füze menzil, ortalama hız, pitbull eşiği, R_cold ve Rmax (WEZ) uyumu | `model/missile_profiles.hpp` |
+| Yeni uçak etiketi / radar / yük | `model/profiles/aircraft_profiles.hpp`; YAML `type` ile aynı anahtar |
+| Füze menzil, ortalama hız, pitbull eşiği, R_cold ve Rmax (WEZ) uyumu | `model/profiles/missile_profiles.hpp` |
 | Saf konum/hız geometrisi | `calculations/geometry.hpp/.cpp` |
 | Dönüş süresi, yarıçapı, yer değişimi | `calculations/turn.hpp/.cpp` |
 | WEZ, A/F-pole, TR, out planı, R_cold, NEZ, MAR, MRR, DR, DOR | `calculations/engagement.hpp/.cpp` |
@@ -225,7 +223,7 @@ FlightCommand RightOffset::update(const Aircraft& own)
 | Hesaplanan alanın uçakta tutulması | `model/picture.hpp` (kaçış) ya da `model/weapons.hpp` (silah) ve `model/world.cpp` |
 | Yeni ölçümün Python'dan gelmesi | Python `Simulation.read_state()` ve C++ `StateReader` |
 
-Uçak profilindeki `main_weapon` WEZ, NEZ, F-pole ve karşı tarafın R_cold/MAR hesabında kullanılır. `loadout` slot sırasındadır; Python `ammo` kadar slot baştan alınır. Profilde AIM-7M/AIM-9X yazmak Python füzesinin fizik/güdüm modelini değiştirmez.
+Uçak profilindeki `main_weapon` WEZ, NEZ, F-pole ve karşı tarafın R_cold/MAR hesabında kullanılır. Füze slotları `hello` mesajından kurulur: her slotun `designation`'ı `missile_profiles.hpp` tablosundan profil seçer, tabloda yoksa hata. Profilde AIM-7M/AIM-9X yazmak Python füzesinin fizik/güdüm modelini değiştirmez.
 
 ## Bir hesabı kayda ve arayüze çıkar
 

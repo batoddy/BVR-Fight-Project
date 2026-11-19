@@ -1,11 +1,11 @@
 """Uçuş kaydındaki sütunları zamana göre çizer.
 
 Workspace içinden:
-  python src/sim/kayit_grafik.py recordings/dor_test_15
+  python src/sim/kayit_grafik.py recordings/<kayıt>
       Kaynakları ve sütunlarını listeler.
-  python src/sim/kayit_grafik.py recordings/dor_test_15 KZL--blue:tas_kt Hostile--red:tas_kt
+  python src/sim/kayit_grafik.py recordings/<kayıt> KZL--blue:tas_kt Hostile--red:tas_kt
       Seçilen sütunları tek grafikte çizer.
-  python src/sim/kayit_grafik.py recordings/dor_test_15 calc/blue:range_3d_nm calc/blue:mar_nm calc/blue:dor_nm --ayri
+  python src/sim/kayit_grafik.py recordings/<kayıt> calc/blue:range_3d_nm calc/blue:mar_nm calc/blue:dor_nm --ayri
       --ayri: her seri ayrı alt grafikte, zaman ekseni ortak.
   ... --kaydet grafik.png
       Pencere açmak yerine dosyaya yazar.
@@ -37,7 +37,7 @@ from matplotlib.ticker import FuncFormatter
 
 CALC_FILE = "calculations.csv"
 EVENTS_FILE = "events.jsonl"
-PITBULL_NM = 10.0   # src/otopilot/model/missile_profiles.hpp, AIM120C pitbull_nm
+PITBULL_NM = 10.0   # src/otopilot/model/profiles/missile_profiles.hpp, AIM120C pitbull_nm
 M_PER_NM = 1852.0
 MISSILE_SOURCE = re.compile(r"^(.+)--(\d+)$")   # KZL--blue--0 → atan KZL--blue, slot 0
 
@@ -133,7 +133,7 @@ def missile_events(folder, found, source):
 
 def main():
     parser = argparse.ArgumentParser(description="Uçuş kaydındaki sütunları zamana göre çizer.")
-    parser.add_argument("kayit", type=Path, help="kayıt klasörü, ör. recordings/dor_test_15")
+    parser.add_argument("kayit", type=Path, help="kayıt klasörü, ör. recordings/<kayıt>")
     parser.add_argument("seriler", nargs="*", help="KAYNAK:SÜTUN; boşsa kaynaklar ve sütunlar listelenir")
     parser.add_argument("--ayri", action="store_true", help="her seri ayrı alt grafikte")
     parser.add_argument("--kaydet", type=Path, help="pencere yerine bu dosyaya yaz (.png)")

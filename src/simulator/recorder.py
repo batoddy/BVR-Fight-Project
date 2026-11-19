@@ -49,13 +49,18 @@ MISSILE_COLUMNS = (
     ("tas_kt", "hız (hava durgun)", "kt"), ("vel_north_kt", "NED hız", "kt"), ("vel_east_kt", "NED hız", "kt"),
     ("vel_down_kt", "NED hız", "kt"), ("load_factor_g", "güdüm yükü (hıza dik)", "g"),
     ("missile_time_s", "füzenin uçuş süresi; atışta 0", "s"),
-    ("guidance_mode", "none / datalink / inertial / seeker; kilitli: datalink, seeker. Pitbull anı events.jsonl'da bir kez", "-"),
+    ("guidance_mode", "none / datalink / inertial / seeker", "-"),
+    ("is_locked", "hedefe kilitli mi (1/0): datalink ya da seeker", "-"),
+    ("is_pitbull", "kendi arayıcısına geçti mi (1/0); bir kez 1 olunca kalır", "-"),
 )
 COMMAND_COLUMNS = (
     ("cmd_heading_deg", "deg"),
     ("cmd_alt_ft", "ft"),
     ("cmd_throttle_norm", "-"),
     ("cmd_g_limit", "g"),
+    ("cmd_mode", "-"),          # target / direct (protokol v2.1)
+    ("cmd_bank_deg", "deg"),    # direct modda istenen yatış
+    ("cmd_g", "g"),             # direct modda istenen yük
 )
 
 CALCULATIONS_FILE = "calculations.csv"
@@ -75,10 +80,7 @@ class Recorder:
         self.snapshots = 0
         self.event_count = 0
         self.calculation_rows = 0
-        self.previous_health = {}
-        self.missile_state = {}                       # (uçak, slot) → önceki durum ve güdüm kipi (olay tespiti)
         self.finished_missiles = set()
-        self.names = {key: agent["name"] for key, agent in ((scenario or {}).get("agents") or {}).items()}
         self.last_time = {}                           # uçak → son yazılan satırın time_s'i
         self.events = (self.directory / "events.jsonl").open("x", encoding="utf-8")
         self._write_manifest()
@@ -101,16 +103,23 @@ class Recorder:
     # =========================================================================
 
     def record(self, simulation):
-        """Bir snapshot: her uçağın ölçümü ve o an uygulanan komutu, havadaki füzeler, olaylar."""
+        """Bir snapshot: her uçağın ölçümü ve o an uygulanan komutu, füzeler, son step'in olayları (sim üretir)."""
         self.snapshots += 1
         for plane in simulation.aircraft.values():
             time_s = plane.model.time_s
             self.last_time[plane.key] = time_s
-            self._detect_events(plane, time_s)
             self._record_aircraft(plane, time_s)
             for missile in plane.missiles:
-                self._detect_missile_events(plane, missile, time_s)
                 self._record_missile(plane, missile, time_s)
+            for event in simulation.events[plane.key]:
+                self._write_event(time_s, plane.key, event)
+
+    def _write_event(self, time_s, agent_key, event):
+        """Sim olayını yaz. Slotlu olaylara görüntüleyici için ammo (= slot) eklenir."""
+        extra = {key: value for key, value in event.items() if key != "type"}
+        if "slot" in extra:
+            extra["ammo"] = extra["slot"]
+        self._event(time_s, agent_key, event["type"], **extra)
 
     def _record_missile(self, plane, missile, time_s):
         """Dosya ilk snapshot'ta (başlıkla) açılır; satırlar atıştan itibaren yazılır, uçuş bitince son satır bir kez."""
@@ -126,37 +135,17 @@ class Recorder:
         state = missile.kinematics()
         north, east, down = state["velocity_ned_mps"]
         row = {TIME_COLUMN[0]: time_s, "lat_deg": state["lat_deg"], "lon_deg": state["lon_deg"],
-               "alt_ft": state["alt_msl_m"] / METERS_PER_FOOT, "roll_deg": 0.0, "pitch_deg": state["pitch_deg"],
+               "alt_ft": state["alt_m"] / METERS_PER_FOOT, "roll_deg": 0.0, "pitch_deg": state["pitch_deg"],
                "yaw_deg": state["yaw_deg"], "mach": state["mach"], "tas_kt": state["tas_mps"] * MPS_TO_KNOT,
                "vel_north_kt": north * MPS_TO_KNOT, "vel_east_kt": east * MPS_TO_KNOT,
                "vel_down_kt": down * MPS_TO_KNOT, "load_factor_g": missile.lateral_g,
-               "missile_time_s": missile.time_s, "guidance_mode": missile.seeker.mode}
+               "missile_time_s": missile.time_s, "guidance_mode": missile.seeker.mode,
+               "is_locked": int(missile.seeker.mode in ("datalink", "seeker")),
+               "is_pitbull": int(missile.seeker.is_pitbull)}
         writer.writerow(row)
         self.files[filename].flush()
         if missile.state == "ended":
             self.finished_missiles.add(key)
-
-    def _detect_missile_events(self, plane, missile, time_s):
-        key = (plane.key, missile.slot)
-        was = self.missile_state.get(key, dict(state="ready", pitbull=False, locked=False))
-        target = self._target_name(missile.target_key)
-        if was["state"] == "ready" and missile.state != "ready":
-            self._event(time_s, plane.key, "missile_launched", ammo=missile.slot, target=target)
-        pitbull = missile.seeker.is_pitbull
-        locked = missile.seeker.mode == "seeker"               # arayıcı hedefi görüyor
-        if pitbull and not was["pitbull"]:                     # füze başına bir kez
-            self._event(time_s, plane.key, "missile_pitbull", ammo=missile.slot, target=target)
-        elif pitbull and locked and not was["locked"]:          # pitbull sonrası hedefi yeniden buldu
-            self._event(time_s, plane.key, "missile_seeker_acquired", ammo=missile.slot, target=target)
-        if was["locked"] and not locked and missile.state != "ended":   # hedefi kaybetti (isabette yanından geçiş sayılmaz)
-            self._event(time_s, plane.key, "missile_seeker_lost", ammo=missile.slot, target=target)
-        if missile.state == "ended" and was["state"] != "ended":
-            kind = "missile_hit" if missile.outcome == "hit" else "missile_lost"
-            self._event(time_s, plane.key, kind, ammo=missile.slot, target=target)
-        self.missile_state[key] = dict(state=missile.state, pitbull=pitbull, locked=locked)
-
-    def _target_name(self, key):
-        return None if key is None else self.names.get(key, key)
 
     def _record_aircraft(self, plane, time_s):
         filename = f"{AIRCRAFT_MODEL} ({plane.name}--{plane.key}) [{plane.team}].csv"
@@ -171,19 +160,14 @@ class Recorder:
             row[column] = fdm[name] * scale
         command = plane.command
         row.update(cmd_heading_deg=command.heading_deg, cmd_alt_ft=command.altitude_m / METERS_PER_FOOT,
-                   cmd_throttle_norm=command.throttle, cmd_g_limit=command.g_limit)   # g_limit yoksa hücre boş
+                   cmd_throttle_norm=command.throttle, cmd_g_limit=command.g_limit,
+                   cmd_mode=command.mode, cmd_bank_deg=command.bank_deg, cmd_g=command.g)   # g_limit yoksa hücre boş
         self._writer(filename, columns).writerow(row)
         self.files[filename].flush()
 
     # =========================================================================
     # OLAYLAR
     # =========================================================================
-
-    def _detect_events(self, plane, time_s):
-        previous = self.previous_health.get(plane.key)
-        if previous is not None and previous != plane.health:
-            self._event(time_s, plane.key, "health_changed", **{"from": previous, "to": plane.health})
-        self.previous_health[plane.key] = plane.health
 
     def _event(self, time_s, agent_key, kind, **extra):
         self.event_count += 1

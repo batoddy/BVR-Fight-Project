@@ -15,6 +15,7 @@ public:
     Connection(const Connection&) = delete;                      // kopyalanamaz: tek bir TCP bağlantısı
     Connection& operator=(const Connection&) = delete;
 
+    Message receive_hello();                                     // ilk mesaj: hello; değilse hata
     bool receive(Message& message);                              // ölçüm al; uçuş bittiyse ("end") false
     void send(const Message& message);                           // mesajı Python'a gönder
 

@@ -71,6 +71,16 @@ export function catchLabel(entity){
   return Number.isFinite(seconds)?'varış '+seconds.toLocaleString('tr-TR',{minimumFractionDigits:1,maximumFractionDigits:1})+' s':'';
 }
 
+// Füze durum rozeti: PB (kendi arayıcısı kilitli, yeşil), DL (atan uçağın radarıyla kilitli, mavi), LOST (kilit yok, kırmızı).
+// Kipi kaydetmeyen eski kayıtlarda yalnız C++'ın pitbull bilgisinden PB; bilgi yoksa null.
+export function missileBadge(entity){
+  if(entity.kind!=='missile')return null;
+  if(!entity.guidance_mode)return entity.is_pitbull===true?{text:'PB',kind:'pitbull',title:'Pitbull · füzenin kendi radarı aktif'}:null;
+  if(entity.guidance_mode==='seeker')return {text:'PB',kind:'pitbull',title:'Pitbull · füzenin kendi arayıcısı hedefe kilitli'};
+  if(entity.guidance_mode==='datalink')return {text:'DL',kind:'datalink',title:'Veri bağı · atan uçağın radarı hedefe kilitli'};
+  return {text:'LOST',kind:'lost',title:entity.guidance_mode==='inertial'?'Kilit yok · son bilinen konuma tahminle uçuyor':'Kilit yok · güdümsüz'};
+}
+
 export function speedLabel(entity,unit='mps'){
   const definition=SPEED_UNITS[unit]||SPEED_UNITS.mps,speed=speedValue(entity,unit);
   const value=speed==null?'—':speed.toLocaleString('tr-TR',{minimumFractionDigits:definition.labelDigits,maximumFractionDigits:definition.labelDigits});

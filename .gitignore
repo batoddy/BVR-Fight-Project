@@ -41,3 +41,9 @@ Desktop.ini
 
 # Generated C++ executable
 /src/otopilot/main.exe
+
+# Scratch, editor locks, screen recordings, stray executables
+/tmp/
+.~lock.*
+*.mkv
+*.exe

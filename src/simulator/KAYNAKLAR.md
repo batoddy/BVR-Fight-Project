@@ -114,6 +114,23 @@ Bütün kod Python'dur (`src/simulator/`). C++ otopilota (`src/otopilot/`) bu ç
 | `fuze.detonates` (boş) | OPRF `proximity_detection()` (~4220), satır 2027 | kullanıcı yazacak |
 | `aim120c5.yaml`, `aim120b_oprf.yaml` | Her satırın yanında; özet `docs/veri_info/FUZE_VERI_TABLOSU.md` | — |
 
+## Sensörler (`sensors/`, `data/aircraft/f16.yaml`)
+
+**Varsayılan kapalı** (`scenario.yaml` `world.sensors: false`); açılınca aşağıdakiler çalışır.
+
+Hepsi **kod okunup kural ve değerleri alındı, Python'da yeniden yazıldı**; Nasal kodu çevrilmedi.
+
+| Fonksiyon / alan | Kaynak | Etiket |
+|---|---|---|
+| `Radar.detection_range_m`: R = 70 NM · (σ/3.2)^(1/4) | OPRF F-16 `Nasal/radar/apg-68.nas` (`rcsRefDistance`, `rcsRefValue`, ~530) | kaynak |
+| `Radar.sees`: görüş alanı ±60° azimut / yükseliş | `apg-68.nas` field of regard | kaynak; antenin yatışta dengeli olması kabul |
+| `Radar.in_notch`: aşağı bakış + \|v·LOS\| < 30 kt | OPRF `radar/radar-system.nas` `checkClutter`, `doppler_speed_kt` | uyarlama (düz yer: hedef alçaktaysa arka plan yer) |
+| `rcs_m2` = 2 m² | OPRF `radar/rcs_mand.nas` "F-16" | kaynak; açıdan bağımsız kabul |
+| `Tracker`: son iz + yaş | Protokol v2.1 kararı (kullanıcı) | — |
+| RWR: beni gören radarlar | Sim kuralı (karşı uçağın `Radar.sees`) | — |
+| Doğrudan mod g aralığı −4..+9 | JSBSim `f16.xml` FBW yorumu ("9G positive and 4G negative") | kaynak |
+| Veri bağı = atan uçağın radarı hedefi görüyor | OPRF `guide()` "sample" (blep = radar izi) | uyarlama |
+
 ## İncelenip kullanılmayanlar
 
 | Kaynak | Neden |

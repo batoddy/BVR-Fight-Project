@@ -1,120 +1,356 @@
 {
   "kind": "state",
-  "tick": 1,
+  "tick": 79,
   "data": {
-    "tick": 1,
-    "sim_time_s": 0.09166663,
-    "aircraft": [
-      {
-        "id": "blue",
-        "name": "KZL",
-        "type": "F16",
-        "team": "Blue",
-        "health": 1.0,
-        "lat_deg": 59.16974620173626,
-        "lon_deg": 18.00000000273037,
-        "alt_msl_m": 4999.999432588005,
-        "yaw_deg": 1.1284470081398285e-05,
-        "pitch_deg": -0.0738104926305269,
-        "roll_deg": 2.487516469904938e-05,
-        "tas_mps": 300.13415672192065,
-        "mach": 0.9363246536756431,
-        "velocity_ned_mps": [
-          300.134156084699,
-          0.003395358785862911,
-          0.01926072842860515
+    "time_s": 6.58333333333345,
+    "aircraft": {
+      "blue": {
+        "own": {
+          "id": "blue",
+          "name": "KZL",
+          "type": "F16",
+          "team": "Blue",
+          "health": 1,
+          "kinematics": {
+            "lat_deg": 59.01766899461719,
+            "lon_deg": 18.000006266693457,
+            "alt_m": 9997.82792801099,
+            "yaw_deg": 0.009083113205447153,
+            "pitch_deg": 1.173162326907217,
+            "roll_deg": -0.21354007460046526,
+            "tas_mps": 297.0238415895351,
+            "mach": 0.9915976414601576,
+            "velocity_ned_mps": [
+              297.02365533887604,
+              0.07018207379958823,
+              -0.32519113620657075
+            ]
+          },
+          "load_factor_g": 0.9937961255886096,
+          "fuel_kg": 1357.0261124276667,
+          "applied_command": {
+            "mode": "target",
+            "heading_deg": 359.99942282976497,
+            "altitude_m": 9999.999999999547,
+            "throttle": 0.45,
+            "g_limit": 4.0,
+            "bank_deg": null,
+            "g": null
+          }
+        },
+        "rwr": [],
+        "weapons": [
+          {
+            "slot": 0,
+            "id": "blue/missile/0",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 1,
+            "id": "blue/missile/1",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 2,
+            "id": "blue/missile/2",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 3,
+            "id": "blue/missile/3",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 4,
+            "id": "blue/missile/4",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 5,
+            "id": "blue/missile/5",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          }
+        ],
+        "contacts": [
+          {
+            "id": "red",
+            "team": "Red",
+            "source": "truth",
+            "tracked": true,
+            "age_s": 0.0,
+            "kinematics": {
+              "lat_deg": 59.648999397303065,
+              "lon_deg": 17.999993583031095,
+              "alt_m": 9997.823386082555,
+              "yaw_deg": 180.0091378020125,
+              "pitch_deg": 1.1731310641315569,
+              "roll_deg": -0.21488874598062607,
+              "tas_mps": 297.02523370044804,
+              "mach": 0.991602223591173,
+              "velocity_ned_mps": [
+                -297.02504817641824,
+                -0.07067121984105762,
+                -0.324410011360992
+              ]
+            }
+          }
+        ],
+        "warnings": [
+          {
+            "missile_id": "red/missile/0",
+            "owner_id": "red",
+            "designation": "AIM-120C",
+            "source": "truth",
+            "flight_time_s": 0.08333333333333333,
+            "is_active": false,
+            "kinematics": {
+              "lat_deg": 59.64899582121891,
+              "lon_deg": 17.999993581635497,
+              "alt_m": 9997.823722451925,
+              "yaw_deg": 180.0135654403748,
+              "pitch_deg": 0.0621580652289514,
+              "roll_deg": 0.0,
+              "tas_mps": 305.7411460742566,
+              "mach": 1.0206984143425781,
+              "velocity_ned_mps": [
+                -305.74095758737667,
+                -0.07238771935806329,
+                -0.33168715976266155
+              ]
+            }
+          }
+        ],
+        "events": [
+          {
+            "type": "missile_launch_warning",
+            "missile_id": "red/missile/0",
+            "owner_id": "red"
+          }
         ]
       },
-      {
-        "id": "red",
-        "name": "Hostile",
-        "type": "F16",
-        "team": "Red",
-        "health": 1.0,
-        "lat_deg": 59.96665687824232,
-        "lon_deg": 17.999999997182673,
-        "alt_msl_m": 4999.999446181834,
-        "yaw_deg": 180.00001116850427,
-        "pitch_deg": -0.06596039264657441,
-        "roll_deg": 2.496994013185038e-05,
-        "tas_mps": 299.61220382907146,
-        "mach": 0.934696324136045,
-        "velocity_ned_mps": [
-          -299.6122032348172,
-          -0.0034204014810892366,
-          0.018557816628644842
+      "red": {
+        "own": {
+          "id": "red",
+          "name": "Hostile",
+          "type": "F16",
+          "team": "Red",
+          "health": 1,
+          "kinematics": {
+            "lat_deg": 59.648999397303065,
+            "lon_deg": 17.999993583031095,
+            "alt_m": 9997.823386082555,
+            "yaw_deg": 180.0091378020125,
+            "pitch_deg": 1.1731310641315569,
+            "roll_deg": -0.21488874598062607,
+            "tas_mps": 297.02523370044804,
+            "mach": 0.991602223591173,
+            "velocity_ned_mps": [
+              -297.02504817641824,
+              -0.07067121984105762,
+              -0.324410011360992
+            ]
+          },
+          "load_factor_g": 0.9938495261005797,
+          "fuel_kg": 1357.0261095860128,
+          "applied_command": {
+            "mode": "target",
+            "heading_deg": 179.99943274969812,
+            "altitude_m": 9999.999999999547,
+            "throttle": 0.45,
+            "g_limit": null,
+            "bank_deg": null,
+            "g": null
+          }
+        },
+        "rwr": [],
+        "weapons": [
+          {
+            "slot": 0,
+            "id": "red/missile/0",
+            "designation": "AIM-120C",
+            "state": "in_flight",
+            "request_id": 1,
+            "target_id": "blue",
+            "flight_time_s": 0.08333333333333333,
+            "kinematics": {
+              "lat_deg": 59.64899582121891,
+              "lon_deg": 17.999993581635497,
+              "alt_m": 9997.823722451925,
+              "yaw_deg": 180.0135654403748,
+              "pitch_deg": 0.0621580652289514,
+              "roll_deg": 0.0,
+              "tas_mps": 305.7411460742566,
+              "mach": 1.0206984143425781,
+              "velocity_ned_mps": [
+                -305.74095758737667,
+                -0.07238771935806329,
+                -0.33168715976266155
+              ]
+            },
+            "guidance_mode": "datalink",
+            "is_locked": true,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 1,
+            "id": "red/missile/1",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 2,
+            "id": "red/missile/2",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 3,
+            "id": "red/missile/3",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 4,
+            "id": "red/missile/4",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          },
+          {
+            "slot": 5,
+            "id": "red/missile/5",
+            "designation": "AIM-120C",
+            "state": "ready",
+            "request_id": null,
+            "target_id": null,
+            "flight_time_s": null,
+            "kinematics": null,
+            "guidance_mode": "none",
+            "is_locked": false,
+            "is_pitbull": false,
+            "outcome": null
+          }
+        ],
+        "contacts": [
+          {
+            "id": "blue",
+            "team": "Blue",
+            "source": "truth",
+            "tracked": true,
+            "age_s": 0.0,
+            "kinematics": {
+              "lat_deg": 59.01766899461719,
+              "lon_deg": 18.000006266693457,
+              "alt_m": 9997.82792801099,
+              "yaw_deg": 0.009083113205447153,
+              "pitch_deg": 1.173162326907217,
+              "roll_deg": -0.21354007460046526,
+              "tas_mps": 297.0238415895351,
+              "mach": 0.9915976414601576,
+              "velocity_ned_mps": [
+                297.02365533887604,
+                0.07018207379958823,
+                -0.32519113620657075
+              ]
+            }
+          }
+        ],
+        "warnings": [],
+        "events": [
+          {
+            "type": "launch_accepted",
+            "request_id": 1,
+            "slot": 0,
+            "target_id": "blue"
+          }
         ]
       }
-    ],
-    "missiles": [
-      {
-        "id": "blue/missile/0",
-        "owner_id": "blue",
-        "target_id": null,
-        "state": "ready",
-        "outcome": null,
-        "flight_time_s": null,
-        "kinematics": null
-      },
-      {
-        "id": "blue/missile/1",
-        "owner_id": "blue",
-        "target_id": null,
-        "state": "ready",
-        "outcome": null,
-        "flight_time_s": null,
-        "kinematics": null
-      },
-      {
-        "id": "blue/missile/2",
-        "owner_id": "blue",
-        "target_id": null,
-        "state": "ready",
-        "outcome": null,
-        "flight_time_s": null,
-        "kinematics": null
-      },
-      {
-        "id": "blue/missile/3",
-        "owner_id": "blue",
-        "target_id": null,
-        "state": "ready",
-        "outcome": null,
-        "flight_time_s": null,
-        "kinematics": null
-      },
-      {
-        "id": "red/missile/0",
-        "owner_id": "red",
-        "target_id": null,
-        "state": "ready",
-        "outcome": null,
-        "flight_time_s": null,
-        "kinematics": null
-      },
-      {
-        "id": "red/missile/1",
-        "owner_id": "red",
-        "target_id": null,
-        "state": "ready",
-        "outcome": null,
-        "flight_time_s": null,
-        "kinematics": null
-      }
-    ],
-    "flight_commands": [
-      {
-        "id": "blue",
-        "heading_deg": 0.0,
-        "altitude_m": 5000.0,
-        "throttle": 0.8
-      },
-      {
-        "id": "red",
-        "heading_deg": 180.0,
-        "altitude_m": 5000.0,
-        "throttle": 0.45
-      }
-    ]
+    }
   }
 }

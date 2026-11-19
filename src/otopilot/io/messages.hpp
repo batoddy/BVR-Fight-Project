@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 
 // JSON'dan gizli dönüşümü kapat: değer okurken türü her zaman açık yaz, j.at("x").get<double>().
@@ -16,43 +15,10 @@ inline constexpr std::size_t MAX_MESSAGE_BYTES = 1024 * 1024;
 // Telde: {"kind": ..., "tick": ..., "data": {...}} + satır sonu.
 struct Message
 {
-    std::string kind;        // "state" / "command" / "end"
+    std::string kind;        // "hello" / "state" / "command" / "end"
     std::uint64_t tick = 0;  // adım numarası
     Json data;
 
-    std::string encode() const                           // tek satır JSON
-    {
-        Json value;
-        value["kind"] = kind;
-        value["tick"] = tick;
-        value["data"] = data;
-        return value.dump() + "\n";
-    }
-
-    static Message decode(const std::string& line)       // tek satır JSON'dan; biçim yanlışsa hata
-    {
-        Json value = Json::parse(line);
-
-        bool shape_ok = value.is_object() && value.size() == 3;   // tam olarak kind, tick ve data
-        bool kind_ok = value.contains("kind") && value.at("kind").is_string();
-        bool tick_ok = value.contains("tick") && value.at("tick").is_number_unsigned();
-        bool data_ok = value.contains("data") && value.at("data").is_object();
-        if (!shape_ok || !kind_ok || !tick_ok || !data_ok)
-        {
-            throw std::runtime_error("Mesaj kind, tick ve data alanlarindan olusmali.");
-        }
-
-        std::string kind = value.at("kind").get<std::string>();
-        bool known_kind = kind == "state" || kind == "command" || kind == "end";
-        if (!known_kind)
-        {
-            throw std::runtime_error("Mesaj turu gecersiz.");
-        }
-
-        Message message;
-        message.kind = kind;
-        message.tick = value.at("tick").get<std::uint64_t>();
-        message.data = value.at("data");
-        return message;
-    }
+    std::string encode() const;                   // tek satır JSON + satır sonu
+    static Message decode(const std::string& line);   // tek satır JSON'dan; biçim yanlışsa hata
 };

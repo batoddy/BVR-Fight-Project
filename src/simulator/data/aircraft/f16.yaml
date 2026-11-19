@@ -1,0 +1,12 @@
+# F-16 sensör ve imza verisi. Kaynak: FlightGear OPRF (topluluk)
+#   rcs_mand.nas = github.com/NikolaiVChr/OpRedFlag radar/rcs_mand.nas
+#   apg-68.nas   = github.com/NikolaiVChr/f16 Nasal/radar/apg-68.nas
+#   radar-system.nas = OpRedFlag radar/radar-system.nas
+rcs_m2: 2.0                         # ön görünüş RCS (rcs_mand.nas "F-16"); açıdan bağımsız kabul (sadeleştirme)
+
+radar:                              # AN/APG-68
+  ref_range_nm: 70.0                # apg-68.nas rcsRefDistance: ref RCS'li hedefin tespit menzili
+  ref_rcs_m2: 3.2                   # apg-68.nas rcsRefValue; menzil = ref_range · (σ/ref_rcs)^(1/4) (apg-68.nas ~530)
+  field_of_regard_az_deg: 60.0      # apg-68.nas field of regard ±60° azimut
+  field_of_regard_el_deg: 60.0      # apg-68.nas field of regard ±60° yükseliş
+  notch_speed_kt: 30.0              # radar-system.nas TerrainChecker doppler_speed_kt varsayılanı

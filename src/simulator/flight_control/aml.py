@@ -29,6 +29,11 @@ class AMLController:
         v_hat = velocity / speed
         _, right, down = body_axes(*(math.radians(a) for a in (model.roll_deg, model.pitch_deg, model.yaw_deg)))
 
+        if command.mode == "direct":                       # yatış + g doğrudan: üst katmanlar atlanır, aynı yatış/g döngüleri
+            bank_error = wrap_pi(math.radians(command.bank_deg) - bank_angle(-down, v_hat, right))
+            self.fbw.update(model, roll_rate_command(bank_error, model.qbar_pa), command.g, command.throttle, PHYSICS_DT_S)
+            return
+
         track = math.radians(model.flight_path_deg[1])                    # iz açısı χ: hız vektörünün yönü
         target = desired_direction(math.radians(command.heading_deg), track,
                                    desired_gamma(command.altitude_m - model.alt_m, speed))

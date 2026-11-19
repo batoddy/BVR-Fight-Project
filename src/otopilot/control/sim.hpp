@@ -1,6 +1,6 @@
 #pragma once
 
-#include "control/otopilot.hpp"
+#include "control/legacy/otopilot.hpp"
 #include "io/console_log.hpp"
 #include "io/messages.hpp"
 #include "model/world.hpp"
@@ -9,6 +9,7 @@
 class Sim
 {
 public:
+    void start(const Message& hello);     // hello mesajı: uçak kimlikleri, profiller ve füze slotları; ilk step'ten önce bir kez
     Message step(const Message& state);   // state mesajını işler, Python'a gidecek command mesajını döner
 
 private:

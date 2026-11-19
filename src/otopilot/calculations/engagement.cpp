@@ -28,7 +28,7 @@ namespace
 //     uçuş süresi        = c + d·ln h
 //     düşmanın aldığı yol = düşmanın bana doğru hızı × uçuş süresi
 //   Düşman bana geliyorsa menzil uzar, benden kaçıyorsa (enemy_closure_kt < 0) kısalır.
-// Katsayılar BVRGym füzesine karşı yapılan erişim taramasından: calculations/wez_grafikler/wez_sonuc.txt
+// Katsayılar BVRGym füzesine karşı yapılan erişim taramasından: olcumler/wez/wez_sonuc.txt
 Wez engagement::wez_nm(const Aircraft& own, const Aircraft& enemy)
 {
     const MissileProfile& missile = own.profile.main_weapon;
@@ -212,7 +212,7 @@ OutPlan engagement::out_plan(const Aircraft& own, const Aircraft& enemy, double 
 //   R_cold = güvenlik × e^(a + b·x + c·y + d·x·y)
 //     x = benim irtifam − 10 km
 //     y = benim kaçış hızım − 700 kt
-// Katsayılar (a, b, c, d, güvenlik) düşmanın ana silahının uyumundan: calculations/r_cold_formulu.md
+// Katsayılar (a, b, c, d, güvenlik) düşmanın ana silahının uyumundan: olcumler/r_cold/r_cold_formulu.md
 //
 // Ne anlatır: düşman füzeyi attığı anda ben kuyruğumu dönmüş, y hızıyla düz kaçıyorsam, füze en fazla
 // R_cold uzaktan atılırsa bana yetişir. Daha uzaktan atılan füze yolda Mach 1'in altına düşer, kaybolur.

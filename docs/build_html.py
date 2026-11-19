@@ -121,9 +121,9 @@ def diagram(kind, uid):
         d.node(30, 25, 300, "main()", ["Connection ve Sim oluşturur", "receive → step → send"], "slate", "giriş", "#kaynak", 125)
         d.node(455, 25, 320, "Sim", ["- world_: World", "- otopilot_fighter_", "- otopilot_hostile_", "+ step(state): Message"], "blue", "class", "#cpp", 175)
         d.node(30, 220, 300, "Connection", ["+ receive(state)", "+ send(command)"], "slate", "class", "#cpp", 120)
-        d.node(30, 395, 300, "OtopilotFighter", ["- state_: int", "- command_: FlightCommand", "- maneuvers_: Maneuvers", "+ step(own, world, current)"], "blue", "class", "#cpp", 180)
+        d.node(30, 395, 300, "Otopilot (fighter)", ["- mission_: Mission", "- state_: OtopilotState", "- maneuvers_: Maneuvers", "+ step(own)"], "blue", "class", "#cpp", 180)
         d.node(420, 395, 340, "World", ["+ fighter: Aircraft", "+ hostile: Aircraft", "+ sim_time_s", "+ update()"], "green", "struct", "#cpp", 180)
-        d.node(835, 395, 280, "OtopilotHostile", ["- state_: int", "- command_: FlightCommand", "- maneuvers_: Maneuvers", "+ step(own, world, current)"], "blue", "class", "#cpp", 180)
+        d.node(835, 395, 280, "Otopilot (hostile)", ["- mission_: Mission", "- state_: OtopilotState", "- maneuvers_: Maneuvers", "+ step(own)"], "blue", "class", "#cpp", 180)
         d.node(40, 735, 280, "Maneuvers", ["Fighter'a ait ayrı nesneler"], "blue", "instance", "#gelistirme", 105)
         d.node(420, 735, 340, "Aircraft × 2", ["fighter / hostile", "Ölçüm · profil · füze · hesap"], "green", "instances", "#cpp", 125)
         d.node(835, 735, 280, "Maneuvers", ["Hostile'e ait ayrı nesneler"], "blue", "instance", "#gelistirme", 105)
@@ -278,7 +278,6 @@ class LinkRewriter:
     def __init__(self):
         self.targets = {(ROOT / filename).resolve(): key for key, _, filename, _ in DOCUMENTS}
         self.targets[(ROOT / "docs/README.md").resolve()] = "overview"
-        self.targets[(ROOT / "docs/mimari/mesaj_sablonlari/README.md").resolve()] = "tcp"
 
     def rewrite(self, html, source, page_key):
         def replace(match):

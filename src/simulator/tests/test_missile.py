@@ -67,18 +67,26 @@ class MissileLifecycleTest(unittest.TestCase):
         self.simulation = Simulation(load_scenario())
         self.commands = self.simulation.read_flight_commands()
 
-    def missile_states(self):
-        return {m["id"]: m for m in self.simulation.read_state()["missiles"]}
+    def weapon(self, owner, slot):
+        return self.simulation.read_state()["aircraft"][owner]["weapons"][slot]
+
+    def events(self, owner):
+        return self.simulation.read_state()["aircraft"][owner]["events"]
 
     def test_fire(self):
         blue = self.simulation.aircraft["blue"]
         ammo = blue.ammo
-        self.assertTrue(self.simulation.fire("blue", "red"))
+        self.simulation.step(self.commands, [dict(request_id=7, id="blue", target_id="red"),
+                                             dict(request_id=8, id="blue", target_id="blue")])
         self.assertEqual(blue.ammo, ammo - 1)
-        self.assertFalse(self.simulation.fire("blue", "blue"))
-        state = self.missile_states()["blue/missile/0"]
-        self.assertEqual((state["state"], state["target_id"]), ("in_flight", "red"))
+        state = self.weapon("blue", 0)
+        self.assertEqual((state["state"], state["target_id"], state["request_id"]), ("in_flight", "red", 7))
         self.assertIsNotNone(state["kinematics"])
+        types = [(e["type"], e.get("request_id")) for e in self.events("blue")]
+        self.assertIn(("launch_accepted", 7), types)
+        self.assertIn(("launch_rejected", 8), types)
+        self.assertIn("missile_launch_warning", [e["type"] for e in self.events("red")])
+        self.assertEqual(len(self.simulation.read_state()["aircraft"]["red"]["warnings"]), 1)
 
     def test_burn_and_end(self):
         profile = load_missile()
@@ -92,7 +100,7 @@ class MissileLifecycleTest(unittest.TestCase):
         while missile.state == "in_flight" and not self.simulation.finished():
             self.simulation.step(self.commands)
         self.assertEqual((missile.state, missile.outcome), ("ended", "lost"))     # güdümsüz: isabet yok
-        self.assertEqual(self.missile_states()["blue/missile/0"]["outcome"], "lost")
+        self.assertEqual(self.weapon("blue", 0)["outcome"], "lost")
 
 
 if __name__ == "__main__":

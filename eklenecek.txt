@@ -1,0 +1,19 @@
+0. Veri	Tamam	—
+1. Sim iskeleti + uçuş kontrolü	Tamam	Pürüzler aşağıda
+2. Füze fiziği	Büyük ölçüde tamam	Menzil kıyası ve sürükleme kalibrasyonu (loft'tan sonra); füzenin azami yükünün hıza bağlanması (şu an sabit 30 g)
+3. Arayıcı, veri bağı, tapa	Tamam (sizin kodunuz)	Loft (güdümde, sizin tarafınız); tapada "ıska" sonucu (isteğe bağlı)
+4. C++ uyumlarının yeni füzeye göre yeniden ölçülmesi	Yapılmadı	WEZ, TR, MSR, NEZ, MAR, DOR, R_cold, yetişme süresi. Son kayıtta C++ hâlâ "WEZmax 80 NM" sanıyordu
+5. Sensörler	Yapılmadı	Radar (RCS'e bağlı menzil, gimbal), RWR, doppler notch, "görülen resim"
+6. Chaff	Yapılmadı (isteğe bağlı)	Olasılıksal chaff
+Plan dışında biriken işler:
+
+İş	Taraf
+Mesaj protokolü v2 (şimdi konuştuğumuz)	Sim + C++ + görüntüleyici
+Hız komutu ve otomatik gaz (TECS)	Sim + C++
+Doğrudan mod (C++ yatış + g verir)	Sim + C++
+OPRF F-16 modeline geçiş kararı	Sim (karar bekliyor)
+Aynı gazla eski sim hızlanırken yeninin hızlanmaması	Sim (inceleme)
+Hızlı yatış sırasında −0.12 g düşüşü	Sim (uçuş kontrolü)
+Kendini imha süresi (110 s, OPRF "tahmin")	Veri
+Belgeler: README, çalıştırma kılavuzu, docs dizini	Belge
+C++ gözlemleri: crank tarafının 1.2 s ters çevrilmesi, drag → kovalama → cold arka arkaya dönüşleri, out'ta birikimli alçalma, TR atışından 0.2 s sonra MSR'de ikinci atış	C++ (şimdilik dokunulmuyor)

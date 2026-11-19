@@ -197,6 +197,14 @@ def read_csv(path, handle):
                     raise ValueError('sonlu olmayan sayı')
                 values[key] = value
                 measured.add(key)
+            # Simülatörün füze durumu (yeni kayıtlar): 1/0 bayraklar ve güdüm kipi; olduğu gibi taşınır.
+            for column in ('is_pitbull', 'is_locked'):
+                raw = row.get(column)
+                if raw is not None and raw.strip():
+                    values[column] = raw.strip() == '1'
+            mode = row.get('guidance_mode')
+            if mode is not None and mode.strip():
+                values['guidance_mode'] = mode.strip()
             if geocentric and 'latitude_gc_deg' in values and 'altitude_m' in values:
                 # Derived from the raw column every row, never from the previous
                 # result, so carrying a value forward cannot convert it twice.
@@ -330,7 +338,9 @@ def read_calculations(directory):
                                 for slot, value in times.items()):
                             raise ValueError('missile_catch_times_s geçersiz')
                         values[key] = times
-                    elif key.endswith('_id') or key == 'decision':   # metin alanları
+                    elif key == 'phase':                             # eski kayıt sayı, protokol v2 ad (ör. CRANK)
+                        values[key] = None if not raw else int(raw) if raw.isdigit() else raw
+                    elif key.endswith('_id') or key in ('decision', 'state'):   # metin alanları
                         values[key] = raw or None
                     elif not raw:
                         values[key] = None
@@ -367,7 +377,8 @@ def attach_calculations(samples, calculations):
     for row in samples:
         if row['kind'] == 'missile':
             values = calculations.get(row.get('carrier_key'), {}).get(row['sim_time_s'])
-            if values is not None and 'pitbull_missile_slots' in values:
+            # Simülatör kaydı is_pitbull'u kendisi yazar; C++ tahmini yalnız eski kayıtlarda kullanılır.
+            if values is not None and 'pitbull_missile_slots' in values and 'is_pitbull' not in row:
                 row['is_pitbull'] = str(row.get('ammo_id')) in {str(slot) for slot in values['pitbull_missile_slots']}
             if values is not None and 'missile_catch_times_s' in values:
                 row['catch_time_s'] = values['missile_catch_times_s'].get(str(row.get('ammo_id')))

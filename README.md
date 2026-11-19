@@ -2,7 +2,7 @@
 
 [HTML teknik rehber](docs/PROJE_REHBERI.html): mimariyi, UML diyagramlarını, kullanım kılavuzlarını ve veri alanlarını tarayıcıda incele.
 
-BVR Fight Project, iki uçağın görüş ötesi hava muharebesini BVRGym/JSBSim üzerinde çalıştıran bir simülasyon ve kayıt inceleme projesidir. Python fizik nesnelerini oluşturur ve ilerletir; C++ uçakların taktik kararlarını verir. Ayrı görüntüleyici, uçuş kayıtlarını tarayıcıda 2D ve 3D olarak oynatır.
+BVR Fight Project, iki uçağın görüş ötesi hava muharebesini JSBSim üzerinde çalıştıran bir simülasyon ve kayıt inceleme projesidir. Python fizik nesnelerini oluşturur ve ilerletir; C++ uçakların taktik kararlarını verir. Ayrı görüntüleyici, uçuş kayıtlarını tarayıcıda 2D ve 3D olarak oynatır.
 
 ```mermaid
 flowchart LR
@@ -17,27 +17,29 @@ flowchart LR
 
 | Konum | Sorumluluk |
 |---|---|
-| [src/sim](src/sim/README.md) | Senaryo yükleme, BVRGym kurulumu, uçuş kontrolü, TCP sunucusu ve kayıt |
-| [src/otopilot](src/otopilot/README.md) | Ortak dünya bilgisi, geometri ve angajman hesapları, fighter/hostile otopilotları |
+| [src/simulator](src/simulator/README.md) | Simülasyon: senaryo, JSBSim F-16, uçuş kontrolü, füze, TCP sunucusu ve kayıt |
+| [src/sim](src/sim/README.md) | Eski BVRGym tabanlı simülasyon; kıyas ve WEZ taraması için duruyor |
+| [src/otopilot](src/otopilot/README.md) | Ortak dünya bilgisi, geometri ve angajman hesapları, otopilot durum makinesi |
 | [BVRGym-Goruntuleyici](BVRGym-Goruntuleyici/README.md) | Kayıt kütüphanesi, zaman çizelgesi, 2D/3D sahne ve analiz katmanları |
-| `BVRGym/` | Alt modül olarak kullanılan fizik ve ajan altyapısı |
-| `recordings/` | Çalıştırma sırasında Üretilen kayıtlar; Git dışında tutulur |
+| `BVRGym/` | Eski simülasyonun alt modülü |
+| `recordings/` | Çalıştırma sırasında üretilen kayıtlar; Git dışında tutulur |
 | [docs](docs/README.md) | Kurulum, mimari ve veri sözleşmesinin konuya göre ayrılmış belgeleri |
 | `BVR-Terminoloji.ods` | Hava muharebesi terimleri için yardımcı çalışma tablosu |
 
-## çalıştırma
+## Çalıştırma
 
 Windows, Python ortamı ve MinGW/CMake kurulu olmalıdır. İlk kurulum için [çalıştırma kılavuzunu](docs/CALISTIRMA_KILAVUZU.md) kullan. Aşağıdaki komutlar proje kökünden, Python ortamı etkin halde çalıştırılır.
 
 ```powershell
-cmake -S src/otopilot -B src/otopilot/build -G "MinGW Makefiles"
 cmake --build src/otopilot/build
 ```
+
+`build/` yoksa ilk kurulum komutu [otopilot KULLANIM.md](src/otopilot/KULLANIM.md#doğrulama)'dedir.
 
 Birinci terminal Python sunucusunu açar:
 
 ```powershell
-python .\src\sim\sim_main.py
+python .\src\simulator\main.py
 ```
 
 İkinci terminal C++ istemcisini başlatır:
@@ -58,14 +60,14 @@ Tarayıcıda `http://127.0.0.1:8765` adresini aç ve **Kayıt aç** menüsünden
 
 Python her dış adımın başında iki uçağın ve mühimmatın ölçümlerini gönderir. C++ aynı adım için iki uçuş komutu ve varsa atış emirlerini döndürür. Komut gelene kadar fizik bekler. Python hesapları mevcut ölçümün zamanıyla kaydeder, atışları uygular, ajanları ilerletir ve yeni ölçümü kaydeder.
 
-C++ tarafında `Sim` bu adımı yönetir. `World`, iki uçağın ölçümlerini ve birbirlerine göre hesapları tutar. `OtopilotFighter` ve `OtopilotHostile` kendi karar durumlarına, uçuş komutlarına ve manevra nesnelerine sahiptir.
+C++ tarafında `Sim` bu adımı yönetir. `World`, iki uçağın ölçümlerini ve birbirlerine göre hesapları tutar. İki uçak da aynı `Otopilot` durum makinesini kendi görev konseptiyle kullanır; her biri kendi karar durumuna ve manevra nesnelerine sahiptir.
 
 ## Okuma yolları
 
 - Sistemi anlamak: [sistem mimarisi](docs/mimari/BVR_SISTEM_MIMARISI.md).
 - Uçak davranışını değiştirmek: [otopilot kullanım rehberi](src/otopilot/KULLANIM.md).
 - C++ sınıflarını anlamak: [otopilot mimarisi](docs/mimari/OTOPILOT_MIMARISI.md).
-- Mesajları ve kayıt alanlarını Öğrenmek: [veri referansı](docs/veri_info/SIMULASYON_VERI_REFERANSI.md).
+- Mesajları ve kayıt alanlarını öğrenmek: [veri referansı](docs/veri_info/SIMULASYON_VERI_REFERANSI.md).
 - Arayüzü kullanmak: [görüntüleyici rehberi](BVRGym-Goruntuleyici/README.md).
 - Doğrulamayı tekrarlamak: [test rehberi](BVRGym-Goruntuleyici/Dogrulama.md).
 

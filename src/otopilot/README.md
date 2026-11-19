@@ -1,6 +1,6 @@
 # C++ otopilot kaynakları
 
-C++ programı Python simülasyonundan ölçüm alır, ortak hesapları günceller ve iki uçağın komutunu üretir. Giriş `main.cpp`, adımın yöneticisi `Sim`, uçak davranışlarının sahipleri `OtopilotFighter` ile `OtopilotHostile` sınıflarıdır (her biri tek switch'li bir durum makinesi). Kod kuralları: [KOD_STANDARTLARI.md](KOD_STANDARTLARI.md).
+C++ programı Python simülasyonundan ölçüm alır, ortak hesapları günceller ve iki uçağın komutunu üretir. Giriş `main.cpp`, adımın yöneticisi `Sim`, uçak davranışı `Otopilot` durum makinesidir: iki uçak da aynı sınıfı kendi görev konseptiyle kullanır, kararları `decisions` seçer. Kod kuralları: [KOD_STANDARTLARI.md](KOD_STANDARTLARI.md).
 
 ```text
 otopilot/
@@ -9,12 +9,17 @@ otopilot/
 ├── KOD_STANDARTLARI.md
 ├── control/
 │   ├── sim.hpp / sim.cpp
-│   ├── otopilot_fighter.hpp / otopilot_fighter.cpp
-│   ├── otopilot_hostile.hpp / otopilot_hostile.cpp
-│   ├── otopilot_state.hpp                 (iki otopilotun ortak durum listesi)
-│   ├── maneuver.hpp / maneuver.cpp
-│   ├── tactic.hpp / tactic.cpp            (taktikler: manevraların kurallı sırası; henüz bağlı değil)
-│   └── conditions.hpp / conditions.cpp    (geçiş koşulları)
+│   ├── conditions.hpp / conditions.cpp    (geçiş koşulları)
+│   ├── maneuvers/                         (her manevra kendi .hpp/.cpp'sinde; maneuver.hpp taban, maneuvers.hpp hepsi)
+│   ├── legacy/                            (eski karar sistemi; FSM hazır olunca kalkar)
+│   │   ├── otopilot.hpp / otopilot.cpp    (durum makinesi)
+│   │   ├── otopilot_state.hpp             (durum listesi)
+│   │   ├── decisions.hpp / decisions.cpp  (karar noktaları; kurallar KARAR_TASARIMI.md)
+│   │   └── KARAR_TASARIMI.md
+│   └── fsm/                               (yeni otopilotFSM, yazılıyor)
+│       ├── otopilot_fsm.hpp / otopilot_fsm.cpp
+│       ├── decisions_fsm.hpp / decisions_fsm.cpp
+│       └── fsm_kararlar.txt
 ├── model/
 │   ├── aircraft.hpp
 │   ├── weapons.hpp / weapons.cpp          (füze slotları, atış, WEZ/NEZ/F-pole)
@@ -25,28 +30,33 @@ otopilot/
 │   ├── missile.hpp
 │   ├── flight_command.hpp
 │   ├── phase.hpp
-│   ├── aircraft_profiles.hpp
-│   └── missile_profiles.hpp
+│   └── profiles/
+│       ├── aircraft_profiles.hpp
+│       └── missile_profiles.hpp
 ├── calculations/
 │   ├── geometry.hpp / geometry.cpp
 │   ├── turn.hpp / turn.cpp
 │   ├── engagement.hpp / engagement.cpp
-│   ├── missile_geometry.hpp / missile_geometry.cpp
-│   ├── r_cold_formulu.md, r_cold_grafikler/      (R_cold uyumu ve ölçümü)
-│   ├── wez_grafikler/ (wez_sonuc.txt)            (WEZ dış sınırı Rmax uyumu ve ölçümü)
-│   └── fuze_ucus_tablosu.md                      (füze uçuş modeli)
+│   └── missile_geometry.hpp / missile_geometry.cpp
+├── olcumler/                              (ölçüm malzemesi: betik, csv, grafik, uyum notları)
+│   ├── wez/                               (WEZ dış sınırı Rmax uyumu ve ölçümü; wez_sonuc.txt)
+│   ├── r_cold/                            (r_cold_formulu.md, R_cold uyumu ve ölçümü)
+│   ├── faz4_olcum/                        (yeni sim füzesi menzil/hız ölçümleri)
+│   ├── fuze_analiz/                       (kayıtlardan füze analizi)
+│   └── fuze_ucus_tablosu.md               (füze uçuş modeli)
 ├── io/
 │   ├── state_reader.hpp / state_reader.cpp
 │   ├── command_writer.hpp / command_writer.cpp
 │   ├── calculation_writer.hpp / calculation_writer.cpp
 │   ├── console_log.hpp / console_log.cpp
-│   ├── connection.hpp / tcp_connection.cpp
-│   └── messages.hpp
-├── common/
-│   ├── units.hpp / angles.hpp / ned.hpp / formulas.hpp
+│   ├── connection.hpp / connection.cpp
+│   ├── messages.hpp / messages.cpp
 │   └── roles.hpp
+├── common/
+│   └── units.hpp / angles.hpp / ned.hpp / formulas.hpp
 ├── tests/
-│   └── units_test.cpp
+│   ├── units_test.cpp
+│   └── maneuver_test.cpp
 └── third_party/nlohmann/
 ```
 
@@ -54,17 +64,18 @@ otopilot/
 
 | İş | Kaynak |
 |---|---|
-| Fighter'ın aşama ve atış kararları | [control/otopilot_fighter.cpp](control/otopilot_fighter.cpp) |
-| Hostile'in karşı senaryosu | [control/otopilot_hostile.cpp](control/otopilot_hostile.cpp) |
+| Durumlar ve geçişler | [control/legacy/otopilot.cpp](control/legacy/otopilot.cpp) |
+| Karar kuralları (atış, destek, savunma, cold ops) | [control/legacy/decisions.cpp](control/legacy/decisions.cpp) |
+| Fighter ve hostile'ın görev konsepti | [control/sim.hpp](control/sim.hpp) |
 | Geçiş koşulları | [control/conditions.cpp](control/conditions.cpp) |
 | Adımın okuma–hesap–karar–yazma sırası | [control/sim.cpp](control/sim.cpp) |
-| Manevraların komut üretmesi ve bitişi | [control/maneuver.cpp](control/maneuver.cpp) |
+| Manevraların komut üretmesi ve bitişi | [control/maneuvers/](control/maneuvers/) |
 | Ortak ölçüm ve füze verileri | [model/aircraft.hpp](model/aircraft.hpp) |
 | Hesaplanan durum: geometri, kaçış, tehdit | [model/picture.hpp](model/picture.hpp) |
 | Füze slotları, atış, kendi WEZ/NEZ/F-pole | [model/weapons.hpp](model/weapons.hpp) |
 | Hesapları ilgili uçak/füze alanlarına koymak | [model/world.cpp](model/world.cpp) |
-| Uçak sabitleri ve slot sırasındaki mühimmat tipleri | [model/aircraft_profiles.hpp](model/aircraft_profiles.hpp) |
-| Füze menzil, hız, pitbull, R_cold ve Rmax (WEZ) parametreleri | [model/missile_profiles.hpp](model/missile_profiles.hpp) |
+| Uçak sabitleri ve slot sırasındaki mühimmat tipleri | [model/profiles/aircraft_profiles.hpp](model/profiles/aircraft_profiles.hpp) |
+| Füze menzil, hız, pitbull, R_cold ve Rmax (WEZ) parametreleri | [model/profiles/missile_profiles.hpp](model/profiles/missile_profiles.hpp) |
 | Mesafe, bearing, ATA, aspect, LOS ve kapanma | [calculations/geometry.cpp](calculations/geometry.cpp) |
 | Dönüş süresi, yarıçapı, yer değişimi | [calculations/turn.cpp](calculations/turn.cpp) |
 | WEZ, A/F-pole, TR, out planı, R_cold, NEZ, MAR, MRR, DR, DOR | [calculations/engagement.cpp](calculations/engagement.cpp) |
@@ -72,7 +83,7 @@ otopilot/
 | JSON ölçümünü C++ nesnelerine okumak | [io/state_reader.cpp](io/state_reader.cpp) |
 | Uçuş ve atış komutlarını JSON'a çevirmek | [io/command_writer.cpp](io/command_writer.cpp) |
 | C++ hesabını kayıt/görüntüleyiciye çıkarmak | [io/calculation_writer.cpp](io/calculation_writer.cpp) |
-| TCP çerçeveleme ve adım sırası | [io/tcp_connection.cpp](io/tcp_connection.cpp) |
+| TCP çerçeveleme ve adım sırası | [io/connection.cpp](io/connection.cpp) |
 | Birim, açı, NED ve hareket formülü yardımcıları | [common/](common/) |
 
 ## Derleme
@@ -80,10 +91,12 @@ otopilot/
 Proje kökünden:
 
 ```powershell
-cmake -S src/otopilot -B src/otopilot/build -G "MinGW Makefiles"
 cmake --build src/otopilot/build
-ctest --test-dir src/otopilot/build --output-on-failure
+src/otopilot/build/units_test.exe
+src/otopilot/build/maneuver_test.exe
 ```
+
+`build/` yoksa ilk kurulum komutu (MinGW'nin boşluklu yolu yüzünden kısa yol gerekir) [KULLANIM.md](KULLANIM.md#doğrulama)'dedir.
 
 CMake C++17 ve Windows Winsock kullanır. Çıktı `src/otopilot/main.exe` dosyasıdır. Proje içi include yolları köke göredir: `#include "model/world.hpp"` gibi. `.hpp` ve `.cpp` aynı görev klasöründe tutulur.
 

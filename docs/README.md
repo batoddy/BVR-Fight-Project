@@ -12,7 +12,8 @@ Belgeler çalışan kaynak kodunun sorumluluklarını anlatır. Kurulum, mimari,
 | [Otopilot mimarisi](mimari/OTOPILOT_MIMARISI.md) | C++ sınıfları, veri sahipliği ve karar akışı nasıl düzenlenir? |
 | [C++ kaynak rehberi](../src/otopilot/README.md) | Bir görev için hangi kaynak dosyasına gidilir? |
 | [Otopilot kullanımı](../src/otopilot/KULLANIM.md) | Manevra, aşama, profil ve kayıt alanı nasıl eklenir? |
-| [Python simülasyonu](../src/sim/README.md) | Senaryo, kurulum, fizik kontrolü ve kayıt nasıl yürür? |
+| [Python simülasyonu](../src/simulator/README.md) | Senaryo, fizik, uçuş kontrolü, füze ve kayıt nasıl yürür? |
+| [Mesaj protokolü v2](mimari/MESAJ_PROTOKOLU_V2.md) | Python ile C++ arasındaki hello/state/command mesajları |
 | [Veri referansı](veri_info/SIMULASYON_VERI_REFERANSI.md) | Ölçüm, komut, olay ve CSV alanları ne ifade eder? |
 | [TCP örnekleri](mimari/mesaj_sablonlari/tcp/README.md) | Geçerli mesajlar somut olarak nasıl görünür? |
 | [Görüntüleyici kullanımı](../BVRGym-Goruntuleyici/README.md) | Kayıt açma, oynatma ve analiz araçları nasıl kullanılır? |
