@@ -1,10 +1,13 @@
 Commit:
 
     Atış kararı - 3 karar
-    1- Atabilir miyim?
+    1- Atabilir miyim? - füze bitti ise goto->Abort
     2- Nerede atmalıyım ?
     3- Düşman benden önce ateş etti
 
+    0- Nasıl yaklaşacağım?
+    - pursuit
+    - flank/crank
     
     1- Atabilir miyim?
     - Atacak füzem var
@@ -20,26 +23,98 @@ Commit:
 
     3- Düşman benden önce ateş etti - goto->Trade
 
-Support:
-    while(pitbull | lost) 
+    4- Düşman cold ise goto->Chase
+
+    
+
+Support: - atış sonrası destek
+    while(!(pitbull || lost))
         crank yap
 
     if(düşman ateş etti)
         goto -> Trade
 
-Trade: 
+    if(pitbull|lost)
+        goto->Reasses
+
+ 
+Support_w_Threat: - atış sonrası havada düşman füzesi varken destek
+    if(üst kurallar sağlanmadı): - support devam
+        if(füze == pitbull || lost) 
+            goto->Reasses
+    else
+    goto->Defend
+
+Trade: - karşılıklı vuruşma hesapları
     if(havada füzem var mı?)
 
     var:    
      - pitbull mu?: goto->Defend
      
      - pitbull değil: 
-        - füze değerlendirmesi
+        füze_değerlendirmesi(atmalı mıyım + nerede atmalıyım)
+        - düşman füzesi pitbula girmeden pitbulla sokarım:
+            goto->Support_w_Threat
+        - düşman füzesi pitbula girdikten sonra ama vurulmadan önce pitbula sokarım (out'u da hesaba katar)
+            goto->Support_w_Threat
+        - pitbula sokamadan kaçmam gerekir
+            goto->Defend
+
 
     yok:
-    - atmalıyım kaçmalımıyım?
-        atmalıyım:  fire & goto->Trade
+    - atmalımıyım savunmalıyım?
+        trade_hesapla()
+        şimdi atmalıyım:  
+           fire & goto->Trade
 
-        kaçmalıyım: goto->Defend
+        x sn/nm sonra atmalıyım & a deg ATA ile yaklaşmalıyım: (derece yerine flank mı pursuit mi de olabilir?)
+            komut uygula + mesafe/süre bekle
+                süre geldi:
+                 command->Fire
+                 goto->Support_w_Threat
 
-Defend:
+
+        savunmalıyım:
+            goto->Defend
+
+Defend: - karşıdan füze geliyorsa nasıl ne zaman savunacağına karar verir. füze atmak istiyorasa uçağı hotta veya flankte tutarak savunmaya çalışır
+    düşmana füze atmak istiyor muyum? (evet ise mümkünse out yapmadan yaklaşmaya çalışır)
+    
+    hot defend cold defend?
+
+    hot defend: (closure'u düşürürsem füze yetişemez ?)
+    - crank? | istediğim koşul sağlanırsa fire + goto->Support_w_Threat
+
+    cold defend:
+    - goto->Out
+
+    if(füze tehlikesiz)
+    - goto->Reasses
+
+Out:  - çıkış manevra state'i
+    out() - out manevreası
+    if(out tamamlandı)
+        if(tehdit var)
+        var: 
+        - goto->Defend
+        yok:
+        - goto->Reasses
+
+Chase: - düşman cold ise nasıl kovalayacağını, menzile giriyorsa ne zaman füze atacağını belirler.
+
+
+Recommit: skate veya out sonrası nasıl ve ne zaman recommit edeceğine karar verir
+
+
+Reasses: - state amacına ulaştı ise buraya bakar (ör: uçak support statinde füzeyi pitbula soktu ise reasses yaparak sonraki adımda ne yapması gerektiğine burada karar verir)
+
+Abort:
+ abort()
+
+üst kurallar:
+IF enemy_range =< MAR THEN goto->Abort
+IF füze_range+hız =< kritik_mesafe THEN goto->Out
+
+
+
+
