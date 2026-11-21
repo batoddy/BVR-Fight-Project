@@ -1,3 +1,36 @@
+
+Kodda hangi ara koşulun karşılığı var, hangisinin yok, aşağıda çıkardım. Taktik içerik isteyen koşullarda (atış zamanı, savunma tipi, kaçış eşiği) nasıl hesaplanacağını ben önermiyorum. Onlar için yalnızca kodda hazır duran değerleri listeledim. Bu değerleri nasıl birleştireceğine sen karar vereceksin.
+
+Kodda doğrudan karşılığı olanlar (conditions.hpp)
+
+FSM'deki koşul	Karşılığı
+füze bitti (Abort)	condition::out_of_missiles: atılacak füze kalmadı ve havada canlı füzem yok. Sadece "atacak füzem yok" demek istiyorsan weapons.missiles_left() == 0
+atacak füzem var	weapons.missiles_left() > 0
+hedef WEZ'de	condition::enemy_in_my_wez
+düşman ateş etti	condition::has_guided_threat veya is_spiked (radar modeli olmadığı için ikisi aynı şeye bakıyor)
+düşman cold	condition::enemy_cold (TA > 110°). Karşılığı enemy_hot (TA ≤ 70°), aradaki Beam bandı histerezis görevi görüyor
+hot / flank / beam ayrımı	condition::enemy_aspect: 30° / 70° / 110° bantları
+pitbull	missile.target.is_pitbull
+lost	!missile.target.is_guided
+havada füzem var	condition::has_live_missile veya weapons.active_missile() != nullptr
+füze tehlikesiz (Defend)	condition::threat_harmless, ya da daha geniş haliyle !condition::threat_alive
+tehdit var (Out)	condition::threat_alive veya has_guided_threat
+out tamamlandı	Out manevrası ManeuverStatus::Done dönüyor (out.cpp:36)
+enemy_range ≤ MAR (üst kural)	condition::in_mar
+Kodda karşılığı olmayanlar: tanımını senin yapman gerekiyor
+
+FSM'deki koşul	Kodda hazır olan ham değerler
+|ATA| ≤ atış limiti	picture.ata_deg. Profilde ayrı bir "atış ATA limiti" alanı yok, sadece radar gimbal ve recommit_fire_ata_deg var
+pitbull'a kadar destek verebilir miyim	weapons.a_pole_nm, tr_nm / enemy_in_tr, picture.mar_nm, dor_nm
+nerede atmalıyım	enemy_in_tr, enemy_in_msr, enemy_in_nez, enemy_in_r_cold, enemy_aspect
+trade_hesapla / füze_değerlendirmesi	Benim füzem için target.pitbull_time_left_s. Tehdit için threat->target.pitbull_time_left_s ve catch_time_left_s, ayrıca picture.threat_escape_margin_nm
+hot defend / cold defend seçimi	threat_escape_margin_nm, threat_recommit_margin_nm, catch_time_left_s
+hot defend'de "istediğim koşul"	Yukarıdakiler ve atış tarafındaki değerler
+füze_range + hız ≤ kritik_mesafe	threat->target.range_nm ve closure_kt. kritik_mesafe diye bir değer yok
+Yapısal bir not
+
+conditions.hpp dosyasındaki yorumda koşulların "saf sorgu" olarak tutulduğu yazıyor: karar yapısı değişse de koşullar aynı kalıyor. Yeni FSM'in ara koşullarını da aynı yere birer isimli fonksiyon olarak eklersen (can_fire, should_hot_defend gibi), FSM dosyası sadece if(condition::x) goto->Y satırlarından oluşur. İçlerini sonradan doldurabilirsin. Bu tamamen senin kararın. FSM dosyalarına ben dokunmuyorum, conditions'a da sen söylemeden eklemem
+
 her tick:
     üst_kurallar()
     state()
